@@ -1,6 +1,16 @@
 spring:
   application:
     name: nexusxva-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/nexusxva}
+    username: ${SPRING_DATASOURCE_USERNAME:nexusxva}
+    password: ${SPRING_DATASOURCE_PASSWORD:nexusxva}
+  flyway:
+    enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
   mvc:
     throw-exception-if-no-handler-found: true
   web:
@@ -15,3 +25,13 @@ management:
 
 server:
   port: 8080
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: jdbc:postgresql://postgres:5432/nexusxva
+    username: nexusxva
+    password: nexusxva

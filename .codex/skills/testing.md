@@ -28,12 +28,21 @@ Required financial invariants:
 - Option price is not negative.
 - European call price should not decrease when spot increases.
 - European call price should not decrease when volatility increases.
-- At expiry, option value equals intrinsic value.
+- At expiry, option payoff equals intrinsic value when testing payoff or expiry-specific models; do not force this on endpoints that intentionally exclude `timeToMaturityYears = 0` because Greeks may be undefined.
 - Positive exposure cannot be negative.
 - PFE at a high percentile should generally be greater than or equal to EE for the same bucket.
 - CVA is zero when exposure is zero.
 - CVA is zero when LGD is zero.
 - CVA increases when default probability increases, all else equal.
+
+Required Black-Scholes pricing tests:
+
+- Known-value tests for European calls and puts.
+- Put-call parity.
+- Monotonicity for call price versus spot and volatility.
+- Valid negative risk-free rate when outputs remain finite.
+- Rejection of invalid inputs, including missing fields, invalid enum values, `timeToMaturityYears = 0`, and outputs that would become `NaN` or `Infinity`.
+- API numeric assertions should use tolerances, not only field presence or broad greater-than checks.
 
 ## Common Mistakes
 
@@ -50,4 +59,3 @@ Required financial invariants:
 - Testcontainers for repositories.
 - Regression tests for previously found bugs.
 - Test plans stored or derived from `.codex/templates/test-plan.md`.
-

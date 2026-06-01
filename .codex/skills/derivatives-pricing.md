@@ -44,6 +44,13 @@ Core inputs:
 - Volatility.
 - Option type: call or put.
 
+Project API conventions:
+
+- The current Black-Scholes endpoint requires `timeToMaturityYears > 0`.
+- Exact payoff at expiry (`timeToMaturityYears = 0`) is out of scope for the current endpoint because Greeks can be discontinuous or undefined there.
+- Rates and volatility are decimals: `0.05` means 5%.
+- The risk-free rate may be negative when the final price and Greeks remain finite.
+
 Potential later inputs:
 
 - Dividend yield.
@@ -64,6 +71,7 @@ Greeks measure sensitivity:
 
 - Validate positive spot, strike, volatility, and time to maturity.
 - Define behavior at expiry explicitly.
+- Validate final price and Greeks are finite; reject `NaN` and `Infinity`.
 - Use tolerances in numerical tests.
 - Test known pricing values.
 - Test monotonicity properties.
@@ -74,6 +82,7 @@ Greeks measure sensitivity:
 - Keep API requests separate from pricing input domain objects.
 - Return both price and Greeks where requested by the feature spec.
 - Document whether rates are continuously compounded.
+- Keep expiry payoff behavior separate from the current Black-Scholes-with-Greeks endpoint until instrument/payoff modeling exists.
 
 ## Common Mistakes
 
@@ -90,4 +99,3 @@ Greeks measure sensitivity:
 - `BlackScholesInput` value object.
 - `BlackScholesResult` containing price and Greeks.
 - Unit tests with known values and invariants.
-

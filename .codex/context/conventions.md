@@ -42,6 +42,7 @@
 - Avoid premature inheritance hierarchies in database tables.
 - Avoid storing core business concepts only as opaque JSON.
 - Use migrations when the backend project is established.
+- Persisted positions should store trade terms, not market data inputs such as spot, volatility, or rates, unless a feature explicitly changes that boundary.
 
 ## API Design
 
@@ -49,6 +50,7 @@
 - Prefer nouns for resources and explicit action endpoints for calculations.
 - Validate inputs and return clear errors.
 - Do not expose internal entity shapes directly.
+- Do not expose framework-internal exception messages, class names, or stack details in API error responses.
 
 ## Documentation
 
@@ -57,6 +59,9 @@
   - API notes.
   - Test plan.
   - Relevant architecture decision if tradeoffs are important.
+- When conceptual docs exist under `docs/`, link them from relevant README or feature docs.
+- Keep docs aligned with explicit financial assumptions such as expiry behavior, rate conventions, and unsupported model inputs.
+- Treat `docs/docs-ES/LogicaDelSistema.md` and `docs/docs-EN/SystemLogic.md` as the living system-logic narrative and update them after meaningful vertical slices.
 
 ## AI Agent Usage
 
@@ -66,4 +71,3 @@
 - The Tester Agent validates correctness and coverage.
 - The Optimizer Agent runs only after working code and tests exist.
 - The Reviewer Agent gives final merge guidance.
-

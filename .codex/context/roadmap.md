@@ -38,6 +38,8 @@ Completion criteria:
 
 ## Milestone 2: European Option Pricing
 
+Status: partially completed for stateless Black-Scholes pricing.
+
 Goals:
 
 - Model European call and put options.
@@ -52,7 +54,15 @@ Completion criteria:
 - Financial invariant tests pass.
 - API tests validate request and response behavior.
 
+Current notes:
+
+- Stateless Black-Scholes API pricing with Greeks is implemented.
+- The current endpoint intentionally requires positive time to maturity; exact expiry payoff is deferred to explicit instrument/payoff modeling.
+- Portfolio-level pricing and persistence are handled in Milestone 3, not in this stateless pricing endpoint.
+
 ## Milestone 3: Portfolio Management
+
+Status: partially completed for persisted portfolio V1.
 
 Goals:
 
@@ -66,6 +76,17 @@ Completion criteria:
 - Portfolio workflows are persisted.
 - API contracts are documented.
 - Integration tests cover persistence.
+
+Current notes:
+
+- Persisted portfolio creation is implemented.
+- Portfolio listing, metadata update, and deletion are implemented.
+- Persisted European option positions are implemented.
+- Individual position get/update/delete workflows are implemented.
+- Portfolio metadata includes optional description, base currency, createdAt, and updatedAt.
+- Portfolio positions store trade terms only: `underlyingSymbol`, `optionType`, `strike`, `maturityDate`, and `quantity`.
+- Market data such as `spot`, `riskFreeRate`, and `volatility` is intentionally not stored in positions.
+- Portfolio-level pricing is the next step and should reuse the existing Black-Scholes calculator.
 
 ## Milestone 4: Monte Carlo Simulation
 
@@ -158,4 +179,3 @@ Future work can include:
 - Kubernetes.
 
 These should not be added until the MVP is coherent and tested.
-

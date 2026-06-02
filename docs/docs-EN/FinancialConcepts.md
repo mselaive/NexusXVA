@@ -204,19 +204,26 @@ In simple terms:
 
 ---
 
-## 12. What does “without dividend yield” mean?
+## 12. What is dividend yield?
 
 Some assets, like certain stocks, pay dividends.
 
 The **dividend yield** represents the expected return from dividends.
 
-In the first version of this module, dividends are not considered.
+In Black-Scholes with dividends, this value is represented as a continuous annual rate.
 
-This means the model is simpler and assumes the asset does not pay dividends during the life of the option.
+Examples:
+
+* 0% per year is represented as `0.0`.
+* 1.5% per year is represented as `0.015`.
+* 3% per year is represented as `0.03`.
+
+If `dividendYield` is not provided, NexusXVA uses `0.0`.
+This preserves compatibility with the no-dividend case.
 
 In simple terms:
 
-> Without dividend yield = dividends are not included in the calculation.
+> Dividend yield = expected dividend return used in the valuation.
 
 ---
 
@@ -399,7 +406,149 @@ The Black-Scholes model takes those inputs and calculates:
 
 ---
 
-## 22. General idea of the module
+## 22. What is a portfolio?
+
+A **portfolio** is a group of financial positions.
+
+In NexusXVA, a European option position stores the trade terms:
+
+* Underlying symbol.
+* Option type: Call or Put.
+* Strike.
+* Maturity date.
+* Quantity.
+
+In simple terms:
+
+> Portfolio = a book or group of positions we want to inspect, price, and later use for risk.
+
+---
+
+## 23. What does Quantity mean?
+
+**Quantity** tells us how many units of a position we hold.
+
+Examples:
+
+* `quantity = 10` means a long position of 10 units.
+* `quantity = -3` means a short position of 3 units.
+* `quantity = 0` does not make sense as a position and is rejected.
+
+When pricing the portfolio:
+
+```text
+positionPrice = unitPrice * quantity
+```
+
+Greeks are also scaled by quantity.
+That is why a short position can have negative position-level value and sensitivities.
+
+---
+
+## 24. What is market data?
+
+**Market data** is the market state used to value a position.
+
+For Black-Scholes we need:
+
+* `spot`: current price of the underlying.
+* `volatility`: volatility used by the model.
+* `riskFreeRate`: risk-free rate used by the model.
+* `dividendYield`: expected dividend return used by the model.
+
+NexusXVA does not store these values inside positions.
+The position stores the trade; market data describes the market at a specific time.
+
+In simple terms:
+
+> The portfolio says what we hold. Market data says which prices and rates we use to value it.
+
+---
+
+## 25. What does portfolio pricing do?
+
+Portfolio pricing takes already persisted positions and calculates their theoretical value with Black-Scholes.
+
+The financial flow is:
+
+```text
+persisted positions
+  + marketdata pricing inputs
+  -> Black-Scholes per position
+  -> price and Greeks scaled by quantity
+  -> portfolio total
+```
+
+The individual formula is still the same.
+What changes is that the system now:
+
+* Reads many positions.
+* Requests market inputs per symbol.
+* Converts `maturityDate` into time in years using ACT/365.
+* Prices each live position.
+* Adds prices and Greeks to produce portfolio totals.
+
+Pricing results are not stored in the database in V1.
+They are a stateless valuation for one date and one set of market inputs.
+
+---
+
+## 26. Why V1 prices only USD portfolios
+
+A portfolio can have a `baseCurrency`, but correctly pricing multiple currencies requires **FX conversion**.
+
+Example:
+
+* One position is worth 100 USD.
+* Another position is worth 100 EUR.
+
+We cannot directly add:
+
+```text
+100 USD + 100 EUR != 200 USD
+```
+
+To do it correctly we need an FX rate, such as EUR/USD, and a clear conversion policy.
+Because that is not implemented yet, portfolio pricing V1 accepts only `USD` portfolios and `USD` market data.
+
+This avoids returning incorrect totals.
+It does not mean NexusXVA can only store USD portfolios; it means the current portfolio pricing endpoint only calculates USD totals until FX is implemented.
+
+---
+
+## 27. What happens with expired positions?
+
+NexusXVA allows positions with past `maturityDate` because a portfolio may contain history or expired trades.
+
+But Black-Scholes with Greeks requires strictly positive time to maturity.
+That is why, in portfolio pricing:
+
+* If `maturityDate > valuationDate`, the position is priced.
+* If `maturityDate <= valuationDate`, the position is reported as `UNPRICEABLE_EXPIRED`.
+* Expired positions are not included in totals.
+
+This avoids mixing Black-Scholes with exact expiry payoff before we have fuller instrument and payoff modeling.
+
+---
+
+## 28. Cases We Explicitly Avoid For Now
+
+The current version avoids some cases on purpose:
+
+* FX and multi-currency portfolios.
+* Real implied volatility and volatility surfaces.
+* Real options chains.
+* Exact payoff at expiration.
+* Persisted valuation results.
+* Real market data storage inside NexusXVA.
+* Monte Carlo, exposure, and CVA.
+
+These cases are not forgotten.
+They are out of scope so the current slice stays small, correct, and testable.
+
+---
+
+## 29. General idea of the module
 
 This module aims to implement a simple but real financial calculation.
 
@@ -413,6 +562,7 @@ The first version focuses on:
 * Calculating the theoretical price using Black-Scholes.
 * Calculating the main Greeks.
 * Returning a clear result.
+* Pricing USD portfolios with persisted European option positions using market-data inputs.
 
 In simple terms:
 

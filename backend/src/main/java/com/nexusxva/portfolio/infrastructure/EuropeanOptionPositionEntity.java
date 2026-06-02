@@ -49,6 +49,9 @@ class EuropeanOptionPositionEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
     protected EuropeanOptionPositionEntity() {
     }
 
@@ -61,6 +64,7 @@ class EuropeanOptionPositionEntity {
         this.maturityDate = position.maturityDate();
         this.quantity = position.quantity();
         this.createdAt = position.createdAt();
+        this.updatedAt = position.updatedAt();
     }
 
     static EuropeanOptionPositionEntity create(
@@ -71,6 +75,7 @@ class EuropeanOptionPositionEntity {
             LocalDate maturityDate,
             BigDecimal quantity
     ) {
+        Instant now = Instant.now();
         EuropeanOptionPosition position = new EuropeanOptionPosition(
                 UUID.randomUUID(),
                 portfolio.getId(),
@@ -79,7 +84,8 @@ class EuropeanOptionPositionEntity {
                 strike,
                 maturityDate,
                 quantity,
-                Instant.now()
+                now,
+                now
         );
 
         return new EuropeanOptionPositionEntity(position, portfolio);
@@ -94,7 +100,8 @@ class EuropeanOptionPositionEntity {
                 strike,
                 maturityDate,
                 quantity,
-                createdAt
+                createdAt,
+                updatedAt
         );
     }
 
@@ -120,5 +127,6 @@ class EuropeanOptionPositionEntity {
         if (quantity != null) {
             this.quantity = quantity;
         }
+        this.updatedAt = Instant.now();
     }
 }

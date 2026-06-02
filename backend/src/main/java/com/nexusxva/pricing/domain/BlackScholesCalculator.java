@@ -12,14 +12,40 @@ public class BlackScholesCalculator {
         double time = input.timeToMaturityYears();
         double rate = input.riskFreeRate();
         double volatility = input.volatility();
+        double dividendYield = input.dividendYield();
         double sqrtTime = Math.sqrt(time);
-        double d1 = d1(spot, strike, time, rate, volatility, sqrtTime);
+        double d1 = d1(spot, strike, time, rate, volatility, dividendYield, sqrtTime);
         double d2 = d1 - volatility * sqrtTime;
         double discountFactor = Math.exp(-rate * time);
+        double dividendDiscountFactor = Math.exp(-dividendYield * time);
 
         BlackScholesResult result = switch (input.optionType()) {
-            case CALL -> callResult(spot, strike, time, rate, volatility, sqrtTime, d1, d2, discountFactor);
-            case PUT -> putResult(spot, strike, time, rate, volatility, sqrtTime, d1, d2, discountFactor);
+            case CALL -> callResult(
+                    spot,
+                    strike,
+                    time,
+                    rate,
+                    volatility,
+                    dividendYield,
+                    sqrtTime,
+                    d1,
+                    d2,
+                    discountFactor,
+                    dividendDiscountFactor
+            );
+            case PUT -> putResult(
+                    spot,
+                    strike,
+                    time,
+                    rate,
+                    volatility,
+                    dividendYield,
+                    sqrtTime,
+                    d1,
+                    d2,
+                    discountFactor,
+                    dividendDiscountFactor
+            );
         };
 
         validateFiniteResult(result);
@@ -32,17 +58,30 @@ public class BlackScholesCalculator {
             double time,
             double rate,
             double volatility,
+            double dividendYield,
             double sqrtTime,
             double d1,
             double d2,
-            double discountFactor
+            double discountFactor,
+            double dividendDiscountFactor
     ) {
-        double price = spot * cdf(d1) - strike * discountFactor * cdf(d2);
+        double price = spot * dividendDiscountFactor * cdf(d1) - strike * discountFactor * cdf(d2);
         Greeks greeks = new Greeks(
-                cdf(d1),
-                gamma(spot, volatility, sqrtTime, d1),
-                vega(spot, sqrtTime, d1),
-                callTheta(spot, strike, time, rate, volatility, sqrtTime, d1, d2, discountFactor),
+                dividendDiscountFactor * cdf(d1),
+                gamma(spot, volatility, sqrtTime, d1, dividendDiscountFactor),
+                vega(spot, sqrtTime, d1, dividendDiscountFactor),
+                callTheta(
+                        spot,
+                        strike,
+                        rate,
+                        volatility,
+                        dividendYield,
+                        sqrtTime,
+                        d1,
+                        d2,
+                        discountFactor,
+                        dividendDiscountFactor
+                ),
                 strike * time * discountFactor * cdf(d2)
         );
 
@@ -55,17 +94,30 @@ public class BlackScholesCalculator {
             double time,
             double rate,
             double volatility,
+            double dividendYield,
             double sqrtTime,
             double d1,
             double d2,
-            double discountFactor
+            double discountFactor,
+            double dividendDiscountFactor
     ) {
-        double price = strike * discountFactor * cdf(-d2) - spot * cdf(-d1);
+        double price = strike * discountFactor * cdf(-d2) - spot * dividendDiscountFactor * cdf(-d1);
         Greeks greeks = new Greeks(
-                cdf(d1) - 1.0,
-                gamma(spot, volatility, sqrtTime, d1),
-                vega(spot, sqrtTime, d1),
-                putTheta(spot, strike, time, rate, volatility, sqrtTime, d1, d2, discountFactor),
+                dividendDiscountFactor * (cdf(d1) - 1.0),
+                gamma(spot, volatility, sqrtTime, d1, dividendDiscountFactor),
+                vega(spot, sqrtTime, d1, dividendDiscountFactor),
+                putTheta(
+                        spot,
+                        strike,
+                        rate,
+                        volatility,
+                        dividendYield,
+                        sqrtTime,
+                        d1,
+                        d2,
+                        discountFactor,
+                        dividendDiscountFactor
+                ),
                 -strike * time * discountFactor * cdf(-d2)
         );
 
@@ -78,48 +130,53 @@ public class BlackScholesCalculator {
             double time,
             double rate,
             double volatility,
+            double dividendYield,
             double sqrtTime
     ) {
-        return (Math.log(spot / strike) + (rate + 0.5 * volatility * volatility) * time)
+        return (Math.log(spot / strike) + (rate - dividendYield + 0.5 * volatility * volatility) * time)
                 / (volatility * sqrtTime);
     }
 
-    private double gamma(double spot, double volatility, double sqrtTime, double d1) {
-        return pdf(d1) / (spot * volatility * sqrtTime);
+    private double gamma(double spot, double volatility, double sqrtTime, double d1, double dividendDiscountFactor) {
+        return dividendDiscountFactor * pdf(d1) / (spot * volatility * sqrtTime);
     }
 
-    private double vega(double spot, double sqrtTime, double d1) {
-        return spot * pdf(d1) * sqrtTime;
+    private double vega(double spot, double sqrtTime, double d1, double dividendDiscountFactor) {
+        return spot * dividendDiscountFactor * pdf(d1) * sqrtTime;
     }
 
     private double callTheta(
             double spot,
             double strike,
-            double time,
             double rate,
             double volatility,
+            double dividendYield,
             double sqrtTime,
             double d1,
             double d2,
-            double discountFactor
+            double discountFactor,
+            double dividendDiscountFactor
     ) {
-        return -spot * pdf(d1) * volatility / (2.0 * sqrtTime)
-                - rate * strike * discountFactor * cdf(d2);
+        return -spot * dividendDiscountFactor * pdf(d1) * volatility / (2.0 * sqrtTime)
+                - rate * strike * discountFactor * cdf(d2)
+                + dividendYield * spot * dividendDiscountFactor * cdf(d1);
     }
 
     private double putTheta(
             double spot,
             double strike,
-            double time,
             double rate,
             double volatility,
+            double dividendYield,
             double sqrtTime,
             double d1,
             double d2,
-            double discountFactor
+            double discountFactor,
+            double dividendDiscountFactor
     ) {
-        return -spot * pdf(d1) * volatility / (2.0 * sqrtTime)
-                + rate * strike * discountFactor * cdf(-d2);
+        return -spot * dividendDiscountFactor * pdf(d1) * volatility / (2.0 * sqrtTime)
+                + rate * strike * discountFactor * cdf(-d2)
+                - dividendYield * spot * dividendDiscountFactor * cdf(-d1);
     }
 
     private double pdf(double value) {

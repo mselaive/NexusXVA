@@ -134,6 +134,8 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
                 .andExpect(jsonPath("$.strike").value(100.0))
                 .andExpect(jsonPath("$.maturityDate").value("2027-12-31"))
                 .andExpect(jsonPath("$.quantity").value(10.0))
+                .andExpect(jsonPath("$.createdAt", notNullValue()))
+                .andExpect(jsonPath("$.updatedAt", notNullValue()))
                 .andReturn();
 
         String positionId = objectMapper.readTree(createdPosition.getResponse().getContentAsString()).get("id").asText();
@@ -167,6 +169,13 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
     void updatesEuropeanOptionPosition() throws Exception {
         String portfolioId = createdPortfolioId("Update Position Book");
         String positionId = createdPositionId(portfolioId);
+        String createdPositionBody = mockMvc.perform(get("/api/portfolios/{portfolioId}/instruments/{positionId}", portfolioId, positionId))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String originalUpdatedAt = objectMapper.readTree(createdPositionBody).get("updatedAt").asText();
+        Thread.sleep(5);
 
         mockMvc.perform(patch("/api/portfolios/{portfolioId}/instruments/european-options/{positionId}", portfolioId, positionId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -185,12 +194,17 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
                 .andExpect(jsonPath("$.optionType").value("PUT"))
                 .andExpect(jsonPath("$.strike").value(95.5))
                 .andExpect(jsonPath("$.maturityDate").value("2028-01-15"))
-                .andExpect(jsonPath("$.quantity").value(-3.0));
+                .andExpect(jsonPath("$.quantity").value(-3.0))
+                .andExpect(jsonPath("$.updatedAt", notNullValue()));
 
-        mockMvc.perform(get("/api/portfolios/{portfolioId}/instruments/{positionId}", portfolioId, positionId))
+        MvcResult updated = mockMvc.perform(get("/api/portfolios/{portfolioId}/instruments/{positionId}", portfolioId, positionId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.underlyingSymbol").value("MSFT"))
-                .andExpect(jsonPath("$.optionType").value("PUT"));
+                .andExpect(jsonPath("$.optionType").value("PUT"))
+                .andReturn();
+
+        String updatedAt = objectMapper.readTree(updated.getResponse().getContentAsString()).get("updatedAt").asText();
+        assertThat(updatedAt).isNotEqualTo(originalUpdatedAt);
     }
 
     @Test

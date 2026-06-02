@@ -2,7 +2,7 @@
 
 Spring Boot backend for NexusXVA.
 
-The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, and persisted portfolio management for European option positions. Portfolio-level pricing, Monte Carlo simulation, exposure analytics, and XVA calculations are planned future milestones.
+The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option positions, and stateless portfolio-level Black-Scholes pricing using market-data pricing inputs. Monte Carlo simulation, exposure analytics, and XVA calculations are planned future milestones.
 
 ## Requirements
 
@@ -36,7 +36,8 @@ curl -X POST http://localhost:8080/api/pricing/european-options/black-scholes \
     "strike": 100.0,
     "timeToMaturityYears": 1.0,
     "riskFreeRate": 0.05,
-    "volatility": 0.2
+    "volatility": 0.2,
+    "dividendYield": 0.0
   }'
 ```
 
@@ -71,8 +72,9 @@ The current test setup covers:
 - financial invariants such as put-call parity and monotonicity
 - pricing API request, response, and validation behavior
 - persisted portfolio metadata, listing, update/delete, and European option position workflows
+- portfolio-level Black-Scholes pricing with local market-data inputs
 
-The current suite is verified with `mvn test`.
+The current suite is verified with `mvn test` and has `80` tests.
 
 ## Developer Financial Docs
 
@@ -100,6 +102,7 @@ GET /api/portfolios/{portfolioId}/instruments
 GET /api/portfolios/{portfolioId}/instruments/{positionId}
 PATCH /api/portfolios/{portfolioId}/instruments/european-options/{positionId}
 DELETE /api/portfolios/{portfolioId}/instruments/{positionId}
+POST /api/portfolios/{portfolioId}/pricing/black-scholes
 ```
 
 Create portfolio request:
@@ -161,6 +164,7 @@ Persisted position fields:
 - `strike`: must be greater than zero.
 - `maturityDate`: option maturity date.
 - `quantity`: can be positive or negative, but not zero.
+- `createdAt` and `updatedAt`: position lifecycle timestamps.
 
 Portfolio metadata fields:
 
@@ -169,7 +173,102 @@ Portfolio metadata fields:
 - `baseCurrency`: three-letter currency code, normalized to uppercase, default `USD`.
 - `updatedAt`: changes when portfolio metadata changes.
 
-Portfolio positions store trade terms only. Market data inputs such as `spot`, `riskFreeRate`, and `volatility` are intentionally not persisted in portfolio positions; they belong to pricing or market-data workflows.
+Portfolio positions store trade terms only. Market data inputs such as `spot`, `riskFreeRate`, `volatility`, and `dividendYield` are intentionally not persisted in portfolio positions; they belong to pricing or market-data workflows.
+
+### Portfolio Black-Scholes Pricing
+
+Portfolio pricing is stateless: it reads persisted positions, requests pricing inputs through the `marketdata` boundary, reuses the Black-Scholes calculator, and returns per-position plus portfolio-level totals. Pricing results are not persisted.
+
+Endpoint:
+
+```text
+POST /api/portfolios/{portfolioId}/pricing/black-scholes
+```
+
+Request:
+
+```json
+{
+  "valuationDate": "2026-06-01"
+}
+```
+
+If `valuationDate` is omitted, the backend uses the current UTC date.
+
+Response shape:
+
+```json
+{
+  "portfolioId": "6f2d4637-ef84-4bc5-bca3-7c7aee54b4e5",
+  "valuationDate": "2026-06-01",
+  "model": "BLACK_SCHOLES",
+  "baseCurrency": "USD",
+  "totalPrice": 1234.56,
+  "totalGreeks": {
+    "delta": 12.3,
+    "gamma": 0.45,
+    "vega": 89.1,
+    "theta": -7.2,
+    "rho": 14.8
+  },
+  "positions": [],
+  "unpriceablePositions": []
+}
+```
+
+V1 pricing rules:
+
+- `baseCurrency` must be `USD`; FX conversion is not implemented yet.
+- `quantity` scales price and Greeks, so negative quantities represent short exposure.
+- Positions with `maturityDate <= valuationDate` are returned in `unpriceablePositions` with `UNPRICEABLE_EXPIRED` and are excluded from totals.
+- Missing market-data pricing inputs return `400 Bad Request`.
+- Blemberg outages return `503 Service Unavailable`.
+
+The USD-only rule prevents incorrect totals. Without FX conversion, values such as `100 USD + 100 EUR` cannot be safely reported as one portfolio total.
+
+### Blemberg Market Data Validation
+
+NexusXVA can validate portfolio position symbols against Blemberg, the separate market-data service planned for reference data and pricing inputs.
+
+Configuration:
+
+```yaml
+nexusxva:
+  market-data:
+    provider: blemberg
+    validation:
+      enabled: false
+    blemberg:
+      base-url: http://localhost:8090
+      timeout: 2s
+```
+
+Environment overrides:
+
+```bash
+NEXUSXVA_MARKET_DATA_PROVIDER=blemberg
+NEXUSXVA_MARKET_DATA_VALIDATION_ENABLED=true
+BLEMBERG_BASE_URL=http://localhost:8090
+BLEMBERG_TIMEOUT=2s
+```
+
+Local validation and pricing-input mock without Blemberg:
+
+```bash
+NEXUSXVA_MARKET_DATA_PROVIDER=local
+NEXUSXVA_MARKET_DATA_VALIDATION_ENABLED=true
+```
+
+The local provider uses a fixed development watchlist for symbols such as `AAPL`, `MSFT`, `NVDA`, `JPM`, `SPY`, `QQQ`, `GLD`, and `SLV`. It validates symbols and provides temporary demo `spot`, `volatility`, `riskFreeRate`, and `dividendYield` values for portfolio pricing. These values are not persisted and must not be treated as real market data.
+
+When validation is enabled:
+
+- creating a European option position validates `underlyingSymbol` with `GET /api/instruments/{symbol}` on Blemberg.
+- updating a position validates only when `underlyingSymbol` changes.
+- unknown or inactive instruments return `400 Bad Request` with `Unknown underlyingSymbol`.
+- unavailable Blemberg calls return `503 Service Unavailable` with `Market data service unavailable`.
+
+NexusXVA still persists only the symbol and trade terms. Blemberg owns instrument reference data and real pricing inputs such as spot, historical volatility, risk-free rates, and dividend yields.
 
 Implementation shape:
 
@@ -177,6 +276,8 @@ Implementation shape:
 - `portfolio.application` owns use cases and transaction boundaries.
 - `portfolio.infrastructure` contains JPA entities and repositories.
 - `portfolio.api` owns REST DTOs and the controller.
+- `marketdata.application` owns the internal ports used to validate symbols and request pricing inputs.
+- `marketdata.infrastructure` owns the Blemberg REST adapters and temporary local watchlist/pricing-input adapter.
 
 ## European Option Pricing
 
@@ -195,7 +296,8 @@ Request:
   "strike": 100.0,
   "timeToMaturityYears": 1.0,
   "riskFreeRate": 0.05,
-  "volatility": 0.2
+  "volatility": 0.2,
+  "dividendYield": 0.0
 }
 ```
 
@@ -221,10 +323,11 @@ Pricing assumptions:
 - Supports European `CALL` and `PUT` options.
 - Uses the Black-Scholes closed-form model.
 - Uses constant volatility and a constant continuously compounded risk-free rate.
-- Does not include dividend yield in this milestone.
+- Supports optional continuous dividend yield; omitted `dividendYield` defaults to `0.0`.
 - Rates and volatility are decimals: `0.05` means 5%.
 - `spot`, `strike`, `timeToMaturityYears`, and `volatility` must be greater than zero.
 - `riskFreeRate` may be negative, but it must be finite.
+- `dividendYield` must be greater than or equal to zero.
 - Exact expiry payoff at `timeToMaturityYears = 0` is out of scope for this endpoint because several Greeks are discontinuous or undefined at expiry.
 - Greeks are reported per unit change: vega is per `1.0` volatility change, not per one volatility point.
 

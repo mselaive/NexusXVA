@@ -19,10 +19,11 @@ The chosen order is:
 1. Backend foundation.
 2. Stateless pricing for European options.
 3. Portfolio management.
-4. Monte Carlo simulation.
-5. Exposure analytics.
-6. Simplified CVA.
-7. Dashboard.
+4. Portfolio-level pricing.
+5. Monte Carlo simulation.
+6. Exposure analytics.
+7. Simplified CVA.
+8. Dashboard.
 
 The idea is that each step uses what came before it, without jumping too far ahead.
 
@@ -36,6 +37,8 @@ The backend currently has:
 - Stateless European option pricing with Black-Scholes.
 - Main Greeks calculation.
 - Persisted portfolio management in PostgreSQL.
+- Stateless portfolio-level Black-Scholes pricing.
+- Temporary local market-data pricing inputs while Blemberg is not available.
 - Database migrations with Flyway.
 - Financial, API, and persistence tests.
 
@@ -53,6 +56,7 @@ GET /api/portfolios/{portfolioId}/instruments
 GET /api/portfolios/{portfolioId}/instruments/{positionId}
 PATCH /api/portfolios/{portfolioId}/instruments/european-options/{positionId}
 DELETE /api/portfolios/{portfolioId}/instruments/{positionId}
+POST /api/portfolios/{portfolioId}/pricing/black-scholes
 ```
 
 The pricing endpoint receives European option data and returns:
@@ -74,6 +78,7 @@ The portfolio endpoints allow us to:
 - Add European option positions.
 - List instruments in a portfolio.
 - Get, update, and delete individual positions.
+- Price persisted European option positions as a portfolio using Black-Scholes.
 
 ## How a Pricing Request Flows
 
@@ -108,6 +113,8 @@ The current portfolio flow is:
 HTTP request
   -> portfolio.api
   -> portfolio.application
+  -> marketdata.application
+  -> Blemberg REST API (if validation is enabled)
   -> portfolio.infrastructure
   -> PostgreSQL
   -> HTTP response
@@ -118,12 +125,39 @@ In more detail:
 1. The controller receives JSON.
 2. The DTO validates required fields and basic ranges.
 3. The DTO is transformed into an application command.
-4. The application service opens the transaction and executes the use case.
+4. The application service validates the symbol against market data if the integration is enabled.
 5. The `PortfolioStore` port abstracts persistence.
 6. The JPA adapter persists or retrieves entities.
 7. The API returns DTOs, not JPA entities.
 
 This gives us real persistence without mixing HTTP rules, domain rules, and database details.
+
+## How a Portfolio Pricing Request Flows
+
+The current portfolio pricing flow is:
+
+```text
+HTTP request
+  -> portfolio.api
+  -> portfolio.application
+  -> marketdata.application pricing inputs
+  -> pricing.domain Black-Scholes
+  -> aggregated portfolio valuation
+  -> HTTP response
+```
+
+In more detail:
+
+1. The controller receives the portfolio id and optional `valuationDate`.
+2. The application service loads the persisted portfolio and positions.
+3. The service asks `marketdata` for `spot`, `volatility`, `riskFreeRate`, and `dividendYield` for each priceable symbol.
+4. The service converts `maturityDate` into `timeToMaturityYears` using ACT/365.
+5. The existing Black-Scholes calculator prices each live position.
+6. Price and Greeks are scaled by `quantity`.
+7. Expired positions are returned as `UNPRICEABLE_EXPIRED` and excluded from totals.
+
+This is still stateless pricing.
+The portfolio stores trade terms, the market-data module provides valuation inputs, and pricing results are not persisted.
 
 ## Layer Responsibilities
 
@@ -188,6 +222,7 @@ For now it coordinates:
 - Checking that a portfolio exists before adding/listing positions.
 - Adding European option positions.
 - Operating individual positions.
+- Pricing a portfolio with Black-Scholes without persisting valuation results.
 
 ### `portfolio.domain`
 
@@ -216,7 +251,7 @@ For the first pricing slice we decided to:
 - Use classic Black-Scholes.
 - Use constant volatility.
 - Use a constant continuously compounded risk-free rate.
-- Exclude dividend yield for now.
+- Support optional continuous `dividendYield`, defaulting to `0.0`.
 - Use decimals for rates and volatility: `0.05` means 5%.
 - Allow a negative risk-free rate if the result remains finite.
 - Require `timeToMaturityYears > 0`.
@@ -234,15 +269,22 @@ For the first portfolio slice we decided to:
 - Persist European option positions.
 - Use UUIDs as public and database identifiers.
 - Store portfolio metadata: `name`, `description`, `baseCurrency`, `createdAt`, and `updatedAt`.
-- Store `underlyingSymbol`, `optionType`, `strike`, `maturityDate`, and `quantity`.
+- Store `underlyingSymbol`, `optionType`, `strike`, `maturityDate`, `quantity`, `createdAt`, and `updatedAt`.
 - Allow positive or negative quantity for long/short positions.
 - Reject zero quantity.
 - Allow past `maturityDate`; pricing decides whether expired trades can be valued.
 - Not store `spot`, `volatility`, or `riskFreeRate` inside the position.
+- Validate `underlyingSymbol` against Blemberg when `nexusxva.market-data.validation.enabled=true`.
+- Allow `nexusxva.market-data.provider=local` as a temporary watchlist for symbol validation while Blemberg does not exist yet.
+- Price portfolios only in `USD` for V1; FX conversion is not implemented yet.
+- Use the local provider as a temporary source of demo pricing inputs while Blemberg does not exist yet.
+- Keep portfolio pricing stateless; do not persist valuation results.
 
 The trade/market-data separation is intentional.
 A portfolio describes which instruments we hold; market data describes the market state used to value those instruments.
-That is why future portfolio-level pricing should read persisted positions and receive market data from the request or from a dedicated module.
+That is why NexusXVA keeps positions as trade terms and uses the `marketdata` module as the boundary to Blemberg.
+Blemberg validates instrument existence and will provide real `spot`, `volatility`, `riskFreeRate`, and `dividendYield`.
+The local provider validates known symbols and provides temporary demo pricing inputs, but it does not persist market data or replace Blemberg.
 
 ## Error Policy
 
@@ -278,6 +320,8 @@ The portfolio slice is protected with:
 - Integration tests with PostgreSQL/Testcontainers.
 - API tests for creating/listing/updating/deleting portfolios.
 - API tests for creating/listing/getting/updating/deleting positions.
+- Tests for Blemberg validation enabled and disabled.
+- Tests for the temporary local watchlist.
 - `400` and `404` error tests with `ApiError`.
 
 The rule is:
@@ -286,13 +330,13 @@ The rule is:
 
 ## What Portfolio Gives Us
 
-Portfolio now has a first persisted version.
+Portfolio now has a first persisted version and a first stateless Black-Scholes valuation flow.
 
 This gives us:
 
 - A persisted business unit.
 - A clear way to store European option positions.
-- A base for portfolio-level pricing.
+- Portfolio-level pricing for USD European option positions.
 - A base for simulation, exposure, and CVA later.
 
 The order we followed was:
@@ -302,21 +346,21 @@ The order we followed was:
 3. Add options to portfolios.
 4. Retrieve portfolios.
 5. Prepare portfolio-level pricing.
+6. Price portfolios with Black-Scholes using inputs from `marketdata`.
 
 This avoids building Monte Carlo or CVA before we have a persisted unit on which to calculate risk.
 
 ## Recommended Next Milestone
 
-The recommended next milestone is portfolio-level pricing.
+The recommended next milestone is replacing local demo inputs with real Blemberg inputs, then moving toward simulation/exposure.
 
-Suggested first version:
+Suggested next version:
 
-- Receive a portfolio id.
-- Read persisted positions.
-- Receive market data in the request.
-- Convert `maturityDate` into `timeToMaturityYears`.
-- Reuse the existing Black-Scholes calculator.
-- Return price and Greeks per position plus a portfolio total.
+- Keep the current portfolio pricing endpoint.
+- Implement real Blemberg as the source of `spot`, `volatility`, `riskFreeRate`, and `dividendYield`.
+- Keep NexusXVA from persisting market data.
+- Add FX only when we want to support multi-currency totals.
+- Then use priceable portfolios as the base for simulation and exposure.
 
 Out of initial scope:
 
@@ -324,7 +368,7 @@ Out of initial scope:
 - Exposure.
 - CVA.
 - Auth.
-- Multi-currency.
+- Multi-currency without FX.
 - Netting/collateral.
 
 ## How to Maintain This Document

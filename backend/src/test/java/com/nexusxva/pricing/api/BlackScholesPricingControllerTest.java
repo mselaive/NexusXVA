@@ -99,6 +99,26 @@ class BlackScholesPricingControllerTest {
     }
 
     @Test
+    void pricesEuropeanCallWithDividendYield() throws Exception {
+        mockMvc.perform(post("/api/pricing/european-options/black-scholes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "optionType": "CALL",
+                                  "spot": 100.0,
+                                  "strike": 100.0,
+                                  "timeToMaturityYears": 1.0,
+                                  "riskFreeRate": 0.05,
+                                  "volatility": 0.2,
+                                  "dividendYield": 0.02
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.price").value(closeTo(9.2270, 0.0001), Double.class))
+                .andExpect(jsonPath("$.greeks.delta").value(closeTo(0.5869, 0.0001), Double.class));
+    }
+
+    @Test
     void invalidNumericInputsReturnValidationErrorShape() throws Exception {
         mockMvc.perform(post("/api/pricing/european-options/black-scholes")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -117,6 +137,27 @@ class BlackScholesPricingControllerTest {
                 .andExpect(jsonPath("$.error").value("Bad Request"))
                 .andExpect(jsonPath("$.message").value("Validation failed"))
                 .andExpect(jsonPath("$.details[0].field").value("spot"));
+    }
+
+    @Test
+    void negativeDividendYieldReturnsValidationErrorShape() throws Exception {
+        mockMvc.perform(post("/api/pricing/european-options/black-scholes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "optionType": "CALL",
+                                  "spot": 100.0,
+                                  "strike": 100.0,
+                                  "timeToMaturityYears": 1.0,
+                                  "riskFreeRate": 0.05,
+                                  "volatility": 0.2,
+                                  "dividendYield": -0.01
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.details[0].field").value("dividendYield"));
     }
 
     @Test

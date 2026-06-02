@@ -43,6 +43,9 @@
 - Avoid storing core business concepts only as opaque JSON.
 - Use migrations when the backend project is established.
 - Persisted positions should store trade terms, not market data inputs such as spot, volatility, or rates, unless a feature explicitly changes that boundary.
+- External instrument validation must go through the `marketdata` application boundary; portfolio code should not call Blemberg or other providers directly.
+- Portfolio pricing inputs must also go through the `marketdata` application boundary; do not read provider data directly from portfolio code.
+- Pricing results are stateless by default and should not be persisted unless the feature explicitly introduces valuation storage.
 
 ## API Design
 

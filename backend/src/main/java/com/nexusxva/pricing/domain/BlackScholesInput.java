@@ -8,8 +8,20 @@ public record BlackScholesInput(
         double strike,
         double timeToMaturityYears,
         double riskFreeRate,
-        double volatility
+        double volatility,
+        double dividendYield
 ) {
+
+    public BlackScholesInput(
+            OptionType optionType,
+            double spot,
+            double strike,
+            double timeToMaturityYears,
+            double riskFreeRate,
+            double volatility
+    ) {
+        this(optionType, spot, strike, timeToMaturityYears, riskFreeRate, volatility, 0.0);
+    }
 
     public BlackScholesInput {
         if (optionType == null) {
@@ -20,6 +32,7 @@ public record BlackScholesInput(
         requirePositiveFinite("timeToMaturityYears", timeToMaturityYears);
         requireFinite("riskFreeRate", riskFreeRate);
         requirePositiveFinite("volatility", volatility);
+        requireNonNegativeFinite("dividendYield", dividendYield);
     }
 
     private static void requirePositiveFinite(String field, double value) {
@@ -32,6 +45,13 @@ public record BlackScholesInput(
     private static void requireFinite(String field, double value) {
         if (!Double.isFinite(value)) {
             throw new IllegalArgumentException(field + " must be finite");
+        }
+    }
+
+    private static void requireNonNegativeFinite(String field, double value) {
+        requireFinite(field, value);
+        if (value < 0.0) {
+            throw new IllegalArgumentException(field + " must be greater than or equal to zero");
         }
     }
 }

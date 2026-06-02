@@ -62,7 +62,7 @@ Current notes:
 
 ## Milestone 3: Portfolio Management
 
-Status: partially completed for persisted portfolio V1.
+Status: partially completed for persisted portfolio V1 plus stateless portfolio-level Black-Scholes pricing V1.
 
 Goals:
 
@@ -84,9 +84,14 @@ Current notes:
 - Persisted European option positions are implemented.
 - Individual position get/update/delete workflows are implemented.
 - Portfolio metadata includes optional description, base currency, createdAt, and updatedAt.
-- Portfolio positions store trade terms only: `underlyingSymbol`, `optionType`, `strike`, `maturityDate`, and `quantity`.
-- Market data such as `spot`, `riskFreeRate`, and `volatility` is intentionally not stored in positions.
-- Portfolio-level pricing is the next step and should reuse the existing Black-Scholes calculator.
+- Portfolio positions store trade terms only: `underlyingSymbol`, `optionType`, `strike`, `maturityDate`, `quantity`, createdAt, and updatedAt.
+- Market data such as `spot`, `riskFreeRate`, `volatility`, and `dividendYield` is intentionally not stored in positions.
+- Optional Blemberg validation for `underlyingSymbol` is implemented behind `nexusxva.market-data.validation.enabled`.
+- Temporary local watchlist validation is available with `nexusxva.market-data.provider=local`; it does not replace Blemberg.
+- Stateless portfolio-level Black-Scholes pricing is implemented at `POST /api/portfolios/{portfolioId}/pricing/black-scholes`.
+- Portfolio pricing requests pricing inputs through `marketdata`, scales price and Greeks by quantity, excludes expired positions as `UNPRICEABLE_EXPIRED`, and does not persist valuation results.
+- Portfolio pricing V1 is USD-only because FX conversion is not implemented yet.
+- The local market-data provider now supplies temporary demo pricing inputs, including dividend yield, for development; real pricing inputs should come from Blemberg when that service exists.
 
 ## Milestone 4: Monte Carlo Simulation
 

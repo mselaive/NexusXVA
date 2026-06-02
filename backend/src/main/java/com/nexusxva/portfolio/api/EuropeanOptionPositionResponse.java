@@ -16,7 +16,8 @@ public record EuropeanOptionPositionResponse(
         BigDecimal strike,
         LocalDate maturityDate,
         BigDecimal quantity,
-        Instant createdAt
+        Instant createdAt,
+        Instant updatedAt
 ) {
 
     static EuropeanOptionPositionResponse from(EuropeanOptionPosition position) {
@@ -28,7 +29,8 @@ public record EuropeanOptionPositionResponse(
                 position.strike(),
                 position.maturityDate(),
                 position.quantity(),
-                position.createdAt()
+                position.createdAt(),
+                position.updatedAt()
         );
     }
 }

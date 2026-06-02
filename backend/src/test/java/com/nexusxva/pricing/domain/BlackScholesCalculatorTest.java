@@ -43,6 +43,20 @@ class BlackScholesCalculatorTest {
     }
 
     @Test
+    void pricesAtTheMoneyCallWithContinuousDividendYield() {
+        BlackScholesResult result = calculator.price(
+                input(OptionType.CALL, 100.0, 100.0, 1.0, 0.05, 0.2, 0.02)
+        );
+
+        assertThat(result.price()).isCloseTo(9.2270, withinTolerance());
+        assertThat(result.greeks().delta()).isCloseTo(0.5869, withinTolerance());
+        assertThat(result.greeks().gamma()).isCloseTo(0.0190, withinTolerance());
+        assertThat(result.greeks().vega()).isCloseTo(37.9012, withinTolerance());
+        assertThat(result.greeks().theta()).isCloseTo(-5.0893, withinTolerance());
+        assertThat(result.greeks().rho()).isCloseTo(49.4581, withinTolerance());
+    }
+
+    @Test
     void satisfiesPutCallParity() {
         BlackScholesInput callInput = input(OptionType.CALL, 100.0, 95.0, 1.5, 0.03, 0.25);
         BlackScholesInput putInput = input(OptionType.PUT, 100.0, 95.0, 1.5, 0.03, 0.25);
@@ -124,6 +138,26 @@ class BlackScholesCalculatorTest {
             double volatility
     ) {
         return new BlackScholesInput(optionType, spot, strike, timeToMaturityYears, riskFreeRate, volatility);
+    }
+
+    private static BlackScholesInput input(
+            OptionType optionType,
+            double spot,
+            double strike,
+            double timeToMaturityYears,
+            double riskFreeRate,
+            double volatility,
+            double dividendYield
+    ) {
+        return new BlackScholesInput(
+                optionType,
+                spot,
+                strike,
+                timeToMaturityYears,
+                riskFreeRate,
+                volatility,
+                dividendYield
+        );
     }
 
     private static org.assertj.core.data.Offset<Double> withinTolerance() {

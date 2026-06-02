@@ -1,5 +1,6 @@
 package com.nexusxva.portfolio.application;
 
+import com.nexusxva.marketdata.application.MarketDataValidationService;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.portfolio.domain.Portfolio;
 import com.nexusxva.portfolio.domain.PortfolioSummary;
@@ -15,9 +16,14 @@ import java.util.UUID;
 public class PortfolioService {
 
     private final PortfolioStore portfolioStore;
+    private final MarketDataValidationService marketDataValidationService;
 
-    public PortfolioService(PortfolioStore portfolioStore) {
+    public PortfolioService(
+            PortfolioStore portfolioStore,
+            MarketDataValidationService marketDataValidationService
+    ) {
         this.portfolioStore = portfolioStore;
+        this.marketDataValidationService = marketDataValidationService;
     }
 
     @Transactional
@@ -54,6 +60,7 @@ public class PortfolioService {
             AddEuropeanOptionPositionCommand command
     ) {
         ensurePortfolioExists(portfolioId);
+        marketDataValidationService.validateUnderlyingSymbol(command.underlyingSymbol());
         return portfolioStore.addEuropeanOptionPosition(portfolioId, command);
     }
 
@@ -77,6 +84,7 @@ public class PortfolioService {
             UpdateEuropeanOptionPositionCommand command
     ) {
         ensurePortfolioExists(portfolioId);
+        validateUnderlyingSymbolChange(portfolioId, positionId, command);
         return portfolioStore.updateEuropeanOptionPosition(portfolioId, positionId, command);
     }
 
@@ -89,6 +97,23 @@ public class PortfolioService {
     private void ensurePortfolioExists(UUID portfolioId) {
         if (!portfolioStore.existsPortfolio(portfolioId)) {
             throw new ResourceNotFoundException("Portfolio not found");
+        }
+    }
+
+    private void validateUnderlyingSymbolChange(
+            UUID portfolioId,
+            UUID positionId,
+            UpdateEuropeanOptionPositionCommand command
+    ) {
+        if (command.underlyingSymbol() == null) {
+            return;
+        }
+
+        EuropeanOptionPosition currentPosition = portfolioStore.findEuropeanOptionPosition(portfolioId, positionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Position not found"));
+
+        if (!command.underlyingSymbol().equals(currentPosition.underlyingSymbol())) {
+            marketDataValidationService.validateUnderlyingSymbol(command.underlyingSymbol());
         }
     }
 }

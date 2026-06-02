@@ -10,7 +10,7 @@ Initial instrument:
 
 Initial model:
 
-- Black-Scholes with constant volatility, constant risk-free rate, no dividends unless explicitly added.
+- Black-Scholes with constant volatility, constant risk-free rate, and optional continuous dividend yield.
 
 ## European Options
 
@@ -49,7 +49,10 @@ Project API conventions:
 - The current Black-Scholes endpoint requires `timeToMaturityYears > 0`.
 - Exact payoff at expiry (`timeToMaturityYears = 0`) is out of scope for the current endpoint because Greeks can be discontinuous or undefined there.
 - Rates and volatility are decimals: `0.05` means 5%.
+- Dividend yield is also a decimal continuous annual rate and defaults to `0.0` when omitted.
 - The risk-free rate may be negative when the final price and Greeks remain finite.
+- Dividend yield must be greater than or equal to zero in the current API.
+- Portfolio-level Black-Scholes pricing converts `maturityDate` to `timeToMaturityYears` with ACT/365 and treats expired positions as unpriceable rather than forcing payoff logic into the Black-Scholes-with-Greeks model.
 
 Potential later inputs:
 
@@ -83,6 +86,8 @@ Greeks measure sensitivity:
 - Return both price and Greeks where requested by the feature spec.
 - Document whether rates are continuously compounded.
 - Keep expiry payoff behavior separate from the current Black-Scholes-with-Greeks endpoint until instrument/payoff modeling exists.
+- For portfolio pricing, scale price and Greeks by position quantity; negative quantity represents short exposure.
+- Keep market-data pricing inputs behind the `marketdata` boundary.
 
 ## Common Mistakes
 

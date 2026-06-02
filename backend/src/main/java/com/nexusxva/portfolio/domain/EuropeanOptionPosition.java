@@ -16,7 +16,8 @@ public record EuropeanOptionPosition(
         BigDecimal strike,
         LocalDate maturityDate,
         BigDecimal quantity,
-        Instant createdAt
+        Instant createdAt,
+        Instant updatedAt
 ) {
 
     public EuropeanOptionPosition {
@@ -47,6 +48,9 @@ public record EuropeanOptionPosition(
         }
         if (createdAt == null) {
             throw new IllegalArgumentException("position createdAt is required");
+        }
+        if (updatedAt == null) {
+            throw new IllegalArgumentException("position updatedAt is required");
         }
     }
 }

@@ -12,7 +12,8 @@ public record BlackScholesPricingRequest(
         @NotNull @DecimalMin(value = "0.0", inclusive = false) Double strike,
         @NotNull @DecimalMin(value = "0.0", inclusive = false) Double timeToMaturityYears,
         @NotNull Double riskFreeRate,
-        @NotNull @DecimalMin(value = "0.0", inclusive = false) Double volatility
+        @NotNull @DecimalMin(value = "0.0", inclusive = false) Double volatility,
+        @DecimalMin(value = "0.0") Double dividendYield
 ) {
 
     BlackScholesInput toInput() {
@@ -22,7 +23,8 @@ public record BlackScholesPricingRequest(
                 strike,
                 timeToMaturityYears,
                 riskFreeRate,
-                volatility
+                volatility,
+                dividendYield == null ? 0.0 : dividendYield
         );
     }
 }

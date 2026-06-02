@@ -52,13 +52,32 @@ class EuropeanOptionPositionTest {
                 BigDecimal.ZERO,
                 LocalDate.of(2027, 12, 31),
                 BigDecimal.ONE,
+                Instant.now(),
                 Instant.now()
         ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("strike must be greater than zero");
     }
 
+    @Test
+    void rejectsMissingUpdatedAt() {
+        assertThatThrownBy(() -> new EuropeanOptionPosition(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "AAPL",
+                OptionType.CALL,
+                new BigDecimal("100.0"),
+                LocalDate.of(2027, 12, 31),
+                BigDecimal.ONE,
+                Instant.now(),
+                null
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("position updatedAt is required");
+    }
+
     private EuropeanOptionPosition validPosition(String symbol, BigDecimal quantity) {
+        Instant now = Instant.now();
         return new EuropeanOptionPosition(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
@@ -67,7 +86,8 @@ class EuropeanOptionPositionTest {
                 new BigDecimal("100.0"),
                 LocalDate.of(2027, 12, 31),
                 quantity,
-                Instant.now()
+                now,
+                now
         );
     }
 }

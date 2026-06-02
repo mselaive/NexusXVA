@@ -92,6 +92,9 @@ Current notes:
 - Portfolio pricing requests pricing inputs through `marketdata`, scales price and Greeks by quantity, excludes expired positions as `UNPRICEABLE_EXPIRED`, and does not persist valuation results.
 - Portfolio pricing V1 is USD-only because FX conversion is not implemented yet.
 - The local market-data provider now supplies temporary demo pricing inputs, including dividend yield, for development; real pricing inputs should come from Blemberg when that service exists.
+- Blemberg HTTP adapter tests should protect instrument validation and European-option pricing input contracts, including stale data, dividend yield, provider failures, and malformed responses.
+- `docs/docs-EN/BlembergBuildSpec.md` is the handoff document for the separate Blemberg repo. Keep NexusXVA aligned with that contract instead of persisting provider/reference/market data locally.
+- The next functional milestone after Blemberg contract hardening is Exposure V1, not CVA. Exposure V1 should simulate GBM paths using `spot`, `volatility`, `riskFreeRate`, and `dividendYield`, then reprice the existing portfolio over a time grid.
 
 ## Milestone 4: Monte Carlo Simulation
 

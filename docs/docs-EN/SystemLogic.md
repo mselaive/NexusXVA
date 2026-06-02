@@ -358,9 +358,11 @@ Suggested next version:
 
 - Keep the current portfolio pricing endpoint.
 - Implement real Blemberg as the source of `spot`, `volatility`, `riskFreeRate`, and `dividendYield`.
+- Keep the Blemberg response fixtures in `BlembergContractFixtures.md` aligned with NexusXVA adapter tests.
+- Use `BlembergBuildSpec.md` as the implementation brief for the separate Blemberg repository.
 - Keep NexusXVA from persisting market data.
 - Add FX only when we want to support multi-currency totals.
-- Then use priceable portfolios as the base for simulation and exposure.
+- Then implement Exposure V1 using priceable portfolios, as described in `ExposureV1Plan.md`.
 
 Out of initial scope:
 

@@ -44,7 +44,11 @@ class BlembergMarketDataPricingInputGateway implements MarketDataPricingInputGat
             return Optional.of(response.toDomain(symbol));
         } catch (HttpClientErrorException.NotFound exception) {
             return Optional.empty();
+        } catch (HttpClientErrorException.BadRequest exception) {
+            return Optional.empty();
         } catch (ResourceAccessException exception) {
+            throw new ServiceUnavailableException("Market data service unavailable");
+        } catch (IllegalArgumentException exception) {
             throw new ServiceUnavailableException("Market data service unavailable");
         } catch (RestClientException exception) {
             throw new ServiceUnavailableException("Market data service unavailable");

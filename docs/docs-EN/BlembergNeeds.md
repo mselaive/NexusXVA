@@ -3,6 +3,9 @@
 This document describes what NexusXVA expects from Blemberg, the separate market-data service.
 It is a functional contract for developers, not a full Blemberg implementation guide.
 
+For concrete JSON examples, see `BlembergContractFixtures.md`.
+For the full build brief, including modules, tables, refresh policy, provider mapping, and tests, see `BlembergBuildSpec.md`.
+
 ## Purpose
 
 NexusXVA owns portfolios, positions, pricing, exposure, and XVA workflows.

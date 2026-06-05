@@ -5,6 +5,7 @@ It is a functional contract for developers, not a full Blemberg implementation g
 
 For concrete JSON examples, see `BlembergContractFixtures.md`.
 For the full build brief, including modules, tables, refresh policy, provider mapping, and tests, see `BlembergBuildSpec.md`.
+The local Blemberg base URL expected by NexusXVA is `http://localhost:8081`, configurable with `BLEMBERG_BASE_URL`.
 
 ## Purpose
 

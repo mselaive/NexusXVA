@@ -37,6 +37,9 @@ class BlembergMarketDataInstrumentGatewayTest {
                           "active": true,
                           "name": "Apple Inc.",
                           "assetClass": "EQUITY",
+                          "exchange": "NASDAQ",
+                          "provider": "TWELVE_DATA",
+                          "providerSymbol": "AAPL",
                           "currency": "USD"
                         }
                         """, MediaType.APPLICATION_JSON));
@@ -74,6 +77,9 @@ class BlembergMarketDataInstrumentGatewayTest {
                           "active": false,
                           "name": "Apple Inc.",
                           "assetClass": "EQUITY",
+                          "exchange": "NASDAQ",
+                          "provider": "TWELVE_DATA",
+                          "providerSymbol": "AAPL",
                           "currency": "USD"
                         }
                         """, MediaType.APPLICATION_JSON));

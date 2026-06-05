@@ -29,7 +29,7 @@ nexusxva:
     validation:
       enabled: ${NEXUSXVA_MARKET_DATA_VALIDATION_ENABLED:false}
     blemberg:
-      base-url: ${BLEMBERG_BASE_URL:http://localhost:8090}
+      base-url: ${BLEMBERG_BASE_URL:http://localhost:8081}
       timeout: ${BLEMBERG_TIMEOUT:2s}
 
 server:

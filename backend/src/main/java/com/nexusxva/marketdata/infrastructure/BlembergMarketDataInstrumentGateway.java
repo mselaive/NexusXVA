@@ -1,5 +1,6 @@
 package com.nexusxva.marketdata.infrastructure;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.nexusxva.marketdata.application.MarketDataInstrumentGateway;
 import com.nexusxva.marketdata.domain.MarketInstrument;
 import com.nexusxva.shared.error.ServiceUnavailableException;
@@ -45,11 +46,15 @@ class BlembergMarketDataInstrumentGateway implements MarketDataInstrumentGateway
         }
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     private record BlembergInstrumentResponse(
             String symbol,
             Boolean active,
             String name,
             String assetClass,
+            String exchange,
+            String provider,
+            String providerSymbol,
             String currency
     ) {
 

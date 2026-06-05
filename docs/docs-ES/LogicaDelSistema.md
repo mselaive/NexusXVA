@@ -38,7 +38,9 @@ Actualmente el backend tiene:
 - Calculo de Greeks principales.
 - Portfolio management persistido en PostgreSQL.
 - Pricing stateless de portfolio con Black-Scholes.
-- Inputs temporales de market data local mientras Blemberg no existe.
+- Integracion Blemberg para validar simbolos y pedir pricing inputs.
+- Inputs temporales de market data local como fallback de desarrollo.
+- Exposure V1 con Monte Carlo GBM simple y repricing Black-Scholes.
 - Migraciones de base de datos con Flyway.
 - Tests financieros, de API y de persistencia.
 
@@ -57,6 +59,7 @@ GET /api/portfolios/{portfolioId}/instruments/{positionId}
 PATCH /api/portfolios/{portfolioId}/instruments/european-options/{positionId}
 DELETE /api/portfolios/{portfolioId}/instruments/{positionId}
 POST /api/portfolios/{portfolioId}/pricing/black-scholes
+POST /api/simulations/exposure
 ```
 
 El endpoint de pricing recibe datos de una opcion europea y devuelve:
@@ -79,6 +82,7 @@ Los endpoints de portfolio permiten:
 - Listar instrumentos de un portfolio.
 - Obtener, actualizar y borrar posiciones individuales.
 - Valorar posiciones europeas persistidas a nivel portfolio usando Black-Scholes.
+- Simular perfiles de exposure futuros para portfolios persistidos.
 
 ## Como fluye una request de pricing
 
@@ -158,6 +162,35 @@ En mas detalle:
 
 Esto sigue siendo pricing stateless.
 El portfolio guarda terminos del trade, el modulo market-data entrega inputs de valoracion y los resultados de pricing no se persisten.
+
+## Como fluye una request de exposure
+
+El flujo actual de exposure es:
+
+```text
+HTTP request
+  -> simulation.api
+  -> exposure.application
+  -> portfolio.application / portfolio.infrastructure
+  -> marketdata.application pricing inputs
+  -> simulation.domain GBM paths
+  -> pricing.domain Black-Scholes repricing
+  -> exposure.domain aggregation
+  -> HTTP response
+```
+
+En mas detalle:
+
+1. El controller recibe parametros de simulacion como `portfolioId`, `valuationDate`, `horizonDays`, `timeSteps`, `paths`, `seed` y `pfeConfidenceLevel`.
+2. El servicio de aplicacion carga el portfolio persistido y sus posiciones vivas.
+3. El servicio pide un set de pricing inputs por underlying a traves de `marketdata`.
+4. El generador GBM simula precios futuros usando `spot`, `riskFreeRate`, `dividendYield` y `volatility`.
+5. Cada posicion viva se repricing en cada fecha futura con Black-Scholes.
+6. Las posiciones vencidas se excluyen desde la fecha futura donde `maturityDate <= simulatedDate`.
+7. El agregador devuelve expected exposure, expected negative exposure y PFE por fecha.
+
+Exposure V1 es sincrono y stateless.
+No persiste paths, market data ni resultados de exposure.
 
 ## Responsabilidad de cada capa
 
@@ -243,6 +276,51 @@ Contiene JPA entities, repositories y el adaptador que implementa `PortfolioStor
 
 Esta capa conoce PostgreSQL/JPA; las capas API, application y domain no deben depender de esos detalles.
 
+### `marketdata.application`
+
+Contiene los puertos internos para validar instrumentos y pedir pricing inputs de opciones europeas.
+
+Portfolio y exposure deben hablar con `marketdata.application`, no directamente con los adapters de Blemberg.
+
+### `marketdata.infrastructure`
+
+Contiene providers externos y temporales de market data:
+
+- Adapters REST de Blemberg.
+- Adapter local de watchlist/pricing inputs para desarrollo.
+
+No debe persistir market data dentro de NexusXVA.
+
+### `simulation.api`
+
+Contiene el contrato HTTP de simulacion de exposure.
+
+Valida el request y traduce DTOs a comandos de aplicacion.
+
+### `simulation.domain`
+
+Contiene logica pura de simulacion, como generacion deterministica de paths GBM.
+
+Debe poder probarse sin Spring, HTTP ni base de datos.
+
+### `exposure.application`
+
+Orquesta el caso de uso de exposure:
+
+- Cargar posiciones del portfolio.
+- Pedir pricing inputs a market data.
+- Generar paths simulados de spot.
+- Repricear posiciones en la grilla temporal.
+- Devolver un resultado stateless de exposure.
+
+### `exposure.domain`
+
+Contiene la logica de agregacion de exposure:
+
+- Expected Exposure.
+- Expected Negative Exposure.
+- Potential Future Exposure.
+
 ## Decisiones financieras actuales
 
 Para el primer pricing slice decidimos:
@@ -275,16 +353,34 @@ Para el primer slice de portfolio decidimos:
 - Permitir `maturityDate` en el pasado; pricing decidira si puede valorar trades vencidos.
 - No guardar `spot`, `volatility` ni `riskFreeRate` dentro de la posicion.
 - Validar `underlyingSymbol` contra Blemberg cuando `nexusxva.market-data.validation.enabled=true`.
-- Permitir `nexusxva.market-data.provider=local` como watchlist temporal para validar simbolos mientras Blemberg no existe.
+- Permitir `nexusxva.market-data.provider=local` como watchlist y provider temporal de pricing inputs para desarrollo.
 - Valorar portfolios solo en `USD` para V1; FX conversion no esta implementado todavia.
-- Usar el provider local como fuente temporal de inputs demo de pricing mientras Blemberg no existe.
+- Usar Blemberg como fuente real objetivo de pricing inputs.
+- Usar el provider local solo como fuente temporal de inputs demo.
 - Mantener el pricing de portfolio stateless; no persistir resultados de valoracion.
 
 La separacion trade/market data es intencional.
 Un portfolio describe que instrumentos tenemos; market data describe el estado del mercado usado para valorar esos instrumentos.
 Por eso NexusXVA mantiene las posiciones como terminos del trade y usa el modulo `marketdata` como frontera para hablar con Blemberg.
-Blemberg valida existencia del instrumento y entregara `spot`, `volatility`, `riskFreeRate` y `dividendYield` reales.
+Blemberg valida existencia del instrumento y entrega `spot`, `volatility`, `riskFreeRate` y `dividendYield` reales.
 El provider local valida simbolos conocidos y entrega inputs demo temporales de pricing, pero no persiste market data ni reemplaza Blemberg.
+
+## Decisiones actuales de exposure
+
+Para Exposure V1 decidimos:
+
+- Soportar solo portfolios persistidos de opciones europeas.
+- Usar un modelo GBM simple para paths futuros de spot.
+- Reutilizar Black-Scholes para repricing en fechas futuras.
+- Usar `spot`, `volatility`, `riskFreeRate` y `dividendYield` desde `marketdata`.
+- Mantener simulaciones deterministicas cuando se entrega un `seed` fijo.
+- Devolver expected exposure, expected negative exposure y PFE por fecha.
+- Excluir posiciones cuando ya estan vencidas para una fecha futura simulada.
+- Mantener exposure stateless y sincrono.
+- Mantener USD-only hasta implementar conversion FX.
+
+Este es el puente entre portfolio pricing y CVA.
+CVA debe consumir un perfil de exposure probado, no saltar directo desde pricing actual a valoracion de credito.
 
 ## Politica de errores
 
@@ -324,6 +420,14 @@ El slice de portfolio se protege con:
 - Tests para la watchlist local temporal.
 - Tests de errores `400` y `404` con `ApiError`.
 
+El slice de exposure se protege con:
+
+- Tests deterministas de GBM con seeds fijos.
+- Tests de drift donde `dividendYield` cambia los paths simulados.
+- Tests fixture de agregacion para EE, ENE y PFE.
+- Tests de aplicacion para portfolios vacios, posiciones vencidas, regla USD-only y market data faltante.
+- Tests API para requests validos e invalidos de simulacion.
+
 La regla es:
 
 > Si una formula financiera o un workflow persistido cambia, los tests deben decirnos si cambio por una razon explicita o si rompimos una propiedad esperada.
@@ -337,7 +441,8 @@ Esto nos da:
 - Una unidad de negocio persistida.
 - Una forma clara de guardar posiciones de opciones europeas.
 - Pricing a nivel portfolio para posiciones europeas en USD.
-- Base para simulacion, exposure y CVA mas adelante.
+- Perfiles de exposure para portfolios de opciones europeas en USD.
+- Base para CVA mas adelante.
 
 El orden que seguimos fue:
 
@@ -347,25 +452,25 @@ El orden que seguimos fue:
 4. Recuperar portfolios.
 5. Preparar pricing a nivel portfolio.
 6. Valorar portfolios con Black-Scholes usando inputs desde `marketdata`.
+7. Simular perfiles de exposure usando GBM y repricing Black-Scholes.
 
 Asi evitamos construir Monte Carlo o CVA antes de tener una unidad persistida sobre la cual calcular riesgo.
+Ahora Exposure V1 existe, y CVA debe esperar hasta que el contrato de exposure este estable.
 
 ## Proximo milestone recomendado
 
-El siguiente milestone recomendado es reemplazar los inputs demo del provider local por Blemberg real y luego avanzar hacia simulacion/exposure.
+El siguiente milestone recomendado es endurecer el smoke real con Blemberg y preparar CVA simplificado.
 
 Siguiente version sugerida:
 
-- Mantener el endpoint de portfolio pricing actual.
-- Implementar Blemberg real como fuente de `spot`, `volatility`, `riskFreeRate` y `dividendYield`.
+- Mantener los endpoints actuales de portfolio pricing y exposure.
+- Usar Blemberg real como fuente de `spot`, `volatility`, `riskFreeRate` y `dividendYield` cuando este corriendo.
 - Mantener NexusXVA sin persistir market data.
 - Agregar FX solo cuando queramos soportar totales multi-currency.
-- Despues usar portfolios valorables como base para simulacion y exposure.
+- Agregar CVA solo despues de que Exposure V1 tenga tests y response shape estables.
 
 Fuera de scope inicial:
 
-- Monte Carlo.
-- Exposure.
 - CVA.
 - Auth.
 - Multi-currency sin FX.

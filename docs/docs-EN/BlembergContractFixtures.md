@@ -17,6 +17,9 @@ GET /api/instruments/AAPL
   "active": true,
   "name": "Apple Inc.",
   "assetClass": "EQUITY",
+  "exchange": "NASDAQ",
+  "provider": "TWELVE_DATA",
+  "providerSymbol": "AAPL",
   "currency": "USD"
 }
 ```
@@ -31,6 +34,9 @@ NexusXVA treats inactive instruments as invalid underlyings when validation is e
   "active": false,
   "name": "Apple Inc.",
   "assetClass": "EQUITY",
+  "exchange": "NASDAQ",
+  "provider": "TWELVE_DATA",
+  "providerSymbol": "AAPL",
   "currency": "USD"
 }
 ```
@@ -62,8 +68,11 @@ GET /api/market-data/pricing-inputs/european-option?symbol=AAPL&maturityDate=202
   "symbol": "AAPL",
   "spot": 190.0,
   "volatility": 0.22,
+  "volatilityMethod": "HISTORICAL_REALIZED_60D",
   "riskFreeRate": 0.045,
+  "rateMethod": "LINEAR_INTERPOLATION",
   "dividendYield": 0.005,
+  "dividendYieldMethod": "PROVIDER",
   "currency": "USD",
   "asOf": "2026-06-02T12:00:00Z",
   "source": "BLEMBERG",

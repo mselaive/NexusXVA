@@ -1,5 +1,6 @@
 package com.nexusxva.marketdata.infrastructure;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.nexusxva.marketdata.application.MarketDataPricingInputGateway;
 import com.nexusxva.marketdata.domain.MarketDataPricingInput;
 import com.nexusxva.shared.error.ServiceUnavailableException;
@@ -55,12 +56,16 @@ class BlembergMarketDataPricingInputGateway implements MarketDataPricingInputGat
         }
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     private record BlembergPricingInputResponse(
             String symbol,
             Double spot,
             Double volatility,
+            String volatilityMethod,
             Double riskFreeRate,
+            String rateMethod,
             Double dividendYield,
+            String dividendYieldMethod,
             String currency,
             Instant asOf,
             String source,

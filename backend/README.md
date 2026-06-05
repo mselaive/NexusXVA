@@ -2,7 +2,7 @@
 
 Spring Boot backend for NexusXVA.
 
-The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option positions, and stateless portfolio-level Black-Scholes pricing using market-data pricing inputs. Monte Carlo simulation, exposure analytics, and XVA calculations are planned future milestones.
+The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option positions, stateless portfolio-level Black-Scholes pricing using market-data pricing inputs, and Exposure V1 with simple GBM Monte Carlo simulation. CVA and broader XVA calculations are planned future milestones.
 
 ## Requirements
 
@@ -73,8 +73,9 @@ The current test setup covers:
 - pricing API request, response, and validation behavior
 - persisted portfolio metadata, listing, update/delete, and European option position workflows
 - portfolio-level Black-Scholes pricing with local market-data inputs
+- Exposure V1 Monte Carlo simulation, deterministic GBM paths, and exposure aggregation
 
-The current suite is verified with `mvn test` and has `80` tests.
+The current suite is verified with `mvn test` and has `117` tests.
 
 ## Developer Financial Docs
 
@@ -84,6 +85,12 @@ Conceptual financial guides for developers live in:
 - System logic ES: [`../docs/docs-ES/LogicaDelSistema.md`](../docs/docs-ES/LogicaDelSistema.md)
 - System logic EN: [`../docs/docs-EN/SystemLogic.md`](../docs/docs-EN/SystemLogic.md)
 - English: [`../docs/docs-EN/FinancialConcepts.md`](../docs/docs-EN/FinancialConcepts.md)
+- Blemberg needs: [`../docs/docs-EN/BlembergNeeds.md`](../docs/docs-EN/BlembergNeeds.md)
+- Blemberg contract fixtures: [`../docs/docs-EN/BlembergContractFixtures.md`](../docs/docs-EN/BlembergContractFixtures.md)
+- Blemberg build spec: [`../docs/docs-EN/BlembergBuildSpec.md`](../docs/docs-EN/BlembergBuildSpec.md)
+- Blemberg runtime guide: [`../docs/docs-EN/how-it-works-blemberg.md`](../docs/docs-EN/how-it-works-blemberg.md)
+- NexusXVA/Blemberg integration guide: [`../docs/docs-EN/nexusxva-integration-blemberg.md`](../docs/docs-EN/nexusxva-integration-blemberg.md)
+- Exposure V1 plan: [`../docs/docs-EN/ExposureV1Plan.md`](../docs/docs-EN/ExposureV1Plan.md)
 
 ## Portfolio Management
 
@@ -103,6 +110,7 @@ GET /api/portfolios/{portfolioId}/instruments/{positionId}
 PATCH /api/portfolios/{portfolioId}/instruments/european-options/{positionId}
 DELETE /api/portfolios/{portfolioId}/instruments/{positionId}
 POST /api/portfolios/{portfolioId}/pricing/black-scholes
+POST /api/simulations/exposure
 ```
 
 Create portfolio request:
@@ -228,7 +236,7 @@ The USD-only rule prevents incorrect totals. Without FX conversion, values such 
 
 ### Blemberg Market Data Validation
 
-NexusXVA can validate portfolio position symbols against Blemberg, the separate market-data service planned for reference data and pricing inputs.
+NexusXVA can validate portfolio position symbols against Blemberg, the separate market-data service responsible for reference data and pricing inputs.
 
 Configuration:
 
@@ -239,7 +247,7 @@ nexusxva:
     validation:
       enabled: false
     blemberg:
-      base-url: http://localhost:8090
+      base-url: http://localhost:8081
       timeout: 2s
 ```
 
@@ -248,9 +256,18 @@ Environment overrides:
 ```bash
 NEXUSXVA_MARKET_DATA_PROVIDER=blemberg
 NEXUSXVA_MARKET_DATA_VALIDATION_ENABLED=true
-BLEMBERG_BASE_URL=http://localhost:8090
+BLEMBERG_BASE_URL=http://localhost:8081
 BLEMBERG_TIMEOUT=2s
 ```
+
+Before using Blemberg locally, start that service, trigger its refresh, and verify health:
+
+```bash
+curl http://localhost:8081/actuator/health
+curl -X POST http://localhost:8081/api/admin/market-data/refresh
+```
+
+When NexusXVA runs from the provided Docker Compose file, `BLEMBERG_BASE_URL` defaults to `http://host.docker.internal:8081`. If both services run inside the same Docker network, override it with the Blemberg service name, for example `http://blemberg:8081`.
 
 Local validation and pricing-input mock without Blemberg:
 
@@ -265,10 +282,66 @@ When validation is enabled:
 
 - creating a European option position validates `underlyingSymbol` with `GET /api/instruments/{symbol}` on Blemberg.
 - updating a position validates only when `underlyingSymbol` changes.
+- portfolio pricing requests `GET /api/market-data/pricing-inputs/european-option?symbol={symbol}&maturityDate={yyyy-mm-dd}` on Blemberg.
 - unknown or inactive instruments return `400 Bad Request` with `Unknown underlyingSymbol`.
 - unavailable Blemberg calls return `503 Service Unavailable` with `Market data service unavailable`.
 
 NexusXVA still persists only the symbol and trade terms. Blemberg owns instrument reference data and real pricing inputs such as spot, historical volatility, risk-free rates, and dividend yields.
+
+### Exposure Simulation V1
+
+Exposure V1 is stateless: it loads a persisted portfolio, requests market-data pricing inputs through the `marketdata` boundary, simulates future spot paths with a simple GBM model, reprices live European option positions with Black-Scholes across the time grid, and aggregates exposure measures. Results are not persisted.
+
+Endpoint:
+
+```text
+POST /api/simulations/exposure
+```
+
+Request:
+
+```json
+{
+  "portfolioId": "6f2d4637-ef84-4bc5-bca3-7c7aee54b4e5",
+  "valuationDate": "2026-06-05",
+  "horizonDays": 365,
+  "timeSteps": 12,
+  "paths": 1000,
+  "seed": 12345,
+  "pfeConfidenceLevel": 0.95
+}
+```
+
+Response shape:
+
+```json
+{
+  "portfolioId": "6f2d4637-ef84-4bc5-bca3-7c7aee54b4e5",
+  "valuationDate": "2026-06-05",
+  "model": "GBM_BLACK_SCHOLES_EXPOSURE_V1",
+  "paths": 1000,
+  "timeSteps": 12,
+  "pfeConfidenceLevel": 0.95,
+  "points": [
+    {
+      "date": "2026-07-05",
+      "expectedExposure": 123.45,
+      "expectedNegativeExposure": 12.34,
+      "pfe": 456.78
+    }
+  ]
+}
+```
+
+V1 simulation rules:
+
+- Supports persisted European option portfolios only.
+- Supports USD portfolios and USD market-data inputs only.
+- Uses `spot`, `volatility`, `riskFreeRate`, and `dividendYield` from `marketdata`.
+- Uses deterministic seeds so tests and dev runs are repeatable.
+- Excludes positions once `maturityDate <= futureDate`.
+- Empty portfolios or all-expired portfolios return zero exposure points.
+- Does not persist market data, simulated paths, or exposure results.
 
 Implementation shape:
 

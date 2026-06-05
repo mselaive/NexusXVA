@@ -19,6 +19,10 @@ services:
       - postgres
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      NEXUSXVA_MARKET_DATA_PROVIDER: ${NEXUSXVA_MARKET_DATA_PROVIDER:-blemberg}
+      NEXUSXVA_MARKET_DATA_VALIDATION_ENABLED: ${NEXUSXVA_MARKET_DATA_VALIDATION_ENABLED:-false}
+      BLEMBERG_BASE_URL: ${BLEMBERG_BASE_URL:-http://host.docker.internal:8081}
+      BLEMBERG_TIMEOUT: ${BLEMBERG_TIMEOUT:-2s}
     ports:
       - "8080:8080"
 

@@ -1,7 +1,7 @@
-# Exposure V1 Plan
+# Exposure V1 Behavior
 
-Exposure V1 is the next functional milestone after Blemberg integration hardening.
-It should use the existing persisted portfolios and market-data pricing inputs.
+Exposure V1 is the current stateless simulation slice after portfolio pricing and Blemberg integration hardening.
+It uses existing persisted portfolios and market-data pricing inputs.
 
 ## Goal
 
@@ -11,7 +11,7 @@ Exposure V1 creates the time-grid data that CVA will consume later.
 
 ## Inputs
 
-Exposure V1 should take:
+`POST /api/simulations/exposure` takes:
 
 - `portfolioId`
 - `valuationDate`
@@ -21,7 +21,7 @@ Exposure V1 should take:
 - random seed
 - confidence level for PFE
 
-Market data should come through the existing `marketdata` boundary:
+Market data comes through the existing `marketdata` boundary:
 
 - `spot`
 - `volatility`
@@ -33,7 +33,7 @@ Market data should come through the existing `marketdata` boundary:
 
 ## Model
 
-Start with a single-factor equity GBM model per underlying:
+V1 uses a single-factor equity GBM model per underlying:
 
 ```text
 dS = (riskFreeRate - dividendYield) * S * dt + volatility * S * dW
@@ -79,9 +79,9 @@ For each future date, return:
 - No FX conversion.
 - No counterparty, netting sets, collateral, or credit spreads.
 - No persisted exposure results.
-- No CVA calculation until Exposure V1 is tested.
+- No CVA calculation in this endpoint.
 
-## Tests Needed
+## Tests
 
 - Deterministic output with a fixed random seed.
 - Empty portfolio returns zero exposure.

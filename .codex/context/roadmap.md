@@ -91,27 +91,40 @@ Current notes:
 - Stateless portfolio-level Black-Scholes pricing is implemented at `POST /api/portfolios/{portfolioId}/pricing/black-scholes`.
 - Portfolio pricing requests pricing inputs through `marketdata`, scales price and Greeks by quantity, excludes expired positions as `UNPRICEABLE_EXPIRED`, and does not persist valuation results.
 - Portfolio pricing V1 is USD-only because FX conversion is not implemented yet.
-- The local market-data provider now supplies temporary demo pricing inputs, including dividend yield, for development; real pricing inputs should come from Blemberg when that service exists.
+- The local market-data provider supplies temporary demo pricing inputs, including dividend yield, for development; real pricing inputs should come from Blemberg when that service is running.
 - Blemberg HTTP adapter tests should protect instrument validation and European-option pricing input contracts, including stale data, dividend yield, provider failures, and malformed responses.
 - `docs/docs-EN/BlembergBuildSpec.md` is the handoff document for the separate Blemberg repo. Keep NexusXVA aligned with that contract instead of persisting provider/reference/market data locally.
-- The next functional milestone after Blemberg contract hardening is Exposure V1, not CVA. Exposure V1 should simulate GBM paths using `spot`, `volatility`, `riskFreeRate`, and `dividendYield`, then reprice the existing portfolio over a time grid.
+- Local Blemberg currently runs at `http://localhost:8081`; use `BLEMBERG_BASE_URL` when another network/compose topology needs a different address.
+- Exposure V1 now simulates GBM paths using `spot`, `volatility`, `riskFreeRate`, and `dividendYield`, then reprices the existing portfolio over a time grid.
 
 ## Milestone 4: Monte Carlo Simulation
+
+Status: partially completed for synchronous stateless GBM exposure simulations.
 
 Goals:
 
 - Generate simulated spot paths.
 - Use deterministic seeds for repeatability.
 - Price exposures across time buckets.
-- Record simulation metadata.
+- Return simulation metadata in the API response.
 
 Completion criteria:
 
 - Simulation tests are deterministic with fixed seeds.
-- Runtime metadata is captured.
+- Runtime metadata is returned.
 - No database access occurs inside path loops.
 
+Current notes:
+
+- `POST /api/simulations/exposure` is implemented as a stateless synchronous simulation endpoint.
+- The GBM path generator lives in `simulation.domain` and is deterministic with fixed seeds.
+- Exposure orchestration lives in `exposure.application`.
+- V1 uses Blemberg/local `marketdata` pricing inputs and Black-Scholes repricing.
+- Simulation and exposure results are not persisted yet.
+
 ## Milestone 5: Exposure Analytics
+
+Status: partially completed for EE, ENE, and PFE profiles.
 
 Goals:
 
@@ -125,6 +138,14 @@ Completion criteria:
 - Exposure cannot be negative after clipping.
 - PFE percentile behavior is tested.
 - Exposure result schema is stable.
+
+Current notes:
+
+- Exposure aggregation returns `expectedExposure`, `expectedNegativeExposure`, and `pfe` per future date.
+- Empty portfolios and all-expired portfolios return zero exposure points.
+- Expired positions are excluded at future dates where `maturityDate <= simulatedDate`.
+- V1 remains USD-only and European-options-only.
+- The next functional milestone is simplified CVA over the exposure profile, after a real Blemberg smoke path is stable.
 
 ## Milestone 6: Simplified CVA
 

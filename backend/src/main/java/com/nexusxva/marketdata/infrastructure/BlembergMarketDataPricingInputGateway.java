@@ -5,9 +5,12 @@ import com.nexusxva.marketdata.application.MarketDataPricingInputGateway;
 import com.nexusxva.marketdata.domain.MarketDataPricingInput;
 import com.nexusxva.shared.error.ServiceUnavailableException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -19,6 +22,10 @@ import java.util.Optional;
 @Repository
 @ConditionalOnProperty(prefix = "nexusxva.market-data", name = "provider", havingValue = "blemberg", matchIfMissing = true)
 class BlembergMarketDataPricingInputGateway implements MarketDataPricingInputGateway {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(BlembergMarketDataPricingInputGateway.class);
+    private static final String ENDPOINT = "GET /api/market-data/pricing-inputs/european-option";
+    private static final int MAX_LOG_BODY_LENGTH = 500;
 
     private final RestClient blembergRestClient;
 
@@ -44,16 +51,57 @@ class BlembergMarketDataPricingInputGateway implements MarketDataPricingInputGat
 
             return Optional.of(response.toDomain(symbol));
         } catch (HttpClientErrorException.NotFound exception) {
+            logHttpError(symbol, exception);
             return Optional.empty();
         } catch (HttpClientErrorException.BadRequest exception) {
+            logHttpError(symbol, exception);
             return Optional.empty();
+        } catch (HttpStatusCodeException exception) {
+            logHttpError(symbol, exception);
+            throw new ServiceUnavailableException("Market data service unavailable");
         } catch (ResourceAccessException exception) {
+            LOGGER.warn("Blemberg pricing input lookup failed endpoint={} symbol={} maturityDate={} reason={}",
+                    ENDPOINT,
+                    symbol,
+                    maturityDate,
+                    exception.getClass().getSimpleName());
             throw new ServiceUnavailableException("Market data service unavailable");
         } catch (IllegalArgumentException exception) {
+            LOGGER.warn("Blemberg pricing input response rejected endpoint={} symbol={} maturityDate={} reason={}",
+                    ENDPOINT,
+                    symbol,
+                    maturityDate,
+                    exception.getClass().getSimpleName());
             throw new ServiceUnavailableException("Market data service unavailable");
         } catch (RestClientException exception) {
+            LOGGER.warn("Blemberg pricing input lookup failed endpoint={} symbol={} maturityDate={} reason={}",
+                    ENDPOINT,
+                    symbol,
+                    maturityDate,
+                    exception.getClass().getSimpleName());
             throw new ServiceUnavailableException("Market data service unavailable");
         }
+    }
+
+    private void logHttpError(String symbol, HttpStatusCodeException exception) {
+        LOGGER.warn(
+                "Blemberg pricing input lookup returned error endpoint={} symbol={} status={} body={}",
+                ENDPOINT,
+                symbol,
+                exception.getStatusCode().value(),
+                sanitizedBody(exception.getResponseBodyAsString())
+        );
+    }
+
+    private String sanitizedBody(String body) {
+        if (body == null || body.isBlank()) {
+            return "";
+        }
+        String oneLine = body.replaceAll("\\s+", " ").trim();
+        if (oneLine.length() <= MAX_LOG_BODY_LENGTH) {
+            return oneLine;
+        }
+        return oneLine.substring(0, MAX_LOG_BODY_LENGTH) + "...";
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

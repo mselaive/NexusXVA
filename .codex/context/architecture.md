@@ -24,7 +24,7 @@ Recommended backend modules:
 - `pricing`: owns pricing models, Greeks, pricing requests, and pricing results.
 - `simulation`: owns stochastic path generation, random seeds, scenario generation, and simulation jobs.
 - `exposure`: owns exposure profiles, Expected Exposure, and Potential Future Exposure.
-- `xva`: owns simplified CVA first, then later DVA, FVA, and KVA.
+- `cva`: owns the current simplified CVA slice; broader XVA adjustments can become their own modules when needed.
 - `jobs`: owns asynchronous or long-running execution coordination when needed.
 - `reporting`: owns result summaries and export-ready views.
 - `auth`: future module; not required for the MVP unless explicitly planned.
@@ -85,7 +85,7 @@ API examples:
 - `POST /api/portfolios/{portfolioId}/instruments/european-options`
 - `POST /api/pricing/european-options/black-scholes`
 - `POST /api/simulations/exposure`
-- `POST /api/xva/cva`
+- `POST /api/risk/cva`
 - `GET /api/jobs/{jobId}`
 
 ## Data Model Principles
@@ -153,4 +153,3 @@ Phase 4:
 - Distributed simulation exploration.
 - Kafka where event workflows justify it.
 - Kubernetes deployment manifests.
-

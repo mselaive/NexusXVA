@@ -94,6 +94,35 @@ class BlembergMarketDataPricingInputGatewayTest {
     }
 
     @Test
+    void parsesScientificNotationZeroDividendYield() {
+        Fixture fixture = fixture();
+        fixture.server.expect(once(), requestTo(PRICING_INPUT_URI))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("""
+                        {
+                          "symbol": "AAPL",
+                          "spot": 312.68,
+                          "volatility": 0.21900224702828597,
+                          "volatilityMethod": "HISTORICAL_REALIZED_60D",
+                          "riskFreeRate": 0.03838684931506849,
+                          "rateMethod": "LINEAR_INTERPOLATION",
+                          "dividendYield": 0E-8,
+                          "dividendYieldMethod": "UNKNOWN_ZERO",
+                          "currency": "USD",
+                          "asOf": "2026-06-05T00:00:00Z",
+                          "source": "BLEMBERG",
+                          "stale": false
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        Optional<MarketDataPricingInput> input = fixture.gateway.findEuropeanOptionPricingInput("AAPL", MATURITY_DATE);
+
+        assertThat(input).isPresent();
+        assertThat(input.get().dividendYield()).isZero();
+        fixture.server.verify();
+    }
+
+    @Test
     void mapsNotFoundToEmptyOptional() {
         Fixture fixture = fixture();
         fixture.server.expect(once(), requestTo(PRICING_INPUT_URI))

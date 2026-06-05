@@ -45,7 +45,11 @@
 - Persisted positions should store trade terms, not market data inputs such as spot, volatility, or rates, unless a feature explicitly changes that boundary.
 - External instrument validation must go through the `marketdata` application boundary; portfolio code should not call Blemberg or other providers directly.
 - Portfolio pricing inputs must also go through the `marketdata` application boundary; do not read provider data directly from portfolio code.
+- Blemberg snapshots are diagnostic/cache data only in NexusXVA; pricing and exposure should consume Blemberg pricing inputs, not raw snapshots.
+- Treat Blemberg V1 `GET /v3/api-docs` returning `501 Not Implemented` as expected; runtime integration must not depend on OpenAPI.
 - Pricing results are stateless by default and should not be persisted unless the feature explicitly introduces valuation storage.
+- CVA V1 should consume exposure profiles through `exposure.application`; do not duplicate simulation logic in `cva`.
+- Keep simplified CVA stateless unless a feature explicitly introduces persisted valuation runs.
 
 ## API Design
 

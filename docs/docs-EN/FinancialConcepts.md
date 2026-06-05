@@ -541,19 +541,61 @@ The current version avoids some cases on purpose:
 * Exact payoff at expiration.
 * Persisted valuation results.
 * Real market data storage inside NexusXVA.
-* Monte Carlo, exposure, and CVA.
+* Real credit curves, counterparties, netting sets, collateral, and wrong-way risk.
 
 These cases are not forgotten.
 They are out of scope so the current slice stays small, correct, and testable.
 
 ---
 
-## 29. General idea of the module
+## 29. What is Exposure?
+
+**Exposure** measures how much value could be at risk against a counterparty in the future.
+
+NexusXVA Exposure V1 simulates future prices, reprices the portfolio at future dates, and aggregates:
+
+* Expected Exposure.
+* Expected Negative Exposure.
+* Potential Future Exposure.
+
+In simple terms:
+
+> Exposure estimates how much the portfolio could be worth in future scenarios.
+
+---
+
+## 30. What is CVA?
+
+**Credit Valuation Adjustment**, or **CVA**, estimates the value adjustment caused by counterparty default risk.
+
+NexusXVA CVA V1 uses a simplified formula:
+
+```text
+CVA = LGD * sum(discountFactor * expectedExposure * defaultProbabilityIncrement)
+```
+
+Where:
+
+* `LGD` means loss given default.
+* `expectedExposure` comes from Exposure V1.
+* `defaultProbabilityIncrement` comes from a flat hazard rate.
+* `discountFactor` brings the contribution back to present value.
+
+This is not a full bank-grade CVA model.
+It is the first stateless slice that connects portfolio, market data, exposure, and credit adjustment.
+
+In simple terms:
+
+> CVA estimates how much value we subtract because the counterparty might default while we have positive exposure.
+
+---
+
+## 31. General idea of the module
 
 This module aims to implement a simple but real financial calculation.
 
 It does not try to simulate a complete financial system.
-It does not connect to real market data or store trades.
+It keeps market data outside NexusXVA and stores trade terms in portfolios.
 
 The first version focuses on:
 
@@ -563,6 +605,8 @@ The first version focuses on:
 * Calculating the main Greeks.
 * Returning a clear result.
 * Pricing USD portfolios with persisted European option positions using market-data inputs.
+* Simulating exposure profiles.
+* Calculating simplified CVA from exposure and flat credit assumptions.
 
 In simple terms:
 

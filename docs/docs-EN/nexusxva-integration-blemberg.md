@@ -63,6 +63,29 @@ Blemberg also returns audit fields:
 - `rateMethod`
 - `dividendYieldMethod`
 
+## Diagnostic Snapshots
+
+Snapshots are diagnostic/cache data. NexusXVA pricing and exposure should use pricing inputs, not raw snapshots.
+
+```http
+GET /api/market-data/snapshots?symbols=AAPL,SPY,QQQ,MSFT
+```
+
+Blemberg V1 returns a wrapper:
+
+```json
+{
+  "snapshots": [],
+  "missingSymbols": []
+}
+```
+
+If some symbols are missing, Blemberg should still return `200` when at least one requested symbol has a usable snapshot. NexusXVA smoke checks should parse both `snapshots` and `missingSymbols`.
+
+## OpenAPI
+
+`GET /v3/api-docs` returns clean `501 Not Implemented` in Blemberg V1. NexusXVA must not treat that as a pricing or exposure failure.
+
 ## Error Mapping
 
 Recommended NexusXVA handling:
@@ -88,6 +111,9 @@ Commands:
 ```bash
 curl http://localhost:8081/actuator/health
 curl -X POST http://localhost:8081/api/admin/market-data/refresh
+curl http://localhost:8081/api/admin/market-data/refresh-runs
+curl "http://localhost:8081/api/market-data/snapshots?symbols=AAPL,SPY,QQQ,MSFT"
+curl "http://localhost:8081/api/market-data/pricing-inputs/european-option?symbol=AAPL&maturityDate=2027-06-01"
 ```
 
 ## Boundary Reminder

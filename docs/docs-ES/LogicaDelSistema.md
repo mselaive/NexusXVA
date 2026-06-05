@@ -41,6 +41,7 @@ Actualmente el backend tiene:
 - Integracion Blemberg para validar simbolos y pedir pricing inputs.
 - Inputs temporales de market data local como fallback de desarrollo.
 - Exposure V1 con Monte Carlo GBM simple y repricing Black-Scholes.
+- CVA V1 simplificado sobre el perfil de exposure.
 - Migraciones de base de datos con Flyway.
 - Tests financieros, de API y de persistencia.
 
@@ -60,6 +61,7 @@ PATCH /api/portfolios/{portfolioId}/instruments/european-options/{positionId}
 DELETE /api/portfolios/{portfolioId}/instruments/{positionId}
 POST /api/portfolios/{portfolioId}/pricing/black-scholes
 POST /api/simulations/exposure
+POST /api/risk/cva
 ```
 
 El endpoint de pricing recibe datos de una opcion europea y devuelve:
@@ -192,6 +194,30 @@ En mas detalle:
 Exposure V1 es sincrono y stateless.
 No persiste paths, market data ni resultados de exposure.
 
+## Como fluye un request de CVA
+
+El flujo actual de CVA es:
+
+```text
+HTTP request
+  -> cva.api
+  -> cva.application
+  -> exposure.application
+  -> cva.domain formula CVA simplificada
+  -> HTTP response
+```
+
+En mas detalle:
+
+1. El controller recibe parametros de portfolio, simulacion y credito simple.
+2. El servicio de CVA pide a Exposure V1 un perfil de expected exposure por fecha futura.
+3. El calculador CVA aplica un modelo de default con hazard rate plano y discount rate plano.
+4. Cada bucket aporta `LGD * discountFactor * expectedExposure * defaultProbabilityIncrement`.
+5. La API devuelve CVA total y detalle de contribucion por fecha.
+
+CVA V1 es sincrono y stateless.
+No persiste exposure, probabilidades de default ni resultados CVA.
+
 ## Responsabilidad de cada capa
 
 ### `pricing.api`
@@ -321,6 +347,24 @@ Contiene la logica de agregacion de exposure:
 - Expected Negative Exposure.
 - Potential Future Exposure.
 
+### `cva.api`
+
+Contiene el contrato HTTP de CVA.
+
+Valida el request y traduce DTOs a comandos de aplicacion.
+
+### `cva.application`
+
+Orquesta el caso de uso de CVA.
+
+Llama la simulacion de exposure y pasa ese perfil al calculador de dominio CVA.
+
+### `cva.domain`
+
+Contiene la formula CVA simplificada y los puntos de salida.
+
+Debe mantenerse independiente de Spring, HTTP, Blemberg y la base de datos.
+
 ## Decisiones financieras actuales
 
 Para el primer pricing slice decidimos:
@@ -382,6 +426,21 @@ Para Exposure V1 decidimos:
 Este es el puente entre portfolio pricing y CVA.
 CVA debe consumir un perfil de exposure probado, no saltar directo desde pricing actual a valoracion de credito.
 
+## Decisiones actuales de CVA
+
+Para CVA V1 decidimos:
+
+- Reutilizar Exposure V1 en vez de crear otro flujo de simulacion.
+- Usar expected exposure, no PFE, para la contribucion CVA.
+- Usar un hazard rate anual plano para la contraparte.
+- Usar un discount rate anual plano y continuamente compuesto.
+- Usar `lossGivenDefault` directamente, con valores entre `0.0` y `1.0`.
+- Mantener CVA stateless y sincrono.
+- Mantener USD-only y opciones europeas solamente a traves del flujo de exposure reutilizado.
+
+Esto es intencionalmente simplificado.
+Es suficiente para probar el camino XVA desde portfolio a exposure y luego a ajuste de credito sin introducir todavia curvas de credito, counterparties, collateral ni netting sets.
+
 ## Politica de errores
 
 La API debe devolver errores estables y claros.
@@ -428,6 +487,13 @@ El slice de exposure se protege con:
 - Tests de aplicacion para portfolios vacios, posiciones vencidas, regla USD-only y market data faltante.
 - Tests API para requests validos e invalidos de simulacion.
 
+El slice de CVA se protege con:
+
+- Tests de formula para incrementos de probabilidad de default por bucket y discounting.
+- Tests de invariantes: exposure cero, LGD cero y aumento con hazard rate.
+- Tests de aplicacion confirmando que CVA consume Exposure V1.
+- Tests API para requests validos de CVA, errores de validacion, portfolios desconocidos y regla USD-only.
+
 La regla es:
 
 > Si una formula financiera o un workflow persistido cambia, los tests deben decirnos si cambio por una razon explicita o si rompimos una propiedad esperada.
@@ -442,7 +508,7 @@ Esto nos da:
 - Una forma clara de guardar posiciones de opciones europeas.
 - Pricing a nivel portfolio para posiciones europeas en USD.
 - Perfiles de exposure para portfolios de opciones europeas en USD.
-- Base para CVA mas adelante.
+- Calculo CVA simplificado sobre perfiles de exposure.
 
 El orden que seguimos fue:
 
@@ -453,25 +519,29 @@ El orden que seguimos fue:
 5. Preparar pricing a nivel portfolio.
 6. Valorar portfolios con Black-Scholes usando inputs desde `marketdata`.
 7. Simular perfiles de exposure usando GBM y repricing Black-Scholes.
+8. Calcular CVA simplificado desde expected exposure y supuestos planos de credito.
 
 Asi evitamos construir Monte Carlo o CVA antes de tener una unidad persistida sobre la cual calcular riesgo.
-Ahora Exposure V1 existe, y CVA debe esperar hasta que el contrato de exposure este estable.
+Ahora CVA V1 existe como primer slice de ajuste XVA.
 
 ## Proximo milestone recomendado
 
-El siguiente milestone recomendado es endurecer el smoke real con Blemberg y preparar CVA simplificado.
+El siguiente milestone recomendado es endurecer inputs de CVA y preparar dashboard o modelacion de credito mas rica.
 
 Siguiente version sugerida:
 
 - Mantener los endpoints actuales de portfolio pricing y exposure.
 - Usar Blemberg real como fuente de `spot`, `volatility`, `riskFreeRate` y `dividendYield` cuando este corriendo.
 - Mantener NexusXVA sin persistir market data.
+- Tratar snapshots de Blemberg solo como datos de diagnostico/cache; pricing y exposure deben seguir usando pricing inputs.
+- Aceptar `501` de Blemberg V1 para `/v3/api-docs` como esperado porque la integracion runtime no depende de OpenAPI.
+- Mantener el smoke real opcional deshabilitado por defecto y activarlo con `RUN_REAL_BLEMBERG_SMOKE=true`.
+- Mantener CVA simplificado stateless hasta que introduzcamos explicitamente valuation runs persistidos.
 - Agregar FX solo cuando queramos soportar totales multi-currency.
-- Agregar CVA solo despues de que Exposure V1 tenga tests y response shape estables.
+- Agregar curvas de credito reales, counterparties, netting y collateral solo despues de estabilizar el contrato CVA simplificado.
 
 Fuera de scope inicial:
 
-- CVA.
 - Auth.
 - Multi-currency sin FX.
 - Netting/collateral.

@@ -41,6 +41,7 @@ The backend currently has:
 - Blemberg market-data integration for symbol validation and pricing inputs.
 - Temporary local market-data pricing inputs as a development fallback.
 - Exposure V1 using simple GBM Monte Carlo and Black-Scholes repricing.
+- Simplified CVA V1 over the exposure profile.
 - Database migrations with Flyway.
 - Financial, API, and persistence tests.
 
@@ -60,6 +61,7 @@ PATCH /api/portfolios/{portfolioId}/instruments/european-options/{positionId}
 DELETE /api/portfolios/{portfolioId}/instruments/{positionId}
 POST /api/portfolios/{portfolioId}/pricing/black-scholes
 POST /api/simulations/exposure
+POST /api/risk/cva
 ```
 
 The pricing endpoint receives European option data and returns:
@@ -192,6 +194,30 @@ In more detail:
 Exposure V1 is synchronous and stateless.
 It does not persist paths, market data, or exposure results.
 
+## How a CVA Request Flows
+
+The current CVA flow is:
+
+```text
+HTTP request
+  -> cva.api
+  -> cva.application
+  -> exposure.application
+  -> cva.domain simplified CVA formula
+  -> HTTP response
+```
+
+In more detail:
+
+1. The controller receives portfolio, simulation, and simple credit parameters.
+2. The CVA application service asks Exposure V1 to produce expected exposure by future date.
+3. The CVA calculator applies a flat hazard-rate default model and flat discount rate.
+4. Each bucket contributes `LGD * discountFactor * expectedExposure * defaultProbabilityIncrement`.
+5. The API returns total CVA plus per-date contribution details.
+
+CVA V1 is synchronous and stateless.
+It does not persist exposure, default probabilities, or CVA results.
+
 ## Layer Responsibilities
 
 ### `pricing.api`
@@ -321,6 +347,24 @@ Contains exposure aggregation logic:
 - Expected Negative Exposure.
 - Potential Future Exposure.
 
+### `cva.api`
+
+Owns the CVA HTTP contract.
+
+It validates request shape and translates DTOs into CVA application commands.
+
+### `cva.application`
+
+Owns CVA use-case orchestration.
+
+It calls exposure simulation and passes the resulting exposure profile into the CVA domain calculator.
+
+### `cva.domain`
+
+Contains the simplified CVA formula and output points.
+
+It must stay independent from Spring, HTTP, Blemberg, and the database.
+
 ## Current Financial Decisions
 
 For the first pricing slice we decided to:
@@ -382,6 +426,21 @@ For Exposure V1 we decided to:
 This is the bridge between portfolio pricing and CVA.
 CVA should consume a tested exposure profile instead of jumping directly from current pricing to credit valuation.
 
+## Current CVA Decisions
+
+For CVA V1 we decided to:
+
+- Reuse Exposure V1 instead of creating a separate simulation flow.
+- Use expected exposure, not PFE, for the CVA contribution.
+- Use a flat annual counterparty hazard rate.
+- Use a flat continuously compounded annual discount rate.
+- Use `lossGivenDefault` directly, with values between `0.0` and `1.0`.
+- Keep CVA stateless and synchronous.
+- Keep USD-only and European-options-only through the reused exposure flow.
+
+This is intentionally simplified.
+It is enough to prove the XVA path from portfolio to exposure to credit adjustment without introducing credit curves, counterparties, collateral, or netting sets yet.
+
 ## Error Policy
 
 The API should return stable and clear errors.
@@ -428,6 +487,13 @@ The exposure slice is protected with:
 - Application tests for empty portfolios, expired positions, USD-only rules, and missing market data.
 - API tests for valid exposure requests and invalid simulation parameters.
 
+The CVA slice is protected with:
+
+- Formula tests for bucket-level default probability increments and discounting.
+- Invariant tests: zero exposure, zero LGD, and increasing hazard rate.
+- Application tests confirming CVA consumes Exposure V1.
+- API tests for valid CVA requests, validation errors, unknown portfolios, and USD-only behavior.
+
 The rule is:
 
 > If a financial formula or persisted workflow changes, the tests should tell us whether it changed for an explicit reason or because we broke an expected property.
@@ -442,7 +508,7 @@ This gives us:
 - A clear way to store European option positions.
 - Portfolio-level pricing for USD European option positions.
 - Exposure profiles for USD European option portfolios.
-- A base for CVA later.
+- A simplified CVA calculation over exposure profiles.
 
 The order we followed was:
 
@@ -453,13 +519,14 @@ The order we followed was:
 5. Prepare portfolio-level pricing.
 6. Price portfolios with Black-Scholes using inputs from `marketdata`.
 7. Simulate exposure profiles using GBM plus Black-Scholes repricing.
+8. Calculate simplified CVA from expected exposure and flat credit assumptions.
 
 This avoided building Monte Carlo or CVA before we had a persisted unit on which to calculate risk.
-Now Exposure V1 exists, and CVA should wait until the exposure response shape is stable.
+Now CVA V1 exists as the first XVA adjustment slice.
 
 ## Recommended Next Milestone
 
-The recommended next milestone is hardening the real Blemberg smoke path and preparing simplified CVA.
+The recommended next milestone is hardening CVA inputs and preparing the dashboard or richer credit modeling.
 
 Suggested next version:
 
@@ -469,12 +536,15 @@ Suggested next version:
 - Use `BlembergBuildSpec.md` as the implementation brief for the separate Blemberg repository.
 - Use `http://localhost:8081` as the local Blemberg base URL unless overridden with `BLEMBERG_BASE_URL`.
 - Keep NexusXVA from persisting market data.
+- Treat Blemberg snapshots as diagnostic/cache data only; pricing and exposure must keep using pricing inputs.
+- Accept Blemberg V1 `501` for `/v3/api-docs` as expected because runtime integration does not depend on OpenAPI.
+- Keep the optional real Blemberg smoke test disabled by default and enable it with `RUN_REAL_BLEMBERG_SMOKE=true`.
+- Keep simplified CVA stateless until we explicitly introduce persisted valuation runs.
 - Add FX only when we want to support multi-currency totals.
-- Add CVA only after Exposure V1 has stable tests and a stable response shape.
+- Add real credit curves, counterparties, netting, and collateral only after the simplified CVA contract is stable.
 
 Out of initial scope:
 
-- CVA.
 - Auth.
 - Multi-currency without FX.
 - Netting/collateral.

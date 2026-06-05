@@ -541,19 +541,61 @@ La version actual evita algunos casos a proposito:
 * Payoff exacto en vencimiento.
 * Persistir resultados de valoracion.
 * Usar market data real dentro de NexusXVA.
-* Monte Carlo, exposure y CVA.
+* Curvas de credito reales, counterparties, netting sets, collateral y wrong-way risk.
 
 Estos casos no estan olvidados.
 Estan fuera de scope para que el slice actual sea pequeno, correcto y testeable.
 
 ---
 
-## 29. Idea general del módulo
+## 29. Qué es Exposure
+
+**Exposure** mide cuanto valor podria estar en riesgo frente a una contraparte en el futuro.
+
+NexusXVA Exposure V1 simula precios futuros, revalora el portfolio en fechas futuras y agrega:
+
+* Expected Exposure.
+* Expected Negative Exposure.
+* Potential Future Exposure.
+
+En simple:
+
+> Exposure estima cuanto podria valer el portfolio en escenarios futuros.
+
+---
+
+## 30. Qué es CVA
+
+**Credit Valuation Adjustment**, o **CVA**, estima el ajuste de valor causado por riesgo de default de la contraparte.
+
+NexusXVA CVA V1 usa una formula simplificada:
+
+```text
+CVA = LGD * sum(discountFactor * expectedExposure * defaultProbabilityIncrement)
+```
+
+Donde:
+
+* `LGD` significa loss given default.
+* `expectedExposure` viene de Exposure V1.
+* `defaultProbabilityIncrement` viene de un hazard rate plano.
+* `discountFactor` trae la contribucion a valor presente.
+
+Esto no es un modelo CVA bancario completo.
+Es el primer slice stateless que conecta portfolio, market data, exposure y ajuste de credito.
+
+En simple:
+
+> CVA estima cuanto valor restamos porque la contraparte podria caer en default mientras tenemos exposure positiva.
+
+---
+
+## 31. Idea general del módulo
 
 Este módulo busca implementar un cálculo financiero simple pero real.
 
 No intenta simular todo un sistema financiero completo.
-Tampoco busca conectarse a mercado real ni guardar operaciones.
+Mantiene market data fuera de NexusXVA y guarda terminos de trade en portfolios.
 
 La primera versión se enfoca en:
 
@@ -563,6 +605,8 @@ La primera versión se enfoca en:
 * Calcular Greeks principales.
 * Devolver una respuesta clara.
 * Valorar portfolios USD con posiciones europeas persistidas usando inputs de market data.
+* Simular perfiles de exposure.
+* Calcular CVA simplificado desde exposure y supuestos planos de credito.
 
 En simple:
 

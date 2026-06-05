@@ -91,6 +91,46 @@ Required conventions:
 - `asOf` must be the timestamp of the data used.
 - `stale` may be `true`; NexusXVA will expose it in portfolio pricing responses.
 
+## Market Snapshots
+
+Snapshots are diagnostic/cache data for NexusXVA smoke checks. NexusXVA portfolio pricing and Exposure V1 should use pricing inputs instead of raw snapshots.
+
+```http
+GET /api/market-data/snapshots?symbols=AAPL,SPY,QQQ,MSFT
+```
+
+```json
+{
+  "snapshots": [
+    {
+      "symbol": "AAPL",
+      "lastPrice": 312.68,
+      "open": 312.85,
+      "high": 315.15,
+      "low": 312.265,
+      "previousClose": 311.23001,
+      "volume": 1829914,
+      "currency": "USD",
+      "asOf": "2026-06-05T13:30:00Z",
+      "source": "TWELVE_DATA",
+      "stale": false
+    }
+  ],
+  "missingSymbols": ["SPY", "QQQ", "MSFT"]
+}
+```
+
+If at least one requested symbol has a usable snapshot, Blemberg should return `200` with available snapshots and `missingSymbols`. It should return `404` only when none of the requested symbols has a usable snapshot.
+
+## OpenAPI V1
+
+Blemberg V1 does not enable OpenAPI. This is expected and should not be treated as a NexusXVA integration failure.
+
+```http
+GET /v3/api-docs
+HTTP/1.1 501 Not Implemented
+```
+
 ## Missing Pricing Inputs
 
 Blemberg can return `404` or `400` when no usable pricing inputs exist.

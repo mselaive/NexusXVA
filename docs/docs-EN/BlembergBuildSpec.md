@@ -393,22 +393,28 @@ GET /api/market-data/snapshots?symbols=AAPL,MSFT,QQQ
 Response:
 
 ```json
-[
-  {
-    "symbol": "AAPL",
-    "lastPrice": 190.0,
-    "open": 188.5,
-    "high": 191.2,
-    "low": 187.9,
-    "previousClose": 188.1,
-    "volume": 53200000,
-    "currency": "USD",
-    "asOf": "2026-06-02T12:00:00Z",
-    "source": "TWELVE_DATA",
-    "stale": false
-  }
-]
+{
+  "snapshots": [
+    {
+      "symbol": "AAPL",
+      "lastPrice": 190.0,
+      "open": 188.5,
+      "high": 191.2,
+      "low": 187.9,
+      "previousClose": 188.1,
+      "volume": 53200000,
+      "currency": "USD",
+      "asOf": "2026-06-02T12:00:00Z",
+      "source": "TWELVE_DATA",
+      "stale": false
+    }
+  ],
+  "missingSymbols": ["MSFT", "QQQ"]
+}
 ```
+
+If at least one requested symbol has a usable snapshot, return `200` with available snapshots and `missingSymbols`.
+Return `404` only when none of the requested symbols has a usable snapshot.
 
 ### Get European Option Pricing Inputs
 
@@ -460,12 +466,31 @@ Response:
 ```json
 {
   "runId": "5f0d60dc-0a08-44e4-bad8-df5511ee8036",
-  "status": "SUCCESS",
+  "status": "PARTIAL_SUCCESS",
   "startedAt": "2026-06-02T12:00:00Z",
   "finishedAt": "2026-06-02T12:00:08Z",
   "symbolsRequested": 25,
-  "symbolsSucceeded": 25,
-  "symbolsFailed": 0
+  "symbolsSucceeded": 4,
+  "symbolsFailed": 21,
+  "jobSummaries": [
+    {
+      "jobName": "QUOTES",
+      "requested": 25,
+      "succeeded": 4,
+      "failed": 0,
+      "skippedRateLimit": 21
+    }
+  ],
+  "errors": [
+    {
+      "jobName": "QUOTES",
+      "provider": "TWELVE_DATA",
+      "symbol": "SPY",
+      "status": "SKIPPED_RATE_LIMIT",
+      "errorCode": "RATE_LIMIT",
+      "message": "Twelve Data free-tier rate limit reached; item was not attempted."
+    }
+  ]
 }
 ```
 

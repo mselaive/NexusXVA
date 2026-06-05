@@ -95,6 +95,8 @@ Current notes:
 - Blemberg HTTP adapter tests should protect instrument validation and European-option pricing input contracts, including stale data, dividend yield, provider failures, and malformed responses.
 - `docs/docs-EN/BlembergBuildSpec.md` is the handoff document for the separate Blemberg repo. Keep NexusXVA aligned with that contract instead of persisting provider/reference/market data locally.
 - Local Blemberg currently runs at `http://localhost:8081`; use `BLEMBERG_BASE_URL` when another network/compose topology needs a different address.
+- Blemberg V1 snapshots now return a wrapper with `snapshots` and `missingSymbols`; NexusXVA only uses that in optional smoke/diagnostic checks.
+- Blemberg V1 may return `501` for `/v3/api-docs`; this is not a blocker for pricing, exposure, or CVA work.
 - Exposure V1 now simulates GBM paths using `spot`, `volatility`, `riskFreeRate`, and `dividendYield`, then reprices the existing portfolio over a time grid.
 
 ## Milestone 4: Monte Carlo Simulation
@@ -145,9 +147,11 @@ Current notes:
 - Empty portfolios and all-expired portfolios return zero exposure points.
 - Expired positions are excluded at future dates where `maturityDate <= simulatedDate`.
 - V1 remains USD-only and European-options-only.
-- The next functional milestone is simplified CVA over the exposure profile, after a real Blemberg smoke path is stable.
+- The next functional milestone after simplified CVA is CVA hardening, richer credit inputs, or dashboard visualization.
 
 ## Milestone 6: Simplified CVA
+
+Status: partially completed for stateless simplified CVA over Exposure V1.
 
 Goals:
 
@@ -160,6 +164,14 @@ Completion criteria:
 - CVA is zero when exposure is zero.
 - CVA is zero when LGD is zero.
 - CVA increases when default probability increases, all else equal.
+
+Current notes:
+
+- `POST /api/risk/cva` is implemented as a stateless synchronous CVA endpoint.
+- CVA V1 reuses `ExposureSimulationService`; it does not duplicate path generation or repricing.
+- The formula is `LGD * sum(discountFactor * expectedExposure * defaultProbabilityIncrement)`.
+- V1 uses flat `counterpartyHazardRate` and flat continuously compounded `discountRate` from the request.
+- No counterparty persistence, credit curves, collateral, netting, wrong-way risk, or persisted CVA runs are implemented yet.
 
 ## Milestone 7: Dashboard
 

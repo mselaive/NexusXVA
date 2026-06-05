@@ -7,7 +7,7 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "nexusxva.market-data.blemberg")
 public class BlembergProperties {
 
-    private String baseUrl = "http://localhost:8090";
+    private String baseUrl = "http://localhost:8081";
     private Duration timeout = Duration.ofSeconds(2);
 
     public String getBaseUrl() {

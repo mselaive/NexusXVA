@@ -2,7 +2,7 @@
 
 Spring Boot backend for NexusXVA.
 
-The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option positions, stateless portfolio-level Black-Scholes pricing using market-data pricing inputs, and Exposure V1 with simple GBM Monte Carlo simulation. CVA and broader XVA calculations are planned future milestones.
+The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option positions, stateless portfolio-level Black-Scholes pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, and simplified CVA V1.
 
 ## Requirements
 
@@ -74,8 +74,9 @@ The current test setup covers:
 - persisted portfolio metadata, listing, update/delete, and European option position workflows
 - portfolio-level Black-Scholes pricing with local market-data inputs
 - Exposure V1 Monte Carlo simulation, deterministic GBM paths, and exposure aggregation
+- simplified CVA V1 over the exposure profile
 
-The current suite is verified with `mvn test` and has `117` tests.
+The current suite is verified with `mvn test` and has `130` tests, including one real Blemberg smoke test that is skipped unless explicitly enabled.
 
 ## Developer Financial Docs
 
@@ -111,6 +112,7 @@ PATCH /api/portfolios/{portfolioId}/instruments/european-options/{positionId}
 DELETE /api/portfolios/{portfolioId}/instruments/{positionId}
 POST /api/portfolios/{portfolioId}/pricing/black-scholes
 POST /api/simulations/exposure
+POST /api/risk/cva
 ```
 
 Create portfolio request:
@@ -265,6 +267,9 @@ Before using Blemberg locally, start that service, trigger its refresh, and veri
 ```bash
 curl http://localhost:8081/actuator/health
 curl -X POST http://localhost:8081/api/admin/market-data/refresh
+curl http://localhost:8081/api/admin/market-data/refresh-runs
+curl "http://localhost:8081/api/market-data/snapshots?symbols=AAPL,SPY,QQQ,MSFT"
+curl "http://localhost:8081/api/market-data/pricing-inputs/european-option?symbol=AAPL&maturityDate=2027-06-01"
 ```
 
 When NexusXVA runs from the provided Docker Compose file, `BLEMBERG_BASE_URL` defaults to `http://host.docker.internal:8081`. If both services run inside the same Docker network, override it with the Blemberg service name, for example `http://blemberg:8081`.
@@ -287,6 +292,26 @@ When validation is enabled:
 - unavailable Blemberg calls return `503 Service Unavailable` with `Market data service unavailable`.
 
 NexusXVA still persists only the symbol and trade terms. Blemberg owns instrument reference data and real pricing inputs such as spot, historical volatility, risk-free rates, and dividend yields.
+
+Blemberg snapshot responses are diagnostic only for NexusXVA. In Blemberg V1, `GET /api/market-data/snapshots` returns:
+
+```json
+{
+  "snapshots": [],
+  "missingSymbols": []
+}
+```
+
+Portfolio pricing and Exposure V1 do not consume raw snapshots; they consume the pricing-input endpoint. Blemberg V1 may also return `501 Not Implemented` for `GET /v3/api-docs`; NexusXVA does not depend on OpenAPI for runtime integration.
+
+Optional real Blemberg smoke test:
+
+```bash
+RUN_REAL_BLEMBERG_SMOKE=true BLEMBERG_BASE_URL=http://localhost:8081 \
+  mvn test -Dtest=BlembergRealSmokeTest
+```
+
+The real smoke test is skipped in normal `mvn test` runs unless `RUN_REAL_BLEMBERG_SMOKE=true` is set.
 
 ### Exposure Simulation V1
 
@@ -343,6 +368,71 @@ V1 simulation rules:
 - Empty portfolios or all-expired portfolios return zero exposure points.
 - Does not persist market data, simulated paths, or exposure results.
 
+### Simplified CVA V1
+
+CVA V1 is stateless: it reuses Exposure V1, then applies a simple credit valuation adjustment formula over expected exposure by date. Results are not persisted.
+
+Endpoint:
+
+```text
+POST /api/risk/cva
+```
+
+Request:
+
+```json
+{
+  "portfolioId": "6f2d4637-ef84-4bc5-bca3-7c7aee54b4e5",
+  "valuationDate": "2026-06-05",
+  "horizonDays": 365,
+  "timeSteps": 12,
+  "paths": 1000,
+  "seed": 12345,
+  "pfeConfidenceLevel": 0.95,
+  "lossGivenDefault": 0.6,
+  "counterpartyHazardRate": 0.02,
+  "discountRate": 0.05
+}
+```
+
+Response shape:
+
+```json
+{
+  "portfolioId": "6f2d4637-ef84-4bc5-bca3-7c7aee54b4e5",
+  "valuationDate": "2026-06-05",
+  "model": "SIMPLIFIED_CVA_V1",
+  "exposureModel": "GBM_BLACK_SCHOLES_EXPOSURE_V1",
+  "paths": 1000,
+  "timeSteps": 12,
+  "pfeConfidenceLevel": 0.95,
+  "lossGivenDefault": 0.6,
+  "counterpartyHazardRate": 0.02,
+  "discountRate": 0.05,
+  "cva": 12.34,
+  "points": [
+    {
+      "date": "2026-07-05",
+      "expectedExposure": 123.45,
+      "discountFactor": 0.9959,
+      "survivalProbability": 0.9984,
+      "defaultProbabilityIncrement": 0.0016,
+      "discountedExpectedExposure": 122.94,
+      "cvaContribution": 0.12
+    }
+  ]
+}
+```
+
+V1 CVA rules:
+
+- Formula: `CVA = LGD * sum(discountFactor_i * expectedExposure_i * defaultProbabilityIncrement_i)`.
+- `counterpartyHazardRate` is a flat annual hazard rate expressed as a decimal.
+- `discountRate` is a flat continuously compounded annual discount rate expressed as a decimal.
+- `lossGivenDefault` must be between `0.0` and `1.0`.
+- CVA reuses Exposure V1, so USD-only and European-options-only limitations still apply.
+- No counterparty entity, credit curve, netting set, collateral, wrong-way risk, or persisted CVA result is implemented in V1.
+
 Implementation shape:
 
 - `portfolio.domain` contains portfolio and position invariants.
@@ -351,6 +441,10 @@ Implementation shape:
 - `portfolio.api` owns REST DTOs and the controller.
 - `marketdata.application` owns the internal ports used to validate symbols and request pricing inputs.
 - `marketdata.infrastructure` owns the Blemberg REST adapters and temporary local watchlist/pricing-input adapter.
+- `exposure.application` owns exposure simulation orchestration.
+- `cva.domain` owns the simplified CVA formula.
+- `cva.application` coordinates exposure simulation and CVA calculation.
+- `cva.api` owns the CVA REST contract.
 
 ## European Option Pricing
 
@@ -449,11 +543,10 @@ com.nexusxva
     application
     domain
     infrastructure
-  xva
+  cva
     api
     application
     domain
-    infrastructure
 ```
 
 Controllers should stay thin, application services should own use-case orchestration, domain packages should contain financial concepts and invariants, and infrastructure packages should contain persistence or external adapters when those are introduced.

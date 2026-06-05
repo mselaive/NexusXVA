@@ -24,7 +24,7 @@
 - Pricing formulas belong in the `pricing` domain/application area.
 - Simulation path generation belongs in `simulation`.
 - Exposure metrics belong in `exposure`.
-- XVA calculations belong in `xva`.
+- Simplified CVA calculations currently belong in `cva`.
 - Domain behavior should be testable without starting Spring.
 
 ## Common Mistakes
@@ -42,4 +42,3 @@
 - DTO mapper at API boundary.
 - Explicit validation for domain inputs.
 - Deterministic random seed for simulation tests.
-

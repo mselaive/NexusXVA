@@ -85,6 +85,33 @@ Required pricing fields:
 - `source`: provider/source label.
 - `stale`: whether data is older than the freshness policy.
 
+### Diagnostic Snapshots
+
+Snapshots are useful for smoke checks and debugging, but they are not the pricing contract. NexusXVA portfolio pricing and Exposure V1 should keep using the pricing-input endpoint.
+
+```text
+GET /api/market-data/snapshots?symbols=AAPL,SPY,QQQ,MSFT
+```
+
+Expected V1 response:
+
+```json
+{
+  "snapshots": [],
+  "missingSymbols": []
+}
+```
+
+Rules:
+
+- Return `200` when at least one requested symbol has a usable snapshot.
+- Include symbols without usable snapshots in `missingSymbols`.
+- Return `404` only when none of the requested symbols has a usable snapshot.
+
+### OpenAPI
+
+Blemberg V1 may return clean `501 Not Implemented` for `GET /v3/api-docs`. NexusXVA must not depend on OpenAPI to price portfolios, run exposure, or prepare CVA.
+
 ## Financial Conventions
 
 - Rates, volatility, and dividend yield are decimals.
@@ -101,7 +128,7 @@ Until FX conversion exists, Blemberg should return USD instruments and USD prici
 
 NexusXVA will reject non-USD market data in portfolio pricing V1.
 
-## Local Mock Replacement
+## Local Development Fallback
 
 NexusXVA currently has a local provider for development.
 It validates the watchlist and returns demo values for:
@@ -111,7 +138,7 @@ It validates the watchlist and returns demo values for:
 - `riskFreeRate`
 - `dividendYield`
 
-Blemberg should eventually replace that local provider by implementing the same functional behavior over HTTP.
+Blemberg is the real provider for integration smoke, portfolio pricing, and Exposure V1. The local provider remains only as a development fallback when Blemberg is not running.
 
 ## Error Expectations
 
@@ -123,6 +150,7 @@ Expected behavior:
 - Known but inactive instrument: `200` with `active=false`.
 - Missing usable pricing inputs: clean `404` or `400` with an API error.
 - Provider unavailable or refresh failure: clean `5xx` with an API error.
+- OpenAPI unavailable in V1: clean `501`.
 
 NexusXVA maps unavailable Blemberg calls to `503 Market data service unavailable`.
 

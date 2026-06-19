@@ -31,11 +31,4 @@ public interface PortfolioStore {
 
     Optional<EuropeanOptionPosition> findEuropeanOptionPosition(UUID portfolioId, UUID positionId);
 
-    EuropeanOptionPosition updateEuropeanOptionPosition(
-            UUID portfolioId,
-            UUID positionId,
-            UpdateEuropeanOptionPositionCommand command
-    );
-
-    void deleteEuropeanOptionPosition(UUID portfolioId, UUID positionId);
 }

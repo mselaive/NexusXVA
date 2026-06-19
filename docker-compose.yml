@@ -19,12 +19,30 @@ services:
       - postgres
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      NEXUSXVA_MARKET_DATA_PROVIDER: ${NEXUSXVA_MARKET_DATA_PROVIDER:-blemberg}
-      NEXUSXVA_MARKET_DATA_VALIDATION_ENABLED: ${NEXUSXVA_MARKET_DATA_VALIDATION_ENABLED:-false}
+      NEXUSXVA_MARKET_DATA_PROVIDER: ${NEXUSXVA_MARKET_DATA_PROVIDER:-local}
+      NEXUSXVA_MARKET_DATA_VALIDATION_ENABLED: ${NEXUSXVA_MARKET_DATA_VALIDATION_ENABLED:-true}
       BLEMBERG_BASE_URL: ${BLEMBERG_BASE_URL:-http://host.docker.internal:8081}
       BLEMBERG_TIMEOUT: ${BLEMBERG_TIMEOUT:-2s}
+      NEXUSXVA_AUTH_ENABLED: ${NEXUSXVA_AUTH_ENABLED:-true}
+      NEXUSXVA_BOOTSTRAP_ADMIN_USERNAME: ${NEXUSXVA_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      NEXUSXVA_BOOTSTRAP_ADMIN_PASSWORD: ${NEXUSXVA_BOOTSTRAP_ADMIN_PASSWORD:-admin12345}
+      NEXUSXVA_BOOTSTRAP_ADMIN_DISPLAY_NAME: ${NEXUSXVA_BOOTSTRAP_ADMIN_DISPLAY_NAME:-NexusXVA Admin}
     ports:
       - "8080:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXUSXVA_API_BASE_URL: http://backend:8080
+        BLEMBERG_BASE_URL: ${BLEMBERG_BASE_URL:-http://host.docker.internal:8081}
+    container_name: nexusxva-frontend
+    depends_on:
+      - backend
+    environment:
+      BLEMBERG_BASE_URL: ${BLEMBERG_BASE_URL:-http://host.docker.internal:8081}
+    ports:
+      - "3000:3000"
 
 volumes:
   postgres-data:

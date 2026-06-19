@@ -2,6 +2,13 @@
 target/
 *.class
 
+# Node and Next.js
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
 # IDEs
 .idea/
 .vscode/

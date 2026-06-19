@@ -152,19 +152,15 @@ class ExposureSimulationControllerIntegrationTest extends AbstractPostgresIntegr
             String strike,
             String maturityDate,
             String quantity
-    ) throws Exception {
-        mockMvc.perform(post("/api/portfolios/{portfolioId}/instruments/european-options", portfolioId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "underlyingSymbol": "%s",
-                                  "optionType": "%s",
-                                  "strike": %s,
-                                  "maturityDate": "%s",
-                                  "quantity": %s
-                                }
-                                """.formatted(symbol, optionType, strike, maturityDate, quantity)))
-                .andExpect(status().isCreated());
+    ) {
+        insertConfirmedEuropeanOptionPosition(
+                java.util.UUID.fromString(portfolioId),
+                symbol,
+                optionType,
+                strike,
+                maturityDate,
+                quantity
+        );
     }
 
     private String requestBody(String portfolioId) {

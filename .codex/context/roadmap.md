@@ -81,8 +81,10 @@ Current notes:
 
 - Persisted portfolio creation is implemented.
 - Portfolio listing, metadata update, and deletion are implemented.
-- Persisted European option positions are implemented.
-- Individual position get/update/delete workflows are implemented.
+- Persisted confirmed European option positions are implemented.
+- FO submissions are stored separately as immutable trade booking requests.
+- BO Trade Validation can approve or reject requests; only approval creates a confirmed position.
+- Direct position create/update/delete APIs are no longer exposed.
 - Portfolio metadata includes optional description, base currency, createdAt, and updatedAt.
 - Portfolio positions store trade terms only: `underlyingSymbol`, `optionType`, `strike`, `maturityDate`, `quantity`, createdAt, and updatedAt.
 - Market data such as `spot`, `riskFreeRate`, `volatility`, and `dividendYield` is intentionally not stored in positions.
@@ -98,10 +100,12 @@ Current notes:
 - Blemberg V1 snapshots now return a wrapper with `snapshots` and `missingSymbols`; NexusXVA only uses that in optional smoke/diagnostic checks.
 - Blemberg V1 may return `501` for `/v3/api-docs`; this is not a blocker for pricing, exposure, or CVA work.
 - Exposure V1 now simulates GBM paths using `spot`, `volatility`, `riskFreeRate`, and `dividendYield`, then reprices the existing portfolio over a time grid.
+- Active groups are persisted in auth sessions and enforced by the backend: FO owns risk workflows, BO owns Trade Validation and Trading Limits, and ADMIN is reserved for the next slice.
+- Preventive per-user FO limits are implemented for hourly/daily booking count and `abs(quantity) * strike` USD notional.
 
 ## Milestone 4: Monte Carlo Simulation
 
-Status: partially completed for synchronous stateless GBM exposure simulations.
+Status: implemented V1 for synchronous stateless GBM exposure simulations.
 
 Goals:
 
@@ -126,7 +130,7 @@ Current notes:
 
 ## Milestone 5: Exposure Analytics
 
-Status: partially completed for EE, ENE, and PFE profiles.
+Status: implemented V1 for EE, ENE, and PFE profiles.
 
 Goals:
 
@@ -151,7 +155,7 @@ Current notes:
 
 ## Milestone 6: Simplified CVA
 
-Status: partially completed for stateless simplified CVA over Exposure V1.
+Status: implemented V1.1 for stateless simplified CVA over Exposure V1.
 
 Goals:
 
@@ -170,10 +174,13 @@ Current notes:
 - `POST /api/risk/cva` is implemented as a stateless synchronous CVA endpoint.
 - CVA V1 reuses `ExposureSimulationService`; it does not duplicate path generation or repricing.
 - The formula is `LGD * sum(discountFactor * expectedExposure * defaultProbabilityIncrement)`.
-- V1 uses flat `counterpartyHazardRate` and flat continuously compounded `discountRate` from the request.
-- No counterparty persistence, credit curves, collateral, netting, wrong-way risk, or persisted CVA runs are implemented yet.
+- V1.1 supports either flat `counterpartyHazardRate`/`discountRate` or request-provided credit/discount curves.
+- Request-provided curves are interpolated linearly and are not persisted.
+- No counterparty persistence, collateral, netting, wrong-way risk, or persisted CVA runs are implemented yet.
 
 ## Milestone 7: Dashboard
+
+Status: in progress for Dashboard V1.
 
 Goals:
 
@@ -188,6 +195,16 @@ Completion criteria:
 - Dashboard consumes backend APIs.
 - Charts are readable and domain-specific.
 - E2E tests cover primary flows.
+
+Current notes:
+
+- Dashboard V1 lives in `frontend/`.
+- Dashboard V1 is split into workflow pages: overview, `u-Pad`, portfolios, pricing, exposure and CVA.
+- `u-Pad` submits pending bookings; BO Trade Validation decides whether they become confirmed positions.
+- `u-Pad` shows the active FO user's remaining capacity; BO Trading Limits manages preventive policies.
+- The frontend consumes NexusXVA backend APIs only; it does not call Blemberg directly.
+- The frontend must not reimplement Black-Scholes, Monte Carlo, exposure aggregation, or CVA.
+- The first CVA UI uses flat CVA inputs; curve-mode UI can be added after the basic workflow is stable.
 
 ## Milestone 8: Hardening
 

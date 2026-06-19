@@ -1,6 +1,8 @@
 package com.nexusxva.cva.application;
 
 import com.nexusxva.cva.domain.CvaPoint;
+import com.nexusxva.cva.domain.CvaCreditMethod;
+import com.nexusxva.cva.domain.CvaDiscountMethod;
 import com.nexusxva.exposure.application.ExposureSimulationResult;
 
 import java.time.LocalDate;
@@ -16,8 +18,10 @@ public record CvaCalculationResult(
         int timeSteps,
         double pfeConfidenceLevel,
         double lossGivenDefault,
-        double counterpartyHazardRate,
-        double discountRate,
+        Double counterpartyHazardRate,
+        Double discountRate,
+        CvaCreditMethod creditMethod,
+        CvaDiscountMethod discountMethod,
         double cva,
         List<CvaPoint> points
 ) {
@@ -35,6 +39,12 @@ public record CvaCalculationResult(
         if (exposureModel == null || exposureModel.isBlank()) {
             throw new IllegalArgumentException("exposure model is required");
         }
+        if (creditMethod == null) {
+            throw new IllegalArgumentException("creditMethod is required");
+        }
+        if (discountMethod == null) {
+            throw new IllegalArgumentException("discountMethod is required");
+        }
         if (points == null) {
             throw new IllegalArgumentException("cva points are required");
         }
@@ -45,6 +55,8 @@ public record CvaCalculationResult(
             CvaCalculationCommand command,
             ExposureSimulationResult exposure,
             double cva,
+            CvaCreditMethod creditMethod,
+            CvaDiscountMethod discountMethod,
             List<CvaPoint> points
     ) {
         return new CvaCalculationResult(
@@ -58,6 +70,8 @@ public record CvaCalculationResult(
                 command.lossGivenDefault(),
                 command.counterpartyHazardRate(),
                 command.discountRate(),
+                creditMethod,
+                discountMethod,
                 cva,
                 points
         );

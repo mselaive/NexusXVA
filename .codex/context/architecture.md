@@ -27,7 +27,9 @@ Recommended backend modules:
 - `cva`: owns the current simplified CVA slice; broader XVA adjustments can become their own modules when needed.
 - `jobs`: owns asynchronous or long-running execution coordination when needed.
 - `reporting`: owns result summaries and export-ready views.
-- `auth`: future module; not required for the MVP unless explicitly planned.
+- `auth`: owns login, users, groups, group memberships, and opaque HTTP sessions.
+- `tradebooking`: owns FO booking requests, BO approval/rejection, and booking audit history.
+- `tradinglimits`: owns per-FO preventive policies, UTC usage derivation, and booking-time limit enforcement.
 
 ## Layering
 
@@ -82,7 +84,8 @@ Use:
 API examples:
 
 - `POST /api/portfolios`
-- `POST /api/portfolios/{portfolioId}/instruments/european-options`
+- `POST /api/portfolios/{portfolioId}/trade-bookings/european-options`
+- `POST /api/back-office/trade-bookings/{bookingId}/approve`
 - `POST /api/pricing/european-options/black-scholes`
 - `POST /api/simulations/exposure`
 - `POST /api/risk/cva`

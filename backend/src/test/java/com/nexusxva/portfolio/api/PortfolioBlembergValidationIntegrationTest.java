@@ -1,10 +1,7 @@
 package com.nexusxva.portfolio.api;
 
 import static org.hamcrest.Matchers.notNullValue;
-import static org.mockito.Mockito.clearInvocations;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -41,7 +38,7 @@ class PortfolioBlembergValidationIntegrationTest extends AbstractPostgresIntegra
     private MarketDataInstrumentGateway marketDataInstrumentGateway;
 
     @Test
-    void createsPositionWhenBlembergKnowsActiveSymbol() throws Exception {
+    void createsPendingBookingWhenBlembergKnowsActiveSymbol() throws Exception {
         when(marketDataInstrumentGateway.findInstrument("AAPL"))
                 .thenReturn(Optional.of(activeInstrument("AAPL")));
         String portfolioId = createdPortfolioId("Validated Book");
@@ -49,7 +46,8 @@ class PortfolioBlembergValidationIntegrationTest extends AbstractPostgresIntegra
         addPosition(portfolioId, "aapl")
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id", notNullValue()))
-                .andExpect(jsonPath("$.underlyingSymbol").value("AAPL"));
+                .andExpect(jsonPath("$.underlyingSymbol").value("AAPL"))
+                .andExpect(jsonPath("$.status").value("PENDING_VALIDATION"));
     }
 
     @Test
@@ -90,52 +88,11 @@ class PortfolioBlembergValidationIntegrationTest extends AbstractPostgresIntegra
                 .andExpect(jsonPath("$.message").value("Market data service unavailable"));
     }
 
-    @Test
-    void validatesPositionUpdateWhenUnderlyingSymbolChanges() throws Exception {
-        when(marketDataInstrumentGateway.findInstrument("AAPL"))
-                .thenReturn(Optional.of(activeInstrument("AAPL")));
-        when(marketDataInstrumentGateway.findInstrument("MSFT"))
-                .thenReturn(Optional.of(activeInstrument("MSFT")));
-        String portfolioId = createdPortfolioId("Update Symbol Book");
-        String positionId = createdPositionId(portfolioId, "AAPL");
-
-        mockMvc.perform(patch("/api/portfolios/{portfolioId}/instruments/european-options/{positionId}", portfolioId, positionId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "underlyingSymbol": "msft"
-                                }
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.underlyingSymbol").value("MSFT"));
-    }
-
-    @Test
-    void doesNotValidatePositionUpdateWhenUnderlyingSymbolDoesNotChange() throws Exception {
-        when(marketDataInstrumentGateway.findInstrument("AAPL"))
-                .thenReturn(Optional.of(activeInstrument("AAPL")));
-        String portfolioId = createdPortfolioId("Update Strike Book");
-        String positionId = createdPositionId(portfolioId, "AAPL");
-        clearInvocations(marketDataInstrumentGateway);
-
-        mockMvc.perform(patch("/api/portfolios/{portfolioId}/instruments/european-options/{positionId}", portfolioId, positionId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "strike": 110.0
-                                }
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.strike").value(110.0));
-
-        verifyNoInteractions(marketDataInstrumentGateway);
-    }
-
     private org.springframework.test.web.servlet.ResultActions addPosition(
             String portfolioId,
             String underlyingSymbol
     ) throws Exception {
-        return mockMvc.perform(post("/api/portfolios/{portfolioId}/instruments/european-options", portfolioId)
+        return mockMvc.perform(post("/api/portfolios/{portfolioId}/trade-bookings/european-options", portfolioId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {
@@ -146,14 +103,6 @@ class PortfolioBlembergValidationIntegrationTest extends AbstractPostgresIntegra
                           "quantity": 10.0
                         }
                         """.formatted(underlyingSymbol)));
-    }
-
-    private String createdPositionId(String portfolioId, String underlyingSymbol) throws Exception {
-        MvcResult result = addPosition(portfolioId, underlyingSymbol)
-                .andExpect(status().isCreated())
-                .andReturn();
-        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
-        return body.get("id").asText();
     }
 
     private String createdPortfolioId(String name) throws Exception {

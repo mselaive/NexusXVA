@@ -151,23 +151,15 @@ class PortfolioPricingBlembergIntegrationTest extends AbstractPostgresIntegratio
             String strike,
             String maturityDate,
             String quantity
-    ) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/portfolios/{portfolioId}/instruments/european-options", portfolioId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "underlyingSymbol": "%s",
-                                  "optionType": "%s",
-                                  "strike": %s,
-                                  "maturityDate": "%s",
-                                  "quantity": %s
-                                }
-                                """.formatted(underlyingSymbol, optionType, strike, maturityDate, quantity)))
-                .andExpect(status().isCreated())
-                .andExpect(header().string(HttpHeaders.LOCATION, startsWith("/api/portfolios/" + portfolioId + "/instruments/")))
-                .andReturn();
-        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
-        return body.get("id").asText();
+    ) {
+        return insertConfirmedEuropeanOptionPosition(
+                java.util.UUID.fromString(portfolioId),
+                underlyingSymbol,
+                optionType,
+                strike,
+                maturityDate,
+                quantity
+        ).toString();
     }
 
     private MarketDataPricingInput pricingInput(String symbol, String currency, boolean stale) {

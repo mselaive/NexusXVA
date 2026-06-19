@@ -1,6 +1,10 @@
 package com.nexusxva.cva.application;
 
+import com.nexusxva.cva.domain.CreditCurvePoint;
+import com.nexusxva.cva.domain.DiscountCurvePoint;
+
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record CvaCalculationCommand(
@@ -12,9 +16,39 @@ public record CvaCalculationCommand(
         long seed,
         double pfeConfidenceLevel,
         double lossGivenDefault,
-        double counterpartyHazardRate,
-        double discountRate
+        Double counterpartyHazardRate,
+        Double discountRate,
+        List<CreditCurvePoint> creditCurve,
+        List<DiscountCurvePoint> discountCurve
 ) {
+
+    public CvaCalculationCommand(
+            UUID portfolioId,
+            LocalDate valuationDate,
+            int horizonDays,
+            int timeSteps,
+            int paths,
+            long seed,
+            double pfeConfidenceLevel,
+            double lossGivenDefault,
+            double counterpartyHazardRate,
+            double discountRate
+    ) {
+        this(
+                portfolioId,
+                valuationDate,
+                horizonDays,
+                timeSteps,
+                paths,
+                seed,
+                pfeConfidenceLevel,
+                lossGivenDefault,
+                counterpartyHazardRate,
+                discountRate,
+                List.of(),
+                List.of()
+        );
+    }
 
     public CvaCalculationCommand {
         if (portfolioId == null) {
@@ -41,11 +75,23 @@ public record CvaCalculationCommand(
         if (!Double.isFinite(lossGivenDefault) || lossGivenDefault < 0.0 || lossGivenDefault > 1.0) {
             throw new IllegalArgumentException("lossGivenDefault must be between 0 and 1");
         }
-        if (!Double.isFinite(counterpartyHazardRate) || counterpartyHazardRate < 0.0) {
-            throw new IllegalArgumentException("counterpartyHazardRate must be greater than or equal to zero");
+        creditCurve = creditCurve == null ? List.of() : List.copyOf(creditCurve);
+        discountCurve = discountCurve == null ? List.of() : List.copyOf(discountCurve);
+        if (creditCurve.isEmpty()) {
+            if (counterpartyHazardRate == null) {
+                throw new IllegalArgumentException("counterpartyHazardRate is required when creditCurve is not provided");
+            }
+            if (!Double.isFinite(counterpartyHazardRate) || counterpartyHazardRate < 0.0) {
+                throw new IllegalArgumentException("counterpartyHazardRate must be greater than or equal to zero");
+            }
         }
-        if (!Double.isFinite(discountRate)) {
-            throw new IllegalArgumentException("discountRate must be finite");
+        if (discountCurve.isEmpty()) {
+            if (discountRate == null) {
+                throw new IllegalArgumentException("discountRate is required when discountCurve is not provided");
+            }
+            if (!Double.isFinite(discountRate)) {
+                throw new IllegalArgumentException("discountRate must be finite");
+            }
         }
     }
 }

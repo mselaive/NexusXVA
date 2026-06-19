@@ -24,6 +24,14 @@ management:
         include: health,info
 
 nexusxva:
+  auth:
+    enabled: ${NEXUSXVA_AUTH_ENABLED:false}
+    session-hours: ${NEXUSXVA_AUTH_SESSION_HOURS:8}
+    cookie-name: ${NEXUSXVA_AUTH_COOKIE_NAME:NEXUSXVA_SESSION}
+    bootstrap-admin:
+      username: ${NEXUSXVA_BOOTSTRAP_ADMIN_USERNAME:admin}
+      password: ${NEXUSXVA_BOOTSTRAP_ADMIN_PASSWORD:}
+      display-name: ${NEXUSXVA_BOOTSTRAP_ADMIN_DISPLAY_NAME:NexusXVA Admin}
   market-data:
     provider: ${NEXUSXVA_MARKET_DATA_PROVIDER:blemberg}
     validation:

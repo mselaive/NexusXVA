@@ -9,9 +9,21 @@ public record CvaInput(
         LocalDate valuationDate,
         List<ExposurePoint> exposurePoints,
         double lossGivenDefault,
-        double counterpartyHazardRate,
-        double discountRate
+        Double counterpartyHazardRate,
+        Double discountRate,
+        List<CreditCurvePoint> creditCurve,
+        List<DiscountCurvePoint> discountCurve
 ) {
+
+    public CvaInput(
+            LocalDate valuationDate,
+            List<ExposurePoint> exposurePoints,
+            double lossGivenDefault,
+            double counterpartyHazardRate,
+            double discountRate
+    ) {
+        this(valuationDate, exposurePoints, lossGivenDefault, counterpartyHazardRate, discountRate, List.of(), List.of());
+    }
 
     public CvaInput {
         if (valuationDate == null) {
@@ -27,9 +39,68 @@ public record CvaInput(
             }
         }
         requireUnitInterval("lossGivenDefault", lossGivenDefault);
-        requireNonNegativeFinite("counterpartyHazardRate", counterpartyHazardRate);
-        if (!Double.isFinite(discountRate)) {
-            throw new IllegalArgumentException("discountRate must be finite");
+        creditCurve = creditCurve == null ? List.of() : List.copyOf(creditCurve);
+        discountCurve = discountCurve == null ? List.of() : List.copyOf(discountCurve);
+        if (creditCurve.isEmpty()) {
+            if (counterpartyHazardRate == null) {
+                throw new IllegalArgumentException("counterpartyHazardRate is required when creditCurve is not provided");
+            }
+            requireNonNegativeFinite("counterpartyHazardRate", counterpartyHazardRate);
+        }
+        if (discountCurve.isEmpty()) {
+            if (discountRate == null) {
+                throw new IllegalArgumentException("discountRate is required when discountCurve is not provided");
+            }
+            if (!Double.isFinite(discountRate)) {
+                throw new IllegalArgumentException("discountRate must be finite");
+            }
+        }
+        validateCreditCurve(valuationDate, creditCurve);
+        validateDiscountCurve(valuationDate, discountCurve);
+    }
+
+    public CvaCreditMethod creditMethod() {
+        return creditCurve.isEmpty() ? CvaCreditMethod.FLAT_HAZARD_RATE : CvaCreditMethod.CREDIT_CURVE;
+    }
+
+    public CvaDiscountMethod discountMethod() {
+        return discountCurve.isEmpty() ? CvaDiscountMethod.FLAT_RATE : CvaDiscountMethod.DISCOUNT_CURVE;
+    }
+
+    private static void validateCreditCurve(LocalDate valuationDate, List<CreditCurvePoint> creditCurve) {
+        LocalDate previousDate = null;
+        Double previousSurvival = null;
+        CreditCurvePoint previousPoint = null;
+        for (CreditCurvePoint point : creditCurve.stream().sorted(java.util.Comparator.comparing(CreditCurvePoint::date)).toList()) {
+            if (!point.date().isAfter(valuationDate)) {
+                throw new IllegalArgumentException("creditCurve dates must be after valuationDate");
+            }
+            if (previousDate != null && point.date().isEqual(previousDate)) {
+                throw new IllegalArgumentException("creditCurve dates must not contain duplicates");
+            }
+            double survival = point.resolvedSurvivalProbability();
+            if (previousSurvival != null && survival > previousSurvival) {
+                if (previousPoint.usesCumulativeDefaultProbability() && point.usesCumulativeDefaultProbability()) {
+                    throw new IllegalArgumentException("creditCurve cumulativeDefaultProbability must not decrease over time");
+                }
+                throw new IllegalArgumentException("creditCurve survivalProbability must not increase over time");
+            }
+            previousDate = point.date();
+            previousSurvival = survival;
+            previousPoint = point;
+        }
+    }
+
+    private static void validateDiscountCurve(LocalDate valuationDate, List<DiscountCurvePoint> discountCurve) {
+        LocalDate previousDate = null;
+        for (DiscountCurvePoint point : discountCurve.stream().sorted(java.util.Comparator.comparing(DiscountCurvePoint::date)).toList()) {
+            if (!point.date().isAfter(valuationDate)) {
+                throw new IllegalArgumentException("discountCurve dates must be after valuationDate");
+            }
+            if (previousDate != null && point.date().isEqual(previousDate)) {
+                throw new IllegalArgumentException("discountCurve dates must not contain duplicates");
+            }
+            previousDate = point.date();
         }
     }
 

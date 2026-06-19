@@ -578,8 +578,16 @@ Donde:
 
 * `LGD` significa loss given default.
 * `expectedExposure` viene de Exposure V1.
-* `defaultProbabilityIncrement` viene de un hazard rate plano.
+* `defaultProbabilityIncrement` viene de un hazard rate plano o una curva de credito.
 * `discountFactor` trae la contribucion a valor presente.
+
+**Survival probability** es la probabilidad de que la contraparte no haya caido en default hasta una fecha.
+
+**Cumulative default probability** es la probabilidad acumulada de que la contraparte haya caido en default hasta una fecha.
+
+**Default probability increment** es la probabilidad adicional de default entre dos fechas.
+
+**Discount factor** convierte una contribucion futura de exposure a valor presente.
 
 Esto no es un modelo CVA bancario completo.
 Es el primer slice stateless que conecta portfolio, market data, exposure y ajuste de credito.

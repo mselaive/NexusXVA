@@ -41,7 +41,8 @@ Actualmente el backend tiene:
 - Integracion Blemberg para validar simbolos y pedir pricing inputs.
 - Inputs temporales de market data local como fallback de desarrollo.
 - Exposure V1 con Monte Carlo GBM simple y repricing Black-Scholes.
-- CVA V1 simplificado sobre el perfil de exposure.
+- CVA V1.1 simplificado sobre el perfil de exposure.
+- Dashboard V1 frontend para flujos de portfolio, pricing, exposure y CVA.
 - Migraciones de base de datos con Flyway.
 - Tests financieros, de API y de persistencia.
 
@@ -54,11 +55,13 @@ GET /api/portfolios
 GET /api/portfolios/{portfolioId}
 PATCH /api/portfolios/{portfolioId}
 DELETE /api/portfolios/{portfolioId}
-POST /api/portfolios/{portfolioId}/instruments/european-options
 GET /api/portfolios/{portfolioId}/instruments
 GET /api/portfolios/{portfolioId}/instruments/{positionId}
-PATCH /api/portfolios/{portfolioId}/instruments/european-options/{positionId}
-DELETE /api/portfolios/{portfolioId}/instruments/{positionId}
+POST /api/portfolios/{portfolioId}/trade-bookings/european-options
+GET /api/trade-bookings/mine
+GET /api/back-office/trade-bookings
+POST /api/back-office/trade-bookings/{bookingId}/approve
+POST /api/back-office/trade-bookings/{bookingId}/reject
 POST /api/portfolios/{portfolioId}/pricing/black-scholes
 POST /api/simulations/exposure
 POST /api/risk/cva
@@ -85,6 +88,8 @@ Los endpoints de portfolio permiten:
 - Obtener, actualizar y borrar posiciones individuales.
 - Valorar posiciones europeas persistidas a nivel portfolio usando Black-Scholes.
 - Simular perfiles de exposure futuros para portfolios persistidos.
+- Calcular CVA simplificado desde perfiles de exposure.
+- Inspeccionar portfolios, pricing, exposure y CVA desde el dashboard.
 
 ## Como fluye una request de pricing
 
@@ -217,6 +222,68 @@ En mas detalle:
 
 CVA V1 es sincrono y stateless.
 No persiste exposure, probabilidades de default ni resultados CVA.
+
+## Como fluye el dashboard
+
+Dashboard V1 es un frontend Next.js en `frontend/`.
+No implementa formulas financieras.
+La UI esta separada por grupos. FO usa overview, `u-Pad`, portfolios, pricing, exposure y CVA. BO usa Trade Validation y Trading Limits.
+
+El flujo frontend es:
+
+```text
+accion de usuario en dashboard
+  -> frontend API client
+  -> endpoint backend NexusXVA
+  -> modulos backend de pricing / exposure / CVA
+  -> tablas y charts del dashboard
+```
+
+El dashboard usa el backend como fuente de verdad para:
+
+- Datos de portfolio.
+- Envio de bookings pendientes desde `u-Pad`.
+- Validacion BO antes de crear posiciones confirmadas.
+- Visibilidad de limites FO en `u-Pad` y administracion de politicas desde BO.
+- Pricing Black-Scholes a nivel portfolio.
+- Simulacion de exposure.
+- Calculo CVA.
+
+Para desarrollo local, el frontend llama `/nexus-api/*`, que Next.js proxya al backend.
+El frontend nunca llama Blemberg directamente.
+`u-Pad` envia terminos del trade solamente; market data sigue siendo responsabilidad de `marketdata`/Blemberg.
+
+## Como fluye Trade Validation
+
+```text
+FO envia desde u-Pad
+  -> trade_booking_requests: PENDING_VALIDATION
+  -> BO abre Trade Validation
+  -> approve: crea una posicion confirmada
+  -> reject: conserva el booking con motivo
+```
+
+Pending y rejected bookings no forman parte del portfolio y nunca entran en pricing, exposure o CVA.
+La aprobacion bloquea la solicitud dentro de una transaccion para impedir posiciones duplicadas.
+Las posiciones confirmadas son inmutables hasta implementar amendments y cancelaciones controladas.
+
+El usuario puede pertenecer a varios grupos, pero `auth_sessions.active_group_code` guarda un solo contexto activo. El backend, no `localStorage`, aplica los permisos FO/BO.
+
+## Como fluyen los Trading Limits
+
+```text
+FO envia desde u-Pad
+  -> cargar y bloquear la politica de limites del usuario
+  -> derivar consumo de hora/dia UTC desde trade_booking_requests
+  -> validar cantidad de trades y nocional abs(quantity) * strike
+  -> crear PENDING_VALIDATION o devolver 409
+```
+
+Existe una politica opcional por usuario FO activo. Una politica inexistente o desactivada significa `UNLIMITED`; un campo nulo significa que esa medida no tiene limite. El consumo se deriva del historial de bookings en vez de mantener un contador duplicado, por lo que un booking enviado sigue consumiendo aunque BO lo rechace despues.
+
+El nocional V1 esta denominado en USD y es solo una aproximacion preventiva. No representa premium, cash gastado, P&L, valor actual de mercado ni limites de Greeks. Si existe un control nocional activo, portfolios no USD se rechazan hasta implementar FX. El bloqueo de politica y la creacion del booking comparten una transaccion para impedir que requests concurrentes superen juntos la capacidad disponible.
+
+Los endpoints BO viven bajo `/api/back-office/trading-limits/users`; FO solo puede consultar su propio snapshot mediante `/api/trading-limits/me`. Un breach devuelve `409 ApiError.metadata` saneado con limite, consumo, valor solicitado y hora de reset.
 
 ## Responsabilidad de cada capa
 
@@ -432,14 +499,15 @@ Para CVA V1 decidimos:
 
 - Reutilizar Exposure V1 en vez de crear otro flujo de simulacion.
 - Usar expected exposure, no PFE, para la contribucion CVA.
-- Usar un hazard rate anual plano para la contraparte.
-- Usar un discount rate anual plano y continuamente compuesto.
+- Soportar un hazard rate anual plano o curvas de credito enviadas en el request.
+- Soportar un discount rate anual continuamente compuesto o discount curves enviadas en el request.
+- Interpolar linealmente valores de curva para fechas de exposure dentro del rango de la curva.
 - Usar `lossGivenDefault` directamente, con valores entre `0.0` y `1.0`.
 - Mantener CVA stateless y sincrono.
 - Mantener USD-only y opciones europeas solamente a traves del flujo de exposure reutilizado.
 
 Esto es intencionalmente simplificado.
-Es suficiente para probar el camino XVA desde portfolio a exposure y luego a ajuste de credito sin introducir todavia curvas de credito, counterparties, collateral ni netting sets.
+Es suficiente para probar el camino XVA desde portfolio a exposure y luego a ajuste de credito sin introducir todavia counterparties persistidas, curvas de credito persistidas, collateral ni netting sets.
 
 ## Politica de errores
 
@@ -474,7 +542,8 @@ El slice de portfolio se protege con:
 - Tests de dominio para nombres, simbolos, strikes y quantities.
 - Integration tests con PostgreSQL/Testcontainers.
 - Tests API para crear/listar/actualizar/borrar portfolios.
-- Tests API para crear/listar/obtener/actualizar/borrar posiciones.
+- Tests API para enviar, aprobar y rechazar bookings.
+- Tests que confirman que pendientes no afectan pricing, exposure ni CVA.
 - Tests para validacion Blemberg habilitada y deshabilitada.
 - Tests para la watchlist local temporal.
 - Tests de errores `400` y `404` con `ApiError`.
@@ -514,7 +583,7 @@ El orden que seguimos fue:
 
 1. Pricing de una opcion individual.
 2. Crear portfolios.
-3. Agregar opciones a portfolios.
+3. Enviar bookings desde FO y confirmarlos desde BO.
 4. Recuperar portfolios.
 5. Preparar pricing a nivel portfolio.
 6. Valorar portfolios con Black-Scholes usando inputs desde `marketdata`.
@@ -522,15 +591,17 @@ El orden que seguimos fue:
 8. Calcular CVA simplificado desde expected exposure y supuestos planos de credito.
 
 Asi evitamos construir Monte Carlo o CVA antes de tener una unidad persistida sobre la cual calcular riesgo.
-Ahora CVA V1 existe como primer slice de ajuste XVA.
+Ahora CVA V1.1 existe como primer slice de ajuste XVA y Dashboard V1 es el slice de producto activo.
 
 ## Proximo milestone recomendado
 
-El siguiente milestone recomendado es endurecer inputs de CVA y preparar dashboard o modelacion de credito mas rica.
+El siguiente milestone recomendado es terminar Dashboard V1 y luego endurecer los workflows visibles para usuario.
 
 Siguiente version sugerida:
 
-- Mantener los endpoints actuales de portfolio pricing y exposure.
+- Mantener los endpoints actuales de portfolio pricing, exposure y CVA.
+- Mantener el dashboard enfocado en visualizacion y orquestacion de workflow.
+- No mover pricing, Monte Carlo ni CVA al frontend.
 - Usar Blemberg real como fuente de `spot`, `volatility`, `riskFreeRate` y `dividendYield` cuando este corriendo.
 - Mantener NexusXVA sin persistir market data.
 - Tratar snapshots de Blemberg solo como datos de diagnostico/cache; pricing y exposure deben seguir usando pricing inputs.
@@ -538,11 +609,11 @@ Siguiente version sugerida:
 - Mantener el smoke real opcional deshabilitado por defecto y activarlo con `RUN_REAL_BLEMBERG_SMOKE=true`.
 - Mantener CVA simplificado stateless hasta que introduzcamos explicitamente valuation runs persistidos.
 - Agregar FX solo cuando queramos soportar totales multi-currency.
-- Agregar curvas de credito reales, counterparties, netting y collateral solo despues de estabilizar el contrato CVA simplificado.
+- Agregar UI de curve-mode CVA, counterparties reales, netting y collateral solo despues de que Dashboard V1 sea usable.
 
 Fuera de scope inicial:
 
-- Auth.
+- Administracion de usuarios desde ADMIN.
 - Multi-currency sin FX.
 - Netting/collateral.
 

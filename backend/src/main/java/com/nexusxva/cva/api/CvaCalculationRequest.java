@@ -1,7 +1,10 @@
 package com.nexusxva.cva.api;
 
 import com.nexusxva.cva.application.CvaCalculationCommand;
+import com.nexusxva.cva.domain.CreditCurvePoint;
+import com.nexusxva.cva.domain.DiscountCurvePoint;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
@@ -9,6 +12,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record CvaCalculationRequest(
@@ -22,10 +26,11 @@ public record CvaCalculationRequest(
         Double pfeConfidenceLevel,
         @NotNull @DecimalMin("0.0") @DecimalMax("1.0")
         Double lossGivenDefault,
-        @NotNull @DecimalMin("0.0")
+        @DecimalMin("0.0")
         Double counterpartyHazardRate,
-        @NotNull
-        Double discountRate
+        Double discountRate,
+        List<@Valid CreditCurvePointRequest> creditCurve,
+        List<@Valid DiscountCurvePointRequest> discountCurve
 ) {
 
     CvaCalculationCommand toCommand() {
@@ -39,7 +44,49 @@ public record CvaCalculationRequest(
                 pfeConfidenceLevel,
                 lossGivenDefault,
                 counterpartyHazardRate,
-                discountRate
+                discountRate,
+                toCreditCurve(),
+                toDiscountCurve()
         );
+    }
+
+    private List<CreditCurvePoint> toCreditCurve() {
+        if (creditCurve == null) {
+            return List.of();
+        }
+        return creditCurve.stream()
+                .map(CreditCurvePointRequest::toDomain)
+                .toList();
+    }
+
+    private List<DiscountCurvePoint> toDiscountCurve() {
+        if (discountCurve == null) {
+            return List.of();
+        }
+        return discountCurve.stream()
+                .map(DiscountCurvePointRequest::toDomain)
+                .toList();
+    }
+
+    public record CreditCurvePointRequest(
+            @NotNull LocalDate date,
+            Double survivalProbability,
+            Double cumulativeDefaultProbability
+    ) {
+
+        CreditCurvePoint toDomain() {
+            return new CreditCurvePoint(date, survivalProbability, cumulativeDefaultProbability);
+        }
+    }
+
+    public record DiscountCurvePointRequest(
+            @NotNull LocalDate date,
+            @NotNull @DecimalMin("0.0") @DecimalMax("1.0")
+            Double discountFactor
+    ) {
+
+        DiscountCurvePoint toDomain() {
+            return new DiscountCurvePoint(date, discountFactor);
+        }
     }
 }

@@ -2,7 +2,7 @@
 
 ## Current Scope
 
-Portfolio management persists portfolios and European option positions in PostgreSQL.
+Portfolio management persists portfolios and confirmed European option positions in PostgreSQL. FO booking requests are a separate workflow.
 
 Current endpoints:
 
@@ -11,11 +11,13 @@ Current endpoints:
 - `GET /api/portfolios/{portfolioId}`
 - `PATCH /api/portfolios/{portfolioId}`
 - `DELETE /api/portfolios/{portfolioId}`
-- `POST /api/portfolios/{portfolioId}/instruments/european-options`
 - `GET /api/portfolios/{portfolioId}/instruments`
 - `GET /api/portfolios/{portfolioId}/instruments/{positionId}`
-- `PATCH /api/portfolios/{portfolioId}/instruments/european-options/{positionId}`
-- `DELETE /api/portfolios/{portfolioId}/instruments/{positionId}`
+- `POST /api/portfolios/{portfolioId}/trade-bookings/european-options`
+- `GET /api/trade-bookings/mine`
+- `GET /api/back-office/trade-bookings`
+- `POST /api/back-office/trade-bookings/{bookingId}/approve`
+- `POST /api/back-office/trade-bookings/{bookingId}/reject`
 - `POST /api/portfolios/{portfolioId}/pricing/black-scholes`
 
 ## Persisted Fields
@@ -44,6 +46,9 @@ European option position:
 ## Project Rules
 
 - Portfolio positions store trade terms only.
+- Pending and rejected booking requests are not portfolio positions and must not enter analytics.
+- BO approval is the only public workflow that creates confirmed positions.
+- Confirmed positions are immutable until amendment/cancellation workflows exist.
 - Do not persist `spot`, `riskFreeRate`, `volatility`, or `dividendYield` inside positions.
 - Treat those values as market data or pricing inputs.
 - Validate `underlyingSymbol` through `marketdata` when Blemberg validation is enabled.
@@ -80,4 +85,4 @@ Portfolio-level Black-Scholes pricing currently:
 
 ## Next Natural Step
 
-Replace the local demo pricing-input provider with the Blemberg HTTP pricing-input adapter once Blemberg exists, then move toward simulation/exposure.
+Add controlled amendment/cancellation workflows after BO Trade Validation is stable, then build ADMIN user/group management.

@@ -44,9 +44,18 @@ public class CvaCalculationService {
                 exposure.points(),
                 command.lossGivenDefault(),
                 command.counterpartyHazardRate(),
-                command.discountRate()
+                command.discountRate(),
+                command.creditCurve(),
+                command.discountCurve()
         ));
 
-        return CvaCalculationResult.from(command, exposure, cva.cva(), cva.points());
+        return CvaCalculationResult.from(
+                command,
+                exposure,
+                cva.cva(),
+                cva.creditMethod(),
+                cva.discountMethod(),
+                cva.points()
+        );
     }
 }

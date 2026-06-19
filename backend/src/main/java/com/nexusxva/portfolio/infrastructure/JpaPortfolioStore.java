@@ -3,7 +3,6 @@ package com.nexusxva.portfolio.infrastructure;
 import com.nexusxva.portfolio.application.AddEuropeanOptionPositionCommand;
 import com.nexusxva.portfolio.application.PortfolioStore;
 import com.nexusxva.portfolio.application.CreatePortfolioCommand;
-import com.nexusxva.portfolio.application.UpdateEuropeanOptionPositionCommand;
 import com.nexusxva.portfolio.application.UpdatePortfolioCommand;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.portfolio.domain.Portfolio;
@@ -97,35 +96,9 @@ class JpaPortfolioStore implements PortfolioStore {
                 .map(EuropeanOptionPositionEntity::toDomain);
     }
 
-    @Override
-    public EuropeanOptionPosition updateEuropeanOptionPosition(
-            UUID portfolioId,
-            UUID positionId,
-            UpdateEuropeanOptionPositionCommand command
-    ) {
-        EuropeanOptionPositionEntity position = findPositionEntity(portfolioId, positionId);
-        position.update(
-                command.underlyingSymbol(),
-                command.optionType(),
-                command.strike(),
-                command.maturityDate(),
-                command.quantity()
-        );
-        return position.toDomain();
-    }
-
-    @Override
-    public void deleteEuropeanOptionPosition(UUID portfolioId, UUID positionId) {
-        positionJpaRepository.delete(findPositionEntity(portfolioId, positionId));
-    }
-
     private PortfolioEntity findPortfolioEntity(UUID portfolioId) {
         return portfolioJpaRepository.findById(portfolioId)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
     }
 
-    private EuropeanOptionPositionEntity findPositionEntity(UUID portfolioId, UUID positionId) {
-        return positionJpaRepository.findByPortfolioIdAndPositionId(portfolioId, positionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Position not found"));
-    }
 }

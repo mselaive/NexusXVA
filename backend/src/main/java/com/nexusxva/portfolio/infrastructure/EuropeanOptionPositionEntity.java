@@ -16,7 +16,6 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Locale;
 import java.util.UUID;
 
 @Entity
@@ -105,28 +104,4 @@ class EuropeanOptionPositionEntity {
         );
     }
 
-    void update(
-            String underlyingSymbol,
-            OptionType optionType,
-            BigDecimal strike,
-            LocalDate maturityDate,
-            BigDecimal quantity
-    ) {
-        if (underlyingSymbol != null) {
-            this.underlyingSymbol = underlyingSymbol.trim().toUpperCase(Locale.ROOT);
-        }
-        if (optionType != null) {
-            this.optionType = optionType;
-        }
-        if (strike != null) {
-            this.strike = strike;
-        }
-        if (maturityDate != null) {
-            this.maturityDate = maturityDate;
-        }
-        if (quantity != null) {
-            this.quantity = quantity;
-        }
-        this.updatedAt = Instant.now();
-    }
 }

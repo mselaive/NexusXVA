@@ -1,10 +1,10 @@
 package com.nexusxva.portfolio.application;
 
-import com.nexusxva.marketdata.application.MarketDataValidationService;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.portfolio.domain.Portfolio;
 import com.nexusxva.portfolio.domain.PortfolioSummary;
 import com.nexusxva.shared.error.ResourceNotFoundException;
+import com.nexusxva.shared.error.ConflictException;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,14 +16,14 @@ import java.util.UUID;
 public class PortfolioService {
 
     private final PortfolioStore portfolioStore;
-    private final MarketDataValidationService marketDataValidationService;
+    private final PendingTradeBookingChecker pendingTradeBookingChecker;
 
     public PortfolioService(
             PortfolioStore portfolioStore,
-            MarketDataValidationService marketDataValidationService
+            PendingTradeBookingChecker pendingTradeBookingChecker
     ) {
         this.portfolioStore = portfolioStore;
-        this.marketDataValidationService = marketDataValidationService;
+        this.pendingTradeBookingChecker = pendingTradeBookingChecker;
     }
 
     @Transactional
@@ -51,17 +51,10 @@ public class PortfolioService {
     @Transactional
     public void deletePortfolio(UUID portfolioId) {
         ensurePortfolioExists(portfolioId);
+        if (pendingTradeBookingChecker.hasPendingBookings(portfolioId)) {
+            throw new ConflictException("Portfolio has pending trade bookings");
+        }
         portfolioStore.deletePortfolio(portfolioId);
-    }
-
-    @Transactional
-    public EuropeanOptionPosition addEuropeanOptionPosition(
-            UUID portfolioId,
-            AddEuropeanOptionPositionCommand command
-    ) {
-        ensurePortfolioExists(portfolioId);
-        marketDataValidationService.validateUnderlyingSymbol(command.underlyingSymbol());
-        return portfolioStore.addEuropeanOptionPosition(portfolioId, command);
     }
 
     @Transactional(readOnly = true)
@@ -77,43 +70,10 @@ public class PortfolioService {
                 .orElseThrow(() -> new ResourceNotFoundException("Position not found"));
     }
 
-    @Transactional
-    public EuropeanOptionPosition updateEuropeanOptionPosition(
-            UUID portfolioId,
-            UUID positionId,
-            UpdateEuropeanOptionPositionCommand command
-    ) {
-        ensurePortfolioExists(portfolioId);
-        validateUnderlyingSymbolChange(portfolioId, positionId, command);
-        return portfolioStore.updateEuropeanOptionPosition(portfolioId, positionId, command);
-    }
-
-    @Transactional
-    public void deleteEuropeanOptionPosition(UUID portfolioId, UUID positionId) {
-        ensurePortfolioExists(portfolioId);
-        portfolioStore.deleteEuropeanOptionPosition(portfolioId, positionId);
-    }
-
     private void ensurePortfolioExists(UUID portfolioId) {
         if (!portfolioStore.existsPortfolio(portfolioId)) {
             throw new ResourceNotFoundException("Portfolio not found");
         }
     }
 
-    private void validateUnderlyingSymbolChange(
-            UUID portfolioId,
-            UUID positionId,
-            UpdateEuropeanOptionPositionCommand command
-    ) {
-        if (command.underlyingSymbol() == null) {
-            return;
-        }
-
-        EuropeanOptionPosition currentPosition = portfolioStore.findEuropeanOptionPosition(portfolioId, positionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Position not found"));
-
-        if (!command.underlyingSymbol().equals(currentPosition.underlyingSymbol())) {
-            marketDataValidationService.validateUnderlyingSymbol(command.underlyingSymbol());
-        }
-    }
 }

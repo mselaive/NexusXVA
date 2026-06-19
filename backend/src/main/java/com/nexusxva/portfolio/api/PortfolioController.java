@@ -1,7 +1,6 @@
 package com.nexusxva.portfolio.api;
 
 import com.nexusxva.portfolio.application.PortfolioService;
-import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.portfolio.domain.Portfolio;
 
 import jakarta.validation.Valid;
@@ -66,21 +65,6 @@ public class PortfolioController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/{portfolioId}/instruments/european-options")
-    public ResponseEntity<EuropeanOptionPositionResponse> addEuropeanOptionPosition(
-            @PathVariable UUID portfolioId,
-            @Valid @RequestBody AddEuropeanOptionPositionRequest request
-    ) {
-        EuropeanOptionPosition position = portfolioService.addEuropeanOptionPosition(
-                portfolioId,
-                request.toCommand()
-        );
-
-        return ResponseEntity
-                .created(URI.create("/api/portfolios/" + portfolioId + "/instruments/" + position.id()))
-                .body(EuropeanOptionPositionResponse.from(position));
-    }
-
     @GetMapping("/{portfolioId}/instruments/{positionId}")
     public EuropeanOptionPositionResponse getInstrument(
             @PathVariable UUID portfolioId,
@@ -99,23 +83,4 @@ public class PortfolioController {
                 .toList();
     }
 
-    @PatchMapping("/{portfolioId}/instruments/european-options/{positionId}")
-    public EuropeanOptionPositionResponse updateEuropeanOptionPosition(
-            @PathVariable UUID portfolioId,
-            @PathVariable UUID positionId,
-            @Valid @RequestBody UpdateEuropeanOptionPositionRequest request
-    ) {
-        return EuropeanOptionPositionResponse.from(
-                portfolioService.updateEuropeanOptionPosition(portfolioId, positionId, request.toCommand())
-        );
-    }
-
-    @DeleteMapping("/{portfolioId}/instruments/{positionId}")
-    public ResponseEntity<Void> deleteInstrument(
-            @PathVariable UUID portfolioId,
-            @PathVariable UUID positionId
-    ) {
-        portfolioService.deleteEuropeanOptionPosition(portfolioId, positionId);
-        return ResponseEntity.noContent().build();
-    }
 }

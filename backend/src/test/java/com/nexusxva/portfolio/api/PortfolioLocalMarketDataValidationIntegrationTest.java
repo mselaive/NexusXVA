@@ -52,7 +52,7 @@ class PortfolioLocalMarketDataValidationIntegrationTest extends AbstractPostgres
             String portfolioId,
             String underlyingSymbol
     ) throws Exception {
-        return mockMvc.perform(post("/api/portfolios/{portfolioId}/instruments/european-options", portfolioId)
+        return mockMvc.perform(post("/api/portfolios/{portfolioId}/trade-bookings/european-options", portfolioId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {

@@ -47,6 +47,8 @@ class CvaControllerIntegrationTest extends AbstractPostgresIntegrationTest {
                 .andExpect(jsonPath("$.lossGivenDefault").value(0.60))
                 .andExpect(jsonPath("$.counterpartyHazardRate").value(0.02))
                 .andExpect(jsonPath("$.discountRate").value(0.05))
+                .andExpect(jsonPath("$.creditMethod").value("FLAT_HAZARD_RATE"))
+                .andExpect(jsonPath("$.discountMethod").value("FLAT_RATE"))
                 .andExpect(jsonPath("$.cva").isNumber())
                 .andExpect(jsonPath("$.points", hasSize(3)))
                 .andExpect(jsonPath("$.points[0].date").value("2026-07-05"))
@@ -55,6 +57,49 @@ class CvaControllerIntegrationTest extends AbstractPostgresIntegrationTest {
                 .andExpect(jsonPath("$.points[0].survivalProbability").isNumber())
                 .andExpect(jsonPath("$.points[0].defaultProbabilityIncrement").isNumber())
                 .andExpect(jsonPath("$.points[0].cvaContribution").isNumber());
+    }
+
+    @Test
+    void calculatesCvaWithCreditAndDiscountCurves() throws Exception {
+        String portfolioId = createdPortfolioId("Curve CVA API Book", "USD");
+        createdPosition(portfolioId, "AAPL", "CALL", "190.0", "2027-06-05", "2.0");
+
+        mockMvc.perform(post("/api/risk/cva")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(curveRequestBody(portfolioId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.portfolioId").value(portfolioId))
+                .andExpect(jsonPath("$.creditMethod").value("CREDIT_CURVE"))
+                .andExpect(jsonPath("$.discountMethod").value("DISCOUNT_CURVE"))
+                .andExpect(jsonPath("$.counterpartyHazardRate").doesNotExist())
+                .andExpect(jsonPath("$.discountRate").doesNotExist())
+                .andExpect(jsonPath("$.cva").isNumber())
+                .andExpect(jsonPath("$.points", hasSize(3)));
+    }
+
+    @Test
+    void curveOutOfRangeReturnsBadRequest() throws Exception {
+        String portfolioId = createdPortfolioId("Out Of Range Curve CVA Book", "USD");
+        createdPosition(portfolioId, "AAPL", "CALL", "190.0", "2027-06-05", "2.0");
+
+        mockMvc.perform(post("/api/risk/cva")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(outOfRangeCurveRequestBody(portfolioId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("creditCurve does not cover exposure date"));
+    }
+
+    @Test
+    void nonMonotonicCreditCurveReturnsBadRequest() throws Exception {
+        String portfolioId = createdPortfolioId("Non Monotonic Curve CVA Book", "USD");
+
+        mockMvc.perform(post("/api/risk/cva")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(nonMonotonicCurveRequestBody(portfolioId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("creditCurve survivalProbability must not increase over time"));
     }
 
     @Test
@@ -126,19 +171,15 @@ class CvaControllerIntegrationTest extends AbstractPostgresIntegrationTest {
             String strike,
             String maturityDate,
             String quantity
-    ) throws Exception {
-        mockMvc.perform(post("/api/portfolios/{portfolioId}/instruments/european-options", portfolioId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "underlyingSymbol": "%s",
-                                  "optionType": "%s",
-                                  "strike": %s,
-                                  "maturityDate": "%s",
-                                  "quantity": %s
-                                }
-                                """.formatted(symbol, optionType, strike, maturityDate, quantity)))
-                .andExpect(status().isCreated());
+    ) {
+        insertConfirmedEuropeanOptionPosition(
+                java.util.UUID.fromString(portfolioId),
+                symbol,
+                optionType,
+                strike,
+                maturityDate,
+                quantity
+        );
     }
 
     private String requestBody(String portfolioId, String lossGivenDefault, String counterpartyHazardRate) {
@@ -156,5 +197,70 @@ class CvaControllerIntegrationTest extends AbstractPostgresIntegrationTest {
                   "discountRate": 0.05
                 }
                 """.formatted(portfolioId, lossGivenDefault, counterpartyHazardRate);
+    }
+
+    private String curveRequestBody(String portfolioId) {
+        return """
+                {
+                  "portfolioId": "%s",
+                  "valuationDate": "2026-06-05",
+                  "horizonDays": 90,
+                  "timeSteps": 3,
+                  "paths": 20,
+                  "seed": 12345,
+                  "pfeConfidenceLevel": 0.95,
+                  "lossGivenDefault": 0.60,
+                  "creditCurve": [
+                    { "date": "2026-07-05", "survivalProbability": 0.995 },
+                    { "date": "2026-08-04", "survivalProbability": 0.990 },
+                    { "date": "2026-09-03", "survivalProbability": 0.985 }
+                  ],
+                  "discountCurve": [
+                    { "date": "2026-07-05", "discountFactor": 0.996 },
+                    { "date": "2026-08-04", "discountFactor": 0.992 },
+                    { "date": "2026-09-03", "discountFactor": 0.988 }
+                  ]
+                }
+                """.formatted(portfolioId);
+    }
+
+    private String outOfRangeCurveRequestBody(String portfolioId) {
+        return """
+                {
+                  "portfolioId": "%s",
+                  "valuationDate": "2026-06-05",
+                  "horizonDays": 90,
+                  "timeSteps": 3,
+                  "paths": 20,
+                  "seed": 12345,
+                  "pfeConfidenceLevel": 0.95,
+                  "lossGivenDefault": 0.60,
+                  "creditCurve": [
+                    { "date": "2026-08-04", "survivalProbability": 0.990 },
+                    { "date": "2026-09-03", "survivalProbability": 0.985 }
+                  ],
+                  "discountRate": 0.05
+                }
+                """.formatted(portfolioId);
+    }
+
+    private String nonMonotonicCurveRequestBody(String portfolioId) {
+        return """
+                {
+                  "portfolioId": "%s",
+                  "valuationDate": "2026-06-05",
+                  "horizonDays": 90,
+                  "timeSteps": 3,
+                  "paths": 20,
+                  "seed": 12345,
+                  "pfeConfidenceLevel": 0.95,
+                  "lossGivenDefault": 0.60,
+                  "creditCurve": [
+                    { "date": "2026-07-05", "survivalProbability": 0.990 },
+                    { "date": "2026-09-03", "survivalProbability": 0.995 }
+                  ],
+                  "discountRate": 0.05
+                }
+                """.formatted(portfolioId);
     }
 }

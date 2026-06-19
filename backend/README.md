@@ -2,7 +2,7 @@
 
 Spring Boot backend for NexusXVA.
 
-The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option positions, stateless portfolio-level Black-Scholes pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, and simplified CVA V1.
+The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option positions, stateless portfolio-level Black-Scholes pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, and simplified CVA V1.1.
 
 ## Requirements
 
@@ -52,9 +52,113 @@ docker compose up --build
 This starts:
 
 - `backend` on `http://localhost:8080`
+- `frontend` on `http://localhost:3000`
 - `postgres` on `localhost:5432`
 
-Portfolio management uses PostgreSQL through Spring Data JPA. Flyway runs the database migrations on application startup.
+Portfolio management uses PostgreSQL through Spring Data JPA. Flyway runs the database migrations on application startup. The frontend proxies `/nexus-api/*` to the backend service inside Docker.
+
+Docker Compose enables Auth V1 by default. The initial development login is:
+
+- username: `admin`
+- password: `admin12345`
+
+Override it before sharing an environment:
+
+```bash
+NEXUSXVA_BOOTSTRAP_ADMIN_USERNAME=admin \
+NEXUSXVA_BOOTSTRAP_ADMIN_PASSWORD='change-this-password' \
+docker compose up --build
+```
+
+Docker Compose defaults to the local market-data provider so the dashboard can run pricing, exposure and CVA without Blemberg. To use Blemberg instead:
+
+```bash
+NEXUSXVA_MARKET_DATA_PROVIDER=blemberg \
+NEXUSXVA_MARKET_DATA_VALIDATION_ENABLED=true \
+BLEMBERG_BASE_URL=http://host.docker.internal:8081 \
+docker compose up --build
+```
+
+## Run Backend And Dashboard
+
+The simplest way to run the application is:
+
+```bash
+docker compose up --build
+```
+
+Then open `http://localhost:3000`.
+
+For manual local development, start the backend from `backend/`:
+
+```bash
+mvn spring-boot:run
+```
+
+Start the dashboard from `frontend/`:
+
+```bash
+npm install
+npm run dev
+```
+
+The dashboard opens on `http://localhost:3000`. It proxies `/nexus-api/*` to `http://localhost:8080/api/*` by default, so local browser requests do not require backend CORS changes.
+
+To point the dashboard proxy at a different backend:
+
+```bash
+NEXUSXVA_API_BASE_URL=http://localhost:8080 npm run dev
+```
+
+## Authentication And Groups
+
+Auth V1 is enabled in Docker with `NEXUSXVA_AUTH_ENABLED=true`. Local backend runs keep auth disabled by default so existing API workflows and tests remain simple unless auth is explicitly enabled.
+
+Auth endpoints:
+
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/active-group`
+- `POST /api/auth/logout`
+
+Security model:
+
+- Users are stored in `auth_user_accounts`.
+- Groups are stored in `auth_groups`.
+- User/group membership is stored in `auth_user_group_memberships`.
+- Built-in groups are `FO`, `BO`, and `ADMIN`.
+- Passwords are stored only as BCrypt hashes.
+- Browser sessions use opaque random tokens in an `HttpOnly` cookie.
+- The database stores only SHA-256 hashes of session tokens, not the raw cookie value.
+- Mutating authenticated requests require `X-CSRF-Token`; the frontend receives it from login or `/api/auth/me`.
+- One user may belong to multiple groups, but each session has one server-side `activeGroup`.
+
+Current group intent:
+
+- `FO`: portfolios, u-Pad booking submission, pricing, exposure and CVA.
+- `BO`: Trade Validation and preventive Trading Limits for FO users.
+- `ADMIN`: reserved for the next administration slice.
+
+The backend enforces the active group. Frontend navigation is not the security boundary.
+
+## Trading Limits V1
+
+Back Office can configure one preventive policy per active FO user:
+
+- `GET /api/back-office/trading-limits/users`
+- `GET /api/back-office/trading-limits/users/{userId}`
+- `PUT /api/back-office/trading-limits/users/{userId}`
+- `GET /api/trading-limits/me` for the authenticated FO user
+
+Each policy may limit trades and notional per UTC calendar hour or day. A `null` measure is unlimited, and a missing or disabled policy never blocks. V1 notional is:
+
+```text
+abs(quantity) * strike
+```
+
+This is a preventive approximation in USD, not premium paid, cash movement, P&L, or a market valuation. Every submitted booking consumes capacity even if BO rejects it later. Limit validation and booking creation share one transaction and lock the user policy, preventing concurrent requests from jointly exceeding a configured limit.
+
+Breaches return `409 ApiError` with sanitized metadata containing the limit type, maximum, current usage, requested amount, and UTC period end. No booking row is created for a breached request.
 
 ## Run Tests
 
@@ -71,12 +175,15 @@ The current test setup covers:
 - Black-Scholes known-value tests for European calls and puts
 - financial invariants such as put-call parity and monotonicity
 - pricing API request, response, and validation behavior
-- persisted portfolio metadata, listing, update/delete, and European option position workflows
+- persisted portfolio metadata and confirmed European option positions
+- active-group authorization plus FO submission and BO approval/rejection workflows
+- preventive FO trading-limit policies, UTC usage, breach metadata, and concurrent booking enforcement
 - portfolio-level Black-Scholes pricing with local market-data inputs
 - Exposure V1 Monte Carlo simulation, deterministic GBM paths, and exposure aggregation
-- simplified CVA V1 over the exposure profile
+- simplified CVA V1.1 over the exposure profile
+- Dashboard V1 frontend workflow for portfolios, pricing, exposure and flat CVA
 
-The current suite is verified with `mvn test` and has `130` tests, including one real Blemberg smoke test that is skipped unless explicitly enabled.
+The current suite has `153` tests, including one real Blemberg smoke test that is skipped unless explicitly enabled.
 
 ## Developer Financial Docs
 
@@ -84,6 +191,7 @@ Conceptual financial guides for developers live in:
 
 - Spanish: [`../docs/docs-ES/ConceptosFinancieros.md`](../docs/docs-ES/ConceptosFinancieros.md)
 - System logic ES: [`../docs/docs-ES/LogicaDelSistema.md`](../docs/docs-ES/LogicaDelSistema.md)
+- Auth and groups ES: [`../docs/docs-ES/AuthYGrupos.md`](../docs/docs-ES/AuthYGrupos.md)
 - System logic EN: [`../docs/docs-EN/SystemLogic.md`](../docs/docs-EN/SystemLogic.md)
 - English: [`../docs/docs-EN/FinancialConcepts.md`](../docs/docs-EN/FinancialConcepts.md)
 - Blemberg needs: [`../docs/docs-EN/BlembergNeeds.md`](../docs/docs-EN/BlembergNeeds.md)
@@ -95,7 +203,7 @@ Conceptual financial guides for developers live in:
 
 ## Portfolio Management
 
-Portfolio management persists portfolios and European option positions in PostgreSQL.
+Portfolio management persists portfolios and confirmed European option positions in PostgreSQL. FO submissions remain separate until BO reviews them.
 
 Endpoints:
 
@@ -105,11 +213,14 @@ GET /api/portfolios
 GET /api/portfolios/{portfolioId}
 PATCH /api/portfolios/{portfolioId}
 DELETE /api/portfolios/{portfolioId}
-POST /api/portfolios/{portfolioId}/instruments/european-options
 GET /api/portfolios/{portfolioId}/instruments
 GET /api/portfolios/{portfolioId}/instruments/{positionId}
-PATCH /api/portfolios/{portfolioId}/instruments/european-options/{positionId}
-DELETE /api/portfolios/{portfolioId}/instruments/{positionId}
+POST /api/portfolios/{portfolioId}/trade-bookings/european-options
+GET /api/trade-bookings/mine
+GET /api/back-office/trade-bookings
+GET /api/back-office/trade-bookings/{bookingId}
+POST /api/back-office/trade-bookings/{bookingId}/approve
+POST /api/back-office/trade-bookings/{bookingId}/reject
 POST /api/portfolios/{portfolioId}/pricing/black-scholes
 POST /api/simulations/exposure
 POST /api/risk/cva
@@ -155,7 +266,7 @@ List portfolios returns summaries with `positionCount`:
 ]
 ```
 
-Add European option position request:
+Submit European option booking request:
 
 ```json
 {
@@ -167,7 +278,15 @@ Add European option position request:
 }
 ```
 
-Persisted position fields:
+The response starts with `status: PENDING_VALIDATION`. It does not appear in portfolio positions until BO approves it.
+
+Booking states:
+
+- `PENDING_VALIDATION`: waiting for BO.
+- `CONFIRMED`: approval created one confirmed position.
+- `REJECTED`: no position was created; `rejectionReason` explains why.
+
+Confirmed position fields:
 
 - `underlyingSymbol`: normalized to uppercase.
 - `optionType`: `CALL` or `PUT`.
@@ -175,6 +294,10 @@ Persisted position fields:
 - `maturityDate`: option maturity date.
 - `quantity`: can be positive or negative, but not zero.
 - `createdAt` and `updatedAt`: position lifecycle timestamps.
+
+Confirmed positions are immutable in V1. Direct create/update/delete position endpoints are intentionally not exposed. Future amendments and cancellations should use their own controlled workflow.
+
+Portfolio deletion returns `409 Conflict` while pending bookings exist. Reviewed booking history keeps portfolio and actor snapshots even if the portfolio is later deleted.
 
 Portfolio metadata fields:
 
@@ -368,9 +491,9 @@ V1 simulation rules:
 - Empty portfolios or all-expired portfolios return zero exposure points.
 - Does not persist market data, simulated paths, or exposure results.
 
-### Simplified CVA V1
+### Simplified CVA V1.1
 
-CVA V1 is stateless: it reuses Exposure V1, then applies a simple credit valuation adjustment formula over expected exposure by date. Results are not persisted.
+CVA V1.1 is stateless: it reuses Exposure V1, then applies a simple credit valuation adjustment formula over expected exposure by date. Results are not persisted.
 
 Endpoint:
 
@@ -395,6 +518,29 @@ Request:
 }
 ```
 
+Curve-mode request:
+
+```json
+{
+  "portfolioId": "6f2d4637-ef84-4bc5-bca3-7c7aee54b4e5",
+  "valuationDate": "2026-06-05",
+  "horizonDays": 365,
+  "timeSteps": 12,
+  "paths": 1000,
+  "seed": 12345,
+  "pfeConfidenceLevel": 0.95,
+  "lossGivenDefault": 0.6,
+  "creditCurve": [
+    { "date": "2026-07-05", "survivalProbability": 0.995 },
+    { "date": "2026-12-05", "survivalProbability": 0.975 }
+  ],
+  "discountCurve": [
+    { "date": "2026-07-05", "discountFactor": 0.996 },
+    { "date": "2026-12-05", "discountFactor": 0.980 }
+  ]
+}
+```
+
 Response shape:
 
 ```json
@@ -409,6 +555,8 @@ Response shape:
   "lossGivenDefault": 0.6,
   "counterpartyHazardRate": 0.02,
   "discountRate": 0.05,
+  "creditMethod": "FLAT_HAZARD_RATE",
+  "discountMethod": "FLAT_RATE",
   "cva": 12.34,
   "points": [
     {
@@ -427,11 +575,14 @@ Response shape:
 V1 CVA rules:
 
 - Formula: `CVA = LGD * sum(discountFactor_i * expectedExposure_i * defaultProbabilityIncrement_i)`.
-- `counterpartyHazardRate` is a flat annual hazard rate expressed as a decimal.
-- `discountRate` is a flat continuously compounded annual discount rate expressed as a decimal.
+- If `creditCurve` is provided, CVA uses curve-based default probability increments; otherwise it uses `counterpartyHazardRate`.
+- If `discountCurve` is provided, CVA uses curve discount factors; otherwise it uses `discountRate`.
+- `creditCurve` points provide exactly one of `survivalProbability` or `cumulativeDefaultProbability`.
+- Missing exposure dates inside a curve range use simple linear interpolation.
+- Exposure dates outside a provided curve range return `400 Bad Request`.
 - `lossGivenDefault` must be between `0.0` and `1.0`.
 - CVA reuses Exposure V1, so USD-only and European-options-only limitations still apply.
-- No counterparty entity, credit curve, netting set, collateral, wrong-way risk, or persisted CVA result is implemented in V1.
+- No counterparty entity, persisted credit curve, netting set, collateral, wrong-way risk, or persisted CVA result is implemented in V1.1.
 
 Implementation shape:
 

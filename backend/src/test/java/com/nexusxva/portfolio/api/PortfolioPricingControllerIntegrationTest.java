@@ -181,33 +181,27 @@ class PortfolioPricingControllerIntegrationTest extends AbstractPostgresIntegrat
             String strike,
             String maturityDate,
             String quantity
-    ) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/portfolios/{portfolioId}/instruments/european-options", portfolioId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "underlyingSymbol": "%s",
-                                  "optionType": "%s",
-                                  "strike": %s,
-                                  "maturityDate": "%s",
-                                  "quantity": %s
-                                }
-                                """.formatted(underlyingSymbol, optionType, strike, maturityDate, quantity)))
-                .andExpect(status().isCreated())
-                .andExpect(header().string(HttpHeaders.LOCATION, startsWith("/api/portfolios/" + portfolioId + "/instruments/")))
-                .andReturn();
-        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
-        return body.get("id").asText();
+    ) {
+        return insertConfirmedEuropeanOptionPosition(
+                java.util.UUID.fromString(portfolioId),
+                underlyingSymbol,
+                optionType,
+                strike,
+                maturityDate,
+                quantity
+        ).toString();
     }
 
-    private void patchPositionSymbol(String portfolioId, String positionId, String underlyingSymbol) throws Exception {
-        mockMvc.perform(patch("/api/portfolios/{portfolioId}/instruments/european-options/{positionId}", portfolioId, positionId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "underlyingSymbol": "%s"
-                                }
-                                """.formatted(underlyingSymbol)))
-                .andExpect(status().isOk());
+    private void patchPositionSymbol(String portfolioId, String positionId, String underlyingSymbol) {
+        jdbcTemplate.update(
+                """
+                UPDATE portfolio_european_option_positions
+                SET underlying_symbol = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND portfolio_id = ?
+                """,
+                underlyingSymbol,
+                java.util.UUID.fromString(positionId),
+                java.util.UUID.fromString(portfolioId)
+        );
     }
 }

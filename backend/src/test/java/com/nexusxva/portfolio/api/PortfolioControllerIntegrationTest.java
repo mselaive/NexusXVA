@@ -63,7 +63,9 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
     @Test
     void listsPortfolioSummaries() throws Exception {
         String portfolioId = createdPortfolioId("Summary Book", "Listed portfolio", "eur");
-        addPosition(portfolioId, "aapl", "CALL", "100.0", "2027-12-31", "10.0");
+        insertConfirmedEuropeanOptionPosition(
+                UUID.fromString(portfolioId), "AAPL", "CALL", "100.0", "2027-12-31", "10.0"
+        );
 
         MvcResult result = mockMvc.perform(get("/api/portfolios"))
                 .andExpect(status().isOk())
@@ -110,7 +112,9 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
     @Test
     void deletesPortfolioAndPositions() throws Exception {
         String portfolioId = createdPortfolioId("Delete Book");
-        addPosition(portfolioId, "AAPL", "CALL", "100.0", "2027-12-31", "10.0");
+        insertConfirmedEuropeanOptionPosition(
+                UUID.fromString(portfolioId), "AAPL", "CALL", "100.0", "2027-12-31", "10.0"
+        );
 
         mockMvc.perform(delete("/api/portfolios/{portfolioId}", portfolioId))
                 .andExpect(status().isNoContent());
@@ -121,12 +125,11 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
     }
 
     @Test
-    void addsEuropeanOptionPositionAndListsIt() throws Exception {
+    void approvesTradeBookingAndListsConfirmedPosition() throws Exception {
         String portfolioId = createdPortfolioId("Equity Options");
 
-        MvcResult createdPosition = addPosition(portfolioId, "aapl", "CALL", "100.0", "2027-12-31", "10.0")
+        MvcResult submittedBooking = addPosition(portfolioId, "aapl", "CALL", "100.0", "2027-12-31", "10.0")
                 .andExpect(status().isCreated())
-                .andExpect(header().string(HttpHeaders.LOCATION, startsWith("/api/portfolios/" + portfolioId + "/instruments/")))
                 .andExpect(jsonPath("$.id", notNullValue()))
                 .andExpect(jsonPath("$.portfolioId").value(portfolioId))
                 .andExpect(jsonPath("$.underlyingSymbol").value("AAPL"))
@@ -134,11 +137,25 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
                 .andExpect(jsonPath("$.strike").value(100.0))
                 .andExpect(jsonPath("$.maturityDate").value("2027-12-31"))
                 .andExpect(jsonPath("$.quantity").value(10.0))
-                .andExpect(jsonPath("$.createdAt", notNullValue()))
-                .andExpect(jsonPath("$.updatedAt", notNullValue()))
+                .andExpect(jsonPath("$.status").value("PENDING_VALIDATION"))
+                .andExpect(jsonPath("$.submittedAt", notNullValue()))
                 .andReturn();
 
-        String positionId = objectMapper.readTree(createdPosition.getResponse().getContentAsString()).get("id").asText();
+        String bookingId = objectMapper.readTree(submittedBooking.getResponse().getContentAsString()).get("id").asText();
+
+        mockMvc.perform(get("/api/portfolios/{portfolioId}", portfolioId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.positions", hasSize(0)));
+
+        MvcResult approved = mockMvc.perform(post("/api/back-office/trade-bookings/{bookingId}/approve", bookingId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.confirmedPositionId", notNullValue()))
+                .andReturn();
+
+        String positionId = objectMapper.readTree(approved.getResponse().getContentAsString())
+                .get("confirmedPositionId")
+                .asText();
 
         mockMvc.perform(get("/api/portfolios/{portfolioId}/instruments", portfolioId))
                 .andExpect(status().isOk())
@@ -166,16 +183,9 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
     }
 
     @Test
-    void updatesEuropeanOptionPosition() throws Exception {
+    void confirmedPositionCannotBeUpdatedDirectly() throws Exception {
         String portfolioId = createdPortfolioId("Update Position Book");
         String positionId = createdPositionId(portfolioId);
-        String createdPositionBody = mockMvc.perform(get("/api/portfolios/{portfolioId}/instruments/{positionId}", portfolioId, positionId))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        String originalUpdatedAt = objectMapper.readTree(createdPositionBody).get("updatedAt").asText();
-        Thread.sleep(5);
 
         mockMvc.perform(patch("/api/portfolios/{portfolioId}/instruments/european-options/{positionId}", portfolioId, positionId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -188,36 +198,25 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
                                   "quantity": -3.0
                                 }
                                 """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(positionId))
-                .andExpect(jsonPath("$.underlyingSymbol").value("MSFT"))
-                .andExpect(jsonPath("$.optionType").value("PUT"))
-                .andExpect(jsonPath("$.strike").value(95.5))
-                .andExpect(jsonPath("$.maturityDate").value("2028-01-15"))
-                .andExpect(jsonPath("$.quantity").value(-3.0))
-                .andExpect(jsonPath("$.updatedAt", notNullValue()));
+                .andExpect(status().isNotFound());
 
-        MvcResult updated = mockMvc.perform(get("/api/portfolios/{portfolioId}/instruments/{positionId}", portfolioId, positionId))
+        mockMvc.perform(get("/api/portfolios/{portfolioId}/instruments/{positionId}", portfolioId, positionId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.underlyingSymbol").value("MSFT"))
-                .andExpect(jsonPath("$.optionType").value("PUT"))
-                .andReturn();
-
-        String updatedAt = objectMapper.readTree(updated.getResponse().getContentAsString()).get("updatedAt").asText();
-        assertThat(updatedAt).isNotEqualTo(originalUpdatedAt);
+                .andExpect(jsonPath("$.underlyingSymbol").value("AAPL"));
     }
 
     @Test
-    void deletesEuropeanOptionPosition() throws Exception {
+    void confirmedPositionCannotBeDeletedDirectly() throws Exception {
         String portfolioId = createdPortfolioId("Delete Position Book");
         String positionId = createdPositionId(portfolioId);
 
         mockMvc.perform(delete("/api/portfolios/{portfolioId}/instruments/{positionId}", portfolioId, positionId))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.message").value("Method not allowed for this resource"));
 
         mockMvc.perform(get("/api/portfolios/{portfolioId}/instruments", portfolioId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
+                .andExpect(jsonPath("$", hasSize(1)));
     }
 
     @Test
@@ -280,7 +279,7 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
     void invalidEuropeanOptionInputReturnsValidationErrorShape() throws Exception {
         String portfolioId = createdPortfolioId("Validation Book");
 
-        mockMvc.perform(post("/api/portfolios/{portfolioId}/instruments/european-options", portfolioId)
+        mockMvc.perform(post("/api/portfolios/{portfolioId}/trade-bookings/european-options", portfolioId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -301,7 +300,7 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
     void invalidUnderlyingSymbolReturnsValidationErrorShape() throws Exception {
         String portfolioId = createdPortfolioId("Symbol Book");
 
-        mockMvc.perform(post("/api/portfolios/{portfolioId}/instruments/european-options", portfolioId)
+        mockMvc.perform(post("/api/portfolios/{portfolioId}/trade-bookings/european-options", portfolioId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -322,7 +321,7 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
     void zeroQuantityReturnsBadRequest() throws Exception {
         String portfolioId = createdPortfolioId("Quantity Book");
 
-        mockMvc.perform(post("/api/portfolios/{portfolioId}/instruments/european-options", portfolioId)
+        mockMvc.perform(post("/api/portfolios/{portfolioId}/trade-bookings/european-options", portfolioId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -340,7 +339,7 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
     }
 
     @Test
-    void zeroQuantityUpdateReturnsBadRequest() throws Exception {
+    void directPositionUpdateEndpointIsNotExposed() throws Exception {
         String portfolioId = createdPortfolioId("Update Quantity Book");
         String positionId = createdPositionId(portfolioId);
 
@@ -351,16 +350,14 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
                                   "quantity": 0.0
                                 }
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.message").value("quantity must be non-zero"));
+                .andExpect(status().isNotFound());
     }
 
     @Test
     void invalidOptionTypeReturnsCleanApiError() throws Exception {
         String portfolioId = createdPortfolioId("Enum Book");
 
-        mockMvc.perform(post("/api/portfolios/{portfolioId}/instruments/european-options", portfolioId)
+        mockMvc.perform(post("/api/portfolios/{portfolioId}/trade-bookings/european-options", portfolioId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -427,7 +424,7 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
             String maturityDate,
             String quantity
     ) throws Exception {
-        return mockMvc.perform(post("/api/portfolios/{portfolioId}/instruments/european-options", portfolioId)
+        return mockMvc.perform(post("/api/portfolios/{portfolioId}/trade-bookings/european-options", portfolioId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {
@@ -440,12 +437,15 @@ class PortfolioControllerIntegrationTest extends AbstractPostgresIntegrationTest
                         """.formatted(underlyingSymbol, optionType, strike, maturityDate, quantity)));
     }
 
-    private String createdPositionId(String portfolioId) throws Exception {
-        MvcResult result = addPosition(portfolioId, "AAPL", "CALL", "100.0", "2027-12-31", "10.0")
-                .andExpect(status().isCreated())
-                .andReturn();
-        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
-        return body.get("id").asText();
+    private String createdPositionId(String portfolioId) {
+        return insertConfirmedEuropeanOptionPosition(
+                UUID.fromString(portfolioId),
+                "AAPL",
+                "CALL",
+                "100.0",
+                "2027-12-31",
+                "10.0"
+        ).toString();
     }
 
     private JsonNode findPortfolioInArray(JsonNode portfolios, String portfolioId) {

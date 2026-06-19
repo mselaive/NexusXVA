@@ -49,6 +49,7 @@
 - Treat Blemberg V1 `GET /v3/api-docs` returning `501 Not Implemented` as expected; runtime integration must not depend on OpenAPI.
 - Pricing results are stateless by default and should not be persisted unless the feature explicitly introduces valuation storage.
 - CVA V1 should consume exposure profiles through `exposure.application`; do not duplicate simulation logic in `cva`.
+- CVA credit and discount curves are request-scoped for now; do not persist counterparties, curves, or CVA runs until explicitly planned.
 - Keep simplified CVA stateless unless a feature explicitly introduces persisted valuation runs.
 
 ## API Design
@@ -58,6 +59,22 @@
 - Validate inputs and return clear errors.
 - Do not expose internal entity shapes directly.
 - Do not expose framework-internal exception messages, class names, or stack details in API error responses.
+
+## Authentication
+
+- Store passwords only as strong one-way hashes such as BCrypt; never store or log raw passwords.
+- Browser sessions should use opaque random tokens in `HttpOnly` cookies.
+- Store only hashes of session tokens in the database.
+- Keep user/group membership relational and explicit; do not encode core authorization state only inside opaque JSON.
+- Auth groups include `FO`, `BO`, and `ADMIN`; a session persists one active group and backend authorization must enforce it.
+- Mutating authenticated requests should carry CSRF protection when cookie sessions are used.
+- Frontend route filtering is UX only and must never replace backend group authorization.
+- Trade booking requests are separate from confirmed positions. Pending or rejected bookings must never enter pricing, exposure, or CVA.
+- Confirmed positions are immutable until an explicit amendment/cancellation workflow is introduced.
+- Trading-limit usage is derived from submitted booking history; do not maintain a second mutable counter.
+- Trading-limit enforcement and booking creation must share a transaction and lock the policy row.
+- V1 controlled notional is `abs(quantity) * strike` in USD. Never describe it as premium, cash spent, P&L, or market value.
+- Rejected bookings still consume the submission period; only bookings blocked before creation consume nothing.
 
 ## Documentation
 

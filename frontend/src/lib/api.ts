@@ -1,5 +1,9 @@
 import type {
   AddEuropeanOptionPositionRequest,
+  AdminPortfolioSummary,
+  AdminUserAccess,
+  AdminUserPage,
+  AdminWorkflowMap,
   ApiError,
   AuthResponse,
   BlembergHealthResponse,
@@ -10,6 +14,11 @@ import type {
   CvaCalculationResponse,
   ExposureSimulationRequest,
   ExposureSimulationResponse,
+  FrontOfficeDeskResponse,
+  FrontOfficeStressTestRequest,
+  FrontOfficeStressTestResponse,
+  FrontOfficeWhatIfRequest,
+  FrontOfficeWhatIfResponse,
   LoginRequest,
   Portfolio,
   PortfolioPricingResponse,
@@ -96,6 +105,20 @@ export const nexusApi = {
 
   listMyTradeBookings: () => request<TradeBooking[]>("/trade-bookings/mine"),
 
+  getFrontOfficeDesk: () => request<FrontOfficeDeskResponse>("/front-office/desk"),
+
+  runFrontOfficeWhatIf: (body: FrontOfficeWhatIfRequest) =>
+    request<FrontOfficeWhatIfResponse>("/front-office/what-if/european-option", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  runFrontOfficeStressTest: (body: FrontOfficeStressTestRequest) =>
+    request<FrontOfficeStressTestResponse>("/front-office/stress-tests/european-options", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   listBackOfficeTradeBookings: (status?: TradeBookingStatus, page = 0, size = 50) => {
     const query = new URLSearchParams({ page: String(page), size: String(size) });
     if (status) {
@@ -154,6 +177,41 @@ export const nexusApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  listAdminUsers: (query = "", page = 0, size = 50) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    if (query.trim()) {
+      params.set("query", query.trim());
+    }
+    return request<AdminUserPage>(`/admin/users?${params.toString()}`);
+  },
+
+  getAdminUser: (userId: string) => request<AdminUserAccess>(`/admin/users/${userId}`),
+
+  listAdminPortfolios: () => request<AdminPortfolioSummary[]>("/admin/portfolios"),
+
+  updateAdminUserGroups: (userId: string, groups: string[]) =>
+    request<AdminUserAccess>(`/admin/users/${userId}/groups`, {
+      method: "PUT",
+      body: JSON.stringify({ groups }),
+    }),
+
+  updateAdminUserPermissions: (userId: string, permissions: Record<string, boolean>) =>
+    request<AdminUserAccess>(`/admin/users/${userId}/permissions`, {
+      method: "PUT",
+      body: JSON.stringify({ permissions }),
+    }),
+
+  updateAdminPortfolioAccess: (userId: string, accessMode: "ALL" | "SELECTED", portfolioIds: string[]) =>
+    request<AdminUserAccess>(`/admin/users/${userId}/portfolio-access`, {
+      method: "PUT",
+      body: JSON.stringify({ accessMode, portfolioIds }),
+    }),
+
+  getAdminWorkflowMap: (portfolioId?: string) => {
+    const params = portfolioId ? `?portfolioId=${encodeURIComponent(portfolioId)}` : "";
+    return request<AdminWorkflowMap>(`/admin/workflow-map${params}`);
+  },
 };
 
 export const authApi = {

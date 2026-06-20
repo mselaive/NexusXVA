@@ -4,8 +4,11 @@ import React from "react";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  BriefcaseBusiness,
   CircleDollarSign,
+  FlaskConical,
   Gauge,
+  GitBranch,
   HelpCircle,
   LineChart,
   ListChecks,
@@ -13,6 +16,7 @@ import {
   Settings,
   Shield,
   SlidersHorizontal,
+  Waves,
   SquarePen,
   Wallet,
 } from "lucide-react";
@@ -35,6 +39,9 @@ export type HowToItem = {
 
 const navItems = [
   { href: "/", label: "Overview", icon: Gauge },
+  { href: "/fo-desk", label: "FO Desk", icon: BriefcaseBusiness },
+  { href: "/pre-trade-analysis", label: "Pre-Trade Analysis", icon: FlaskConical },
+  { href: "/stress-testing", label: "Stress Testing", icon: Waves },
   { href: "/upad", label: "u-Pad", icon: SquarePen },
   { href: "/portfolios", label: "Portfolios", icon: Wallet },
   { href: "/pricing", label: "Pricing", icon: CircleDollarSign },
@@ -43,6 +50,7 @@ const navItems = [
   { href: "/trade-validation", label: "Trade Validation", icon: ListChecks },
   { href: "/trading-limits", label: "Trading Limits", icon: SlidersHorizontal },
   { href: "/admin", label: "Administration", icon: Settings },
+  { href: "/workflows", label: "Workflows", icon: GitBranch },
 ];
 
 export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps) {

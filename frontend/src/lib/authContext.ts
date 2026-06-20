@@ -15,8 +15,8 @@ export const WORK_GROUPS: Record<WorkGroupCode, WorkGroup> = {
     code: "FO",
     name: "Front Office",
     description: "Book trades, monitor market data, run pricing and analyze exposure.",
-    landingHref: "/upad",
-    allowedHrefs: ["/", "/upad", "/portfolios", "/pricing", "/exposure", "/cva"],
+    landingHref: "/fo-desk",
+    allowedHrefs: ["/", "/fo-desk", "/pre-trade-analysis", "/stress-testing", "/upad", "/what-if", "/portfolios", "/pricing", "/exposure", "/cva"],
   },
   BO: {
     code: "BO",
@@ -28,9 +28,9 @@ export const WORK_GROUPS: Record<WorkGroupCode, WorkGroup> = {
   ADMIN: {
     code: "ADMIN",
     name: "Admin",
-    description: "Platform administration context. User and group screens will live here next.",
+    description: "Manage users, access controls and workflow monitoring.",
     landingHref: "/admin",
-    allowedHrefs: ["/admin"],
+    allowedHrefs: ["/admin", "/workflows"],
   },
 };
 

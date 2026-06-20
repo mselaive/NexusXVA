@@ -96,10 +96,14 @@ public class AuthSessionFilter extends OncePerRequestFilter {
         if (activeGroup == null || activeGroup.isBlank()) {
             return false;
         }
+        if (!session.user().groups().contains(activeGroup)) {
+            return false;
+        }
 
         String path = request.getRequestURI();
         return switch (activeGroup) {
             case "FO" -> path.startsWith("/api/portfolios")
+                    || path.startsWith("/api/front-office")
                     || path.startsWith("/api/trade-bookings/mine")
                     || path.equals("/api/trading-limits/me")
                     || path.startsWith("/api/pricing")
@@ -107,7 +111,7 @@ public class AuthSessionFilter extends OncePerRequestFilter {
                     || path.startsWith("/api/risk");
             case "BO" -> path.startsWith("/api/back-office/trade-bookings")
                     || path.startsWith("/api/back-office/trading-limits");
-            case "ADMIN" -> false;
+            case "ADMIN" -> path.startsWith("/api/admin");
             default -> false;
         };
     }

@@ -79,6 +79,14 @@ BLEMBERG_BASE_URL=http://host.docker.internal:8081 \
 docker compose up --build
 ```
 
+Optional large demo portfolios can be loaded after Docker Compose is running:
+
+```bash
+docker compose exec -T postgres psql -U nexusxva -d nexusxva < backend/src/main/resources/db/demo/demo_portfolios.sql
+```
+
+This creates 5 USD demo portfolios and 72 confirmed European option positions across the supported Blemberg/local watchlist. The seed is idempotent and is not a Flyway migration, so tests and clean environments are not forced to include demo data.
+
 ## Run Backend And Dashboard
 
 The simplest way to run the application is:
@@ -135,11 +143,55 @@ Security model:
 
 Current group intent:
 
-- `FO`: portfolios, u-Pad booking submission, pricing, exposure and CVA.
+- `FO`: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad booking submission, portfolios, pricing, exposure and CVA.
 - `BO`: Trade Validation and preventive Trading Limits for FO users.
-- `ADMIN`: reserved for the next administration slice.
+- `ADMIN`: user/group administration, FO feature permissions, portfolio visibility, and workflow monitoring.
 
 The backend enforces the active group. Frontend navigation is not the security boundary.
+
+## Administration V1
+
+Admin users can manage access without changing the pricing or booking models:
+
+- `GET /api/admin/users`
+- `GET /api/admin/users/{userId}`
+- `PUT /api/admin/users/{userId}/groups`
+- `PUT /api/admin/users/{userId}/permissions`
+- `PUT /api/admin/users/{userId}/portfolio-access`
+- `GET /api/admin/portfolios`
+- `GET /api/admin/workflow-map`
+
+Group membership decides which area a user can enter. FO feature permissions then refine what a Front Office user can do:
+
+- `FO_BOOK_TRADES`
+- `FO_CREATE_PORTFOLIOS`
+- `FO_RUN_CVA`
+- `FO_RUN_WHAT_IF`
+- `FO_RUN_STRESS_TEST`
+
+Portfolio visibility supports `ALL` or `SELECTED`. The default is permissive (`ALL` portfolios and enabled FO features) so existing development users keep working until an admin tightens access.
+
+The workflow map is read-only. It visualizes trade booking requests across `Booked`, `Waiting BO`, `Accepted`, and `Rejected`; it does not approve or reject bookings. BO Trade Validation remains the owner of that maker-checker action.
+
+## Front Office Desk And Pre-Trade Analysis
+
+FO Desk is the Front Office cockpit and the recommended first screen for FO users:
+
+- `GET /api/front-office/desk`
+
+It aggregates visible portfolios, the FO user's booking history, and booking counts. Reviewed or pending bookings remain visible as workflow history; pricing, exposure and CVA still use confirmed positions only.
+
+Pre-Trade Analysis lets FO test one hypothetical European option before sending it to u-Pad and BO:
+
+- `POST /api/front-office/what-if/european-option`
+
+Pre-Trade Analysis is stateless. It does not create a `trade_booking_requests` row, does not create a confirmed position, and does not persist valuation results. It reuses portfolio Black-Scholes pricing and market-data pricing inputs, then returns base portfolio totals, hypothetical trade valuation, with-trade totals and incremental impact. The UI also shows Blemberg market snapshots and strike-vs-market context so FO can see whether the option is in, near, or out of the money. If FO likes the result, the UI sends the ticket terms to u-Pad for review and official BO submission.
+
+Stress Testing lets FO run scenario matrices over confirmed positions, optionally including one hypothetical trade:
+
+- `POST /api/front-office/stress-tests/european-options`
+
+Stress Testing is stateless and pricing/Greeks-only. V1 shocks `spot` by relative percent and shocks `volatility`, `riskFreeRate`, and `dividendYield` by absolute basis points. The result returns base portfolio totals, optional hypothetical trade valuation, per-scenario stressed totals, scenario impact versus the confirmed base portfolio, per-position stressed values, and expired unpriceable positions. It does not run Exposure or CVA and does not persist stress results.
 
 ## Trading Limits V1
 
@@ -181,9 +233,9 @@ The current test setup covers:
 - portfolio-level Black-Scholes pricing with local market-data inputs
 - Exposure V1 Monte Carlo simulation, deterministic GBM paths, and exposure aggregation
 - simplified CVA V1.1 over the exposure profile
-- Dashboard V1 frontend workflow for portfolios, pricing, exposure and flat CVA
+- Dashboard V1 frontend workflow for FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, portfolios, pricing, exposure and flat CVA
 
-The current suite has `153` tests, including one real Blemberg smoke test that is skipped unless explicitly enabled.
+The current suite has more than 150 tests, including one real Blemberg smoke test that is skipped unless explicitly enabled.
 
 ## Developer Financial Docs
 
@@ -192,8 +244,10 @@ Conceptual financial guides for developers live in:
 - Spanish: [`../docs/docs-ES/ConceptosFinancieros.md`](../docs/docs-ES/ConceptosFinancieros.md)
 - System logic ES: [`../docs/docs-ES/LogicaDelSistema.md`](../docs/docs-ES/LogicaDelSistema.md)
 - Auth and groups ES: [`../docs/docs-ES/AuthYGrupos.md`](../docs/docs-ES/AuthYGrupos.md)
+- Demo portfolios ES: [`../docs/docs-ES/PortafoliosDemo.md`](../docs/docs-ES/PortafoliosDemo.md)
 - System logic EN: [`../docs/docs-EN/SystemLogic.md`](../docs/docs-EN/SystemLogic.md)
 - English: [`../docs/docs-EN/FinancialConcepts.md`](../docs/docs-EN/FinancialConcepts.md)
+- Demo portfolios EN: [`../docs/docs-EN/DemoPortfolios.md`](../docs/docs-EN/DemoPortfolios.md)
 - Blemberg needs: [`../docs/docs-EN/BlembergNeeds.md`](../docs/docs-EN/BlembergNeeds.md)
 - Blemberg contract fixtures: [`../docs/docs-EN/BlembergContractFixtures.md`](../docs/docs-EN/BlembergContractFixtures.md)
 - Blemberg build spec: [`../docs/docs-EN/BlembergBuildSpec.md`](../docs/docs-EN/BlembergBuildSpec.md)

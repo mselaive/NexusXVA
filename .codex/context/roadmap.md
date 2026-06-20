@@ -100,7 +100,7 @@ Current notes:
 - Blemberg V1 snapshots now return a wrapper with `snapshots` and `missingSymbols`; NexusXVA only uses that in optional smoke/diagnostic checks.
 - Blemberg V1 may return `501` for `/v3/api-docs`; this is not a blocker for pricing, exposure, or CVA work.
 - Exposure V1 now simulates GBM paths using `spot`, `volatility`, `riskFreeRate`, and `dividendYield`, then reprices the existing portfolio over a time grid.
-- Active groups are persisted in auth sessions and enforced by the backend: FO owns risk workflows, BO owns Trade Validation and Trading Limits, and ADMIN is reserved for the next slice.
+- Active groups are persisted in auth sessions and enforced by the backend: FO owns risk workflows, BO owns Trade Validation and Trading Limits, and ADMIN owns memberships, FO feature permissions, portfolio visibility, and read-only workflow monitoring.
 - Preventive per-user FO limits are implemented for hourly/daily booking count and `abs(quantity) * strike` USD notional.
 
 ## Milestone 4: Monte Carlo Simulation
@@ -199,12 +199,17 @@ Completion criteria:
 Current notes:
 
 - Dashboard V1 lives in `frontend/`.
-- Dashboard V1 is split into workflow pages: overview, `u-Pad`, portfolios, pricing, exposure and CVA.
+- Dashboard V1 is split into workflow pages: FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure and CVA.
+- FO Desk V1 is the operational FO landing page: it aggregates visible portfolios, personal booking counts, and booking history without new persistence.
+- Pre-Trade Analysis V1 lets FO price one hypothetical European option against confirmed positions before preparing the ticket in `u-Pad`; it is stateless and pricing/Greeks-only.
+- Stress Testing V1 lets FO run scenario matrices over confirmed positions, optionally including one hypothetical trade; it is stateless and pricing/Greeks-only.
 - `u-Pad` submits pending bookings; BO Trade Validation decides whether they become confirmed positions.
 - `u-Pad` shows the active FO user's remaining capacity; BO Trading Limits manages preventive policies.
-- The frontend consumes NexusXVA backend APIs only; it does not call Blemberg directly.
+- Administration V1 manages user group memberships, FO permission checks, portfolio access mode, and a read-only booking workflow map.
+- The frontend consumes NexusXVA backend APIs for calculations. FO market-watch widgets may call `/blemberg-api/*` for cached snapshot display, but pricing, exposure, CVA, and stress calculations stay in NexusXVA backend services.
 - The frontend must not reimplement Black-Scholes, Monte Carlo, exposure aggregation, or CVA.
 - The first CVA UI uses flat CVA inputs; curve-mode UI can be added after the basic workflow is stable.
+- Natural next user-workflow candidates are amendment/cancellation requests and persisted valuation run history.
 
 ## Milestone 8: Hardening
 

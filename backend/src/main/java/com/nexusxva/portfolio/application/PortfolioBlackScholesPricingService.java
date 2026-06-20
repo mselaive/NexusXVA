@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -44,12 +45,7 @@ public class PortfolioBlackScholesPricingService {
         LocalDate resolvedValuationDate = valuationDate == null
                 ? LocalDate.now(ZoneOffset.UTC)
                 : valuationDate;
-        Portfolio portfolio = portfolioStore.findPortfolio(portfolioId)
-                .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
-
-        if (!SUPPORTED_BASE_CURRENCY.equals(portfolio.baseCurrency())) {
-            throw new IllegalArgumentException("Portfolio pricing V1 supports USD baseCurrency only");
-        }
+        Portfolio portfolio = portfolio(portfolioId);
 
         List<PortfolioPositionPricingResult> pricedPositions = new ArrayList<>();
         List<UnpriceablePortfolioPosition> unpriceablePositions = new ArrayList<>();
@@ -78,6 +74,42 @@ public class PortfolioBlackScholesPricingService {
                 pricedPositions,
                 unpriceablePositions
         );
+    }
+
+    @Transactional(readOnly = true)
+    public PortfolioPositionPricingResult priceHypotheticalPosition(
+            UUID portfolioId,
+            AddEuropeanOptionPositionCommand command,
+            LocalDate valuationDate
+    ) {
+        LocalDate resolvedValuationDate = valuationDate == null
+                ? LocalDate.now(ZoneOffset.UTC)
+                : valuationDate;
+        portfolio(portfolioId);
+        if (!command.maturityDate().isAfter(resolvedValuationDate)) {
+            throw new IllegalArgumentException("Hypothetical trade maturityDate must be after valuationDate for Black-Scholes what-if");
+        }
+        return pricePosition(new EuropeanOptionPosition(
+                UUID.randomUUID(),
+                portfolioId,
+                command.underlyingSymbol(),
+                command.optionType(),
+                command.strike(),
+                command.maturityDate(),
+                command.quantity(),
+                Instant.EPOCH,
+                Instant.EPOCH
+        ), resolvedValuationDate);
+    }
+
+    private Portfolio portfolio(UUID portfolioId) {
+        Portfolio portfolio = portfolioStore.findPortfolio(portfolioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
+
+        if (!SUPPORTED_BASE_CURRENCY.equals(portfolio.baseCurrency())) {
+            throw new IllegalArgumentException("Portfolio pricing V1 supports USD baseCurrency only");
+        }
+        return portfolio;
     }
 
     private PortfolioPositionPricingResult pricePosition(

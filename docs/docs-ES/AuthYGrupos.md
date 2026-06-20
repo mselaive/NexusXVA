@@ -10,7 +10,7 @@ Los grupos iniciales son:
 
 - `FO`: Front Office. Usuarios que bookean trades y corren analitica de pricing/riesgo.
 - `BO`: Back Office. Usuarios que revisan posiciones, lifecycle y datos operativos.
-- `ADMIN`: Administradores. Usuarios que luego podran administrar usuarios, grupos y settings.
+- `ADMIN`: Administradores. Usuarios que administran membresias, permisos FO, visibilidad de portfolios y monitoreo de workflow.
 
 Un usuario puede pertenecer a mas de un grupo.
 La relacion usuario-grupo se guarda en `auth_user_group_memberships`.
@@ -56,9 +56,40 @@ POST /api/auth/active-group
 
 El backend verifica que el usuario pertenezca al grupo solicitado y guarda la eleccion en `auth_sessions`. La autorizacion no depende de `localStorage`.
 
-- `FO`: portfolios, u-Pad, pricing, exposure y CVA.
+- `FO`: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, portfolios, pricing, exposure y CVA.
 - `BO`: Trade Validation y Trading Limits preventivos para usuarios FO.
-- `ADMIN`: reservado para administracion de usuarios y grupos.
+- `ADMIN`: administracion de usuarios, grupos, permisos FO, visibilidad de portfolios y mapa de workflow.
+
+## Administracion V1
+
+ADMIN no bookea ni aprueba trades. Su responsabilidad es controlar acceso y observar el flujo.
+
+Endpoints principales:
+
+- `GET /api/admin/users`
+- `GET /api/admin/users/{userId}`
+- `PUT /api/admin/users/{userId}/groups`
+- `PUT /api/admin/users/{userId}/permissions`
+- `PUT /api/admin/users/{userId}/portfolio-access`
+- `GET /api/admin/portfolios`
+- `GET /api/admin/workflow-map`
+
+El modelo queda en dos capas:
+
+- Grupo activo: decide si el usuario entra como `FO`, `BO` o `ADMIN`.
+- Permisos/visibilidad: refinan que puede hacer un usuario FO y que portfolios puede ver.
+
+Permisos FO iniciales:
+
+- `FO_BOOK_TRADES`: permite enviar bookings desde `u-Pad`.
+- `FO_CREATE_PORTFOLIOS`: permite crear portfolios.
+- `FO_RUN_CVA`: permite ejecutar CVA.
+- `FO_RUN_WHAT_IF`: permite ejecutar Pre-Trade Analysis stateless.
+- `FO_RUN_STRESS_TEST`: permite ejecutar Stress Testing stateless.
+
+La visibilidad de portfolios puede ser `ALL` o `SELECTED`. Por defecto los usuarios existentes quedan con `ALL` y permisos habilitados, para no romper el flujo local hasta que ADMIN restrinja accesos.
+
+El mapa de workflow es solo lectura. Muestra solicitudes en `Booked`, `Waiting BO`, `Accepted` y `Rejected`; la aprobacion o rechazo sigue perteneciendo a BO Trade Validation.
 
 ## CSRF
 
@@ -90,5 +121,5 @@ NEXUSXVA_BOOTSTRAP_ADMIN_PASSWORD=change-this-password
 
 ## Siguiente Slice
 
-Auth valida la sesion, CSRF y el grupo activo por endpoint.
-El siguiente slice de seguridad sera administrar usuarios y memberships desde ADMIN.
+Auth valida la sesion, CSRF, el grupo activo y los primeros permisos administrativos.
+El siguiente slice de seguridad natural sera crear usuarios desde ADMIN, auditoria mas rica y permisos adicionales por producto o workflow.

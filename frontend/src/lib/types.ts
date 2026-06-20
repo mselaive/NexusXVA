@@ -73,6 +73,26 @@ export type TradeBooking = {
   confirmedPositionId: string | null;
 };
 
+export type FrontOfficeDeskBooking = TradeBooking & {
+  portfolioVisible: boolean;
+};
+
+export type FrontOfficeDeskResponse = {
+  user: {
+    id: string | null;
+    username: string;
+    displayName: string;
+  };
+  bookingCounts: {
+    pendingValidation: number;
+    confirmed: number;
+    rejected: number;
+    total: number;
+  };
+  portfolios: PortfolioSummary[];
+  bookings: FrontOfficeDeskBooking[];
+};
+
 export type TradeBookingPage = {
   items: TradeBooking[];
   page: number;
@@ -121,6 +141,73 @@ export type PortfolioPositionMarketData = {
   asOf: string;
   source: string;
   stale: boolean;
+};
+
+export type FrontOfficeWhatIfRequest = {
+  portfolioId: string;
+  valuationDate: string;
+  trade: AddEuropeanOptionPositionRequest;
+};
+
+export type WhatIfPortfolioTotals = {
+  totalPrice: number;
+  totalGreeks: Greeks;
+};
+
+export type WhatIfImpact = Greeks & {
+  price: number;
+};
+
+export type FrontOfficeWhatIfResponse = {
+  portfolioId: string;
+  valuationDate: string;
+  model: string;
+  basePortfolio: WhatIfPortfolioTotals;
+  hypotheticalTrade: PortfolioPositionPricing;
+  withTradePortfolio: WhatIfPortfolioTotals;
+  impact: WhatIfImpact;
+};
+
+export type StressScenarioRequest = {
+  name: string;
+  spotShockPercent: number;
+  volatilityShockBps: number;
+  riskFreeRateShockBps: number;
+  dividendYieldShockBps: number;
+};
+
+export type FrontOfficeStressTestRequest = {
+  portfolioId: string;
+  valuationDate: string;
+  hypotheticalTrade?: AddEuropeanOptionPositionRequest | null;
+  scenarios: StressScenarioRequest[];
+};
+
+export type StressPortfolioTotals = {
+  totalPrice: number;
+  totalGreeks: Greeks;
+};
+
+export type StressImpact = Greeks & {
+  price: number;
+};
+
+export type StressScenarioResult = {
+  scenario: StressScenarioRequest;
+  totals: StressPortfolioTotals;
+  impact: StressImpact;
+  positions: PortfolioPositionPricing[];
+};
+
+export type FrontOfficeStressTestResponse = {
+  portfolioId: string;
+  valuationDate: string;
+  model: string;
+  baseCurrency: string;
+  basePortfolio: StressPortfolioTotals;
+  hypotheticalTrade: PortfolioPositionPricing | null;
+  scenarios: StressScenarioResult[];
+  unpriceablePositions: UnpriceablePortfolioPosition[];
 };
 
 export type UnpriceablePortfolioPosition = {
@@ -257,6 +344,87 @@ export type UpdateTradingLimitRequest = {
   maxNotionalPerDay: number | null;
   active: boolean;
   version: number | null;
+};
+
+export type AdminFeaturePermission = {
+  code: string;
+  groupCode: string;
+  name: string;
+  description: string;
+  effectiveEnabled: boolean;
+  overrideEnabled: boolean | null;
+};
+
+export type AdminPortfolioSummary = {
+  id: string;
+  name: string;
+  baseCurrency: string;
+  positionCount: number;
+};
+
+export type AdminPortfolioAccess = {
+  accessMode: "ALL" | "SELECTED";
+  portfolios: AdminPortfolioSummary[];
+};
+
+export type AdminUserAccess = {
+  id: string;
+  username: string;
+  displayName: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt: string | null;
+  groups: string[];
+  permissions: AdminFeaturePermission[];
+  portfolioAccess: AdminPortfolioAccess;
+};
+
+export type AdminUserPage = {
+  items: AdminUserAccess[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
+export type AdminWorkflowBooking = {
+  id: string;
+  portfolioId: string | null;
+  portfolioName: string;
+  node: string;
+  status: TradeBookingStatus;
+  underlyingSymbol: string;
+  optionType: OptionType;
+  strike: number;
+  maturityDate: string;
+  quantity: number;
+  submittedBy: string | null;
+  submittedAt: string;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  confirmedPositionId: string | null;
+};
+
+export type AdminWorkflowNode = {
+  id: string;
+  label: string;
+  description: string;
+  count: number;
+  bookings: AdminWorkflowBooking[];
+};
+
+export type AdminWorkflowLink = {
+  from: string;
+  to: string;
+  count: number;
+};
+
+export type AdminWorkflowMap = {
+  portfolioId: string | null;
+  nodes: AdminWorkflowNode[];
+  links: AdminWorkflowLink[];
 };
 
 export type AuthUser = {

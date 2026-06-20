@@ -69,7 +69,12 @@
 - Auth groups include `FO`, `BO`, and `ADMIN`; a session persists one active group and backend authorization must enforce it.
 - Mutating authenticated requests should carry CSRF protection when cookie sessions are used.
 - Frontend route filtering is UX only and must never replace backend group authorization.
+- ADMIN manages group memberships, FO feature permissions, and portfolio visibility; ADMIN workflow maps are read-only monitoring, not BO approval actions.
+- FO feature permissions currently gate trade booking, portfolio creation, CVA execution, Pre-Trade Analysis, and Stress Testing. Keep adding explicit permission codes instead of burying new checks in UI-only logic.
+- Portfolio visibility is enforced by the backend and must be checked by portfolio views, trade booking, pricing, exposure, and CVA.
 - Trade booking requests are separate from confirmed positions. Pending or rejected bookings must never enter pricing, exposure, or CVA.
+- Pre-Trade Analysis is stateless and must not create booking requests, confirmed positions, market data, or stored valuation runs. If FO wants to book after analysis, send the ticket terms to `u-Pad`.
+- Stress Testing is stateless and pricing/Greeks-only in V1. It may include one hypothetical trade, but must not create bookings, confirmed positions, market data, exposure runs, CVA runs, or persisted stress results.
 - Confirmed positions are immutable until an explicit amendment/cancellation workflow is introduced.
 - Trading-limit usage is derived from submitted booking history; do not maintain a second mutable counter.
 - Trading-limit enforcement and booking creation must share a transaction and lock the policy row.

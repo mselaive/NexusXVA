@@ -1,5 +1,7 @@
 package com.nexusxva.tradebooking.api;
 
+import com.nexusxva.auth.application.FeaturePermissionCode;
+import com.nexusxva.auth.application.UserAccessService;
 import com.nexusxva.tradebooking.domain.TradeBookingRequest;
 import com.nexusxva.tradebooking.application.TradeBookingService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,9 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class PortfolioTradeBookingController {
 
     private final TradeBookingService service;
+    private final UserAccessService userAccessService;
 
-    public PortfolioTradeBookingController(TradeBookingService service) {
+    public PortfolioTradeBookingController(TradeBookingService service, UserAccessService userAccessService) {
         this.service = service;
+        this.userAccessService = userAccessService;
     }
 
     @PostMapping("/european-options")
@@ -29,6 +33,8 @@ public class PortfolioTradeBookingController {
             @Valid @RequestBody CreateEuropeanOptionBookingRequest request,
             HttpServletRequest servletRequest
     ) {
+        userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_BOOK_TRADES);
+        userAccessService.requirePortfolioAccess(servletRequest, portfolioId);
         TradeBookingRequest booking = service.submitEuropeanOption(
                 portfolioId,
                 request.toCommand(),
@@ -39,4 +45,3 @@ public class PortfolioTradeBookingController {
                 .body(TradeBookingResponse.from(booking));
     }
 }
-

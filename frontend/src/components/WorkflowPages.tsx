@@ -6,6 +6,7 @@ import {
   Building2,
   CircleDollarSign,
   Cpu,
+  FlaskConical,
   Gem,
   Landmark,
   Loader2,
@@ -15,6 +16,7 @@ import {
   Shield,
   SquarePen,
   Wallet,
+  Waves,
 } from "lucide-react";
 import { blembergApi, nexusApi, NexusApiError } from "@/lib/api";
 import { formatCurrency, formatNumber, formatPercent, todayIsoDate } from "@/lib/format";
@@ -46,6 +48,14 @@ type RunForm = {
   lossGivenDefault: string;
   counterpartyHazardRate: string;
   discountRate: string;
+};
+
+type TradeTicketForm = {
+  underlyingSymbol: string;
+  optionType: OptionType;
+  strike: string;
+  maturityDate: string;
+  quantity: string;
 };
 
 const defaultRunForm: RunForm = {
@@ -196,6 +206,8 @@ export function OverviewPage() {
 
       <div className="workflow-lanes">
         <WorkflowLink href="/upad" icon={<SquarePen size={20} />} title="u-Pad" text="Book European option trades into existing portfolios." />
+        <WorkflowLink href="/pre-trade-analysis" icon={<FlaskConical size={20} />} title="Pre-Trade Analysis" text="Test pre-trade price and Greeks before sending to BO." />
+        <WorkflowLink href="/stress-testing" icon={<Waves size={20} />} title="Stress Testing" text="Shock spot, vol and rates across FO scenarios." />
         <WorkflowLink href="/pricing" icon={<CircleDollarSign size={20} />} title="Pricing" text="Run portfolio-level Black-Scholes valuation." />
         <WorkflowLink href="/exposure" icon={<Activity size={20} />} title="Exposure" text="Simulate GBM paths and inspect EE, ENE and PFE." />
         <WorkflowLink href="/cva" icon={<Shield size={20} />} title="CVA" text="Calculate simplified CVA from expected exposure." />
@@ -205,7 +217,7 @@ export function OverviewPage() {
 }
 
 export function PortfoliosPage() {
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(initialPortfolioIdFromUrl);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -328,23 +340,20 @@ export function PortfoliosPage() {
 }
 
 export function UPadPage() {
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(initialPortfolioIdFromUrl);
+  const openedFromPreTrade = initialUPadSourceFromUrl() === "pre-trade-analysis";
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(
+    openedFromPreTrade ? "Ticket loaded from Pre-Trade Analysis. Review it before sending to BO." : null,
+  );
   const [loading, setLoading] = useState<string | null>(null);
-  const [activeNotebookId, setActiveNotebookId] = useState(notebooks[0].id);
+  const [activeNotebookId, setActiveNotebookId] = useState(() => notebookIdForSymbol(initialTradeFormFromUrl().underlyingSymbol));
   const [marketSnapshots, setMarketSnapshots] = useState<BlembergMarketSnapshot[]>([]);
   const [tradeBookings, setTradeBookings] = useState<TradeBooking[]>([]);
   const [myLimits, setMyLimits] = useState<TradingLimitSnapshot | null>(null);
 
-  const [tradeForm, setTradeForm] = useState({
-    underlyingSymbol: "AAPL",
-    optionType: "CALL" as OptionType,
-    strike: "190",
-    maturityDate: "2027-06-01",
-    quantity: "10",
-  });
+  const [tradeForm, setTradeForm] = useState(initialTradeFormFromUrl);
 
   const marketSnapshotBySymbol = new Map(marketSnapshots.map((snapshot) => [snapshot.symbol.toUpperCase(), snapshot]));
 
@@ -818,7 +827,7 @@ function changeClass(snapshot: BlembergMarketSnapshot | undefined) {
 }
 
 export function PricingPage() {
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(initialPortfolioIdFromUrl);
   const [valuationDate, setValuationDate] = useState(todayIsoDate());
   const [pricing, setPricing] = useState<PortfolioPricingResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -877,7 +886,7 @@ export function PricingPage() {
 }
 
 export function ExposurePage() {
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(initialPortfolioIdFromUrl);
   const [form, setForm] = useState(defaultRunForm);
   const [exposure, setExposure] = useState<ExposureSimulationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -916,7 +925,7 @@ export function ExposurePage() {
 }
 
 export function CvaPage() {
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(initialPortfolioIdFromUrl);
   const [form, setForm] = useState(defaultRunForm);
   const [cva, setCva] = useState<CvaCalculationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1285,6 +1294,46 @@ function Alert({ message }: { message: string | null }) {
 
 function EmptyState({ text }: { text: string }) {
   return <div className="empty">{text}</div>;
+}
+
+function initialPortfolioIdFromUrl() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return new URLSearchParams(window.location.search).get("portfolioId") ?? "";
+}
+
+function initialUPadSourceFromUrl() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return new URLSearchParams(window.location.search).get("source") ?? "";
+}
+
+function initialTradeFormFromUrl(): TradeTicketForm {
+  const fallback: TradeTicketForm = {
+    underlyingSymbol: "AAPL",
+    optionType: "CALL" as OptionType,
+    strike: "190",
+    maturityDate: "2027-06-01",
+    quantity: "10",
+  };
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+  const params = new URLSearchParams(window.location.search);
+  const optionType = params.get("optionType") === "PUT" ? "PUT" : "CALL";
+  return {
+    underlyingSymbol: (params.get("underlyingSymbol") ?? params.get("symbol") ?? fallback.underlyingSymbol).toUpperCase(),
+    optionType,
+    strike: params.get("strike") ?? fallback.strike,
+    maturityDate: params.get("maturityDate") ?? fallback.maturityDate,
+    quantity: params.get("quantity") ?? fallback.quantity,
+  };
+}
+
+function notebookIdForSymbol(symbol: string) {
+  return notebooks.find((notebook) => notebook.symbols.includes(symbol.toUpperCase()))?.id ?? notebooks[0].id;
 }
 
 function errorMessage(caught: unknown): string {

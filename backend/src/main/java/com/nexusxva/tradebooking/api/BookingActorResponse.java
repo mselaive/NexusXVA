@@ -9,11 +9,10 @@ public record BookingActorResponse(
         String displayName
 ) {
 
-    static BookingActorResponse from(BookingActor actor) {
+    public static BookingActorResponse from(BookingActor actor) {
         if (actor == null) {
             return null;
         }
         return new BookingActorResponse(actor.userId(), actor.username(), actor.displayName());
     }
 }
-

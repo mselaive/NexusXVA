@@ -227,7 +227,7 @@ It does not persist exposure, default probabilities, or CVA results.
 
 Dashboard V1 is a Next.js frontend in `frontend/`.
 It does not implement financial formulas.
-The UI is split by active group. FO uses overview, `u-Pad`, portfolios, pricing, exposure and CVA. BO uses Trade Validation and Trading Limits.
+The UI is split by active group. FO uses FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure and CVA. BO uses Trade Validation and Trading Limits. ADMIN uses Administration for memberships, FO feature permissions and portfolio visibility, plus Workflows for read-only workflow monitoring.
 
 The frontend flow is:
 
@@ -242,16 +242,76 @@ dashboard user action
 The dashboard uses the backend as the source of truth for:
 
 - Portfolio data.
+- FO Desk aggregation through `/api/front-office/desk`.
 - Pending booking submission through `u-Pad`.
+- Stateless Pre-Trade Analysis through `/api/front-office/what-if/european-option`.
+- Stateless Stress Testing through `/api/front-office/stress-tests/european-options`.
 - BO validation before confirmed positions are created.
 - FO limit visibility in `u-Pad` and BO policy management.
+- ADMIN user/group access, FO feature checks, portfolio visibility, and read-only workflow map.
 - Portfolio-level Black-Scholes pricing.
 - Exposure simulation.
 - CVA calculation.
 
-For local development, the frontend calls `/nexus-api/*`, which Next.js proxies to the backend.
-The frontend never calls Blemberg directly.
+For local development, the frontend calls `/nexus-api/*`, which Next.js proxies to NexusXVA. It may also call `/blemberg-api/*` for cached snapshot display in FO screens. Pricing, exposure, CVA, and stress calculations still go through NexusXVA backend services.
 `u-Pad` submits trade terms only; market data remains owned by `marketdata`/Blemberg.
+
+Optional large demo portfolios live in `backend/src/main/resources/db/demo/demo_portfolios.sql`. They are not Flyway migrations; developers load them explicitly when they want realistic local books for dashboard demos, pricing, exposure, CVA, pre-trade analysis and stress testing. See `docs/docs-EN/DemoPortfolios.md`.
+
+## How FO Desk And Pre-Trade Analysis Flow
+
+```text
+FO opens FO Desk
+  -> frontoffice.api
+  -> visible portfolios + my trade_booking_requests
+  -> booking counts, portfolio shortcuts and booking blotter
+```
+
+FO Desk is read-only. It shows pending, rejected and confirmed booking requests across the user's history. Pending and rejected bookings remain visible for workflow control but still do not enter pricing, exposure or CVA.
+
+```text
+FO runs Pre-Trade Analysis
+  -> frontoffice.api
+  -> portfolio Black-Scholes pricing for confirmed positions
+  -> hypothetical European option pricing
+  -> base totals, with-trade totals and incremental impact
+```
+
+Pre-Trade Analysis is stateless. It does not create a BO booking request, does not create a confirmed position and does not persist valuation results. The page shows Blemberg market snapshots, fills strike from Last when a symbol is selected, and displays strike-vs-market context before and after the run. If FO likes the result, the UI sends the ticket terms to `u-Pad`; `u-Pad` remains the official booking screen.
+
+```text
+FO runs Stress Testing
+  -> frontoffice.api
+  -> confirmed portfolio positions
+  -> marketdata pricing inputs
+  -> scenario matrix shocks
+  -> stressed price/Greeks by scenario
+```
+
+Stress Testing is stateless. It shocks `spot` by relative percent and shocks `volatility`, `riskFreeRate`, and `dividendYield` by basis points. V1 is pricing/Greeks-only; it does not run Exposure, CVA, or persist stress results. It can include one hypothetical trade, but that trade remains temporary and must still go through `u-Pad` and BO validation if FO wants to book it.
+
+## Administration V1
+
+Administration V1 adds access control without changing trade economics:
+
+```text
+ADMIN user action
+  -> admin.api
+  -> admin.application
+  -> auth access-control tables
+```
+
+Group membership controls which area a user can enter. FO feature permissions then refine the allowed Front Office actions:
+
+- `FO_BOOK_TRADES`
+- `FO_CREATE_PORTFOLIOS`
+- `FO_RUN_CVA`
+- `FO_RUN_WHAT_IF`
+- `FO_RUN_STRESS_TEST`
+
+Portfolio visibility can be `ALL` or `SELECTED`. Pricing, exposure, CVA and trade booking requests all check portfolio access before operating.
+
+The workflow map reads `trade_booking_requests` and shows entries as `Booked`, `Waiting BO`, `Accepted`, or `Rejected`. It is intentionally read-only; BO Trade Validation remains the place where approvals and rejections happen.
 
 ## How Trade Validation Flows
 
@@ -595,12 +655,13 @@ Now CVA V1.1 exists as the first XVA adjustment slice and Dashboard V1 is the ac
 
 ## Recommended Next Milestone
 
-The recommended next milestone is finishing Dashboard V1 and then hardening user-facing workflows.
+The recommended next milestone is hardening user-facing workflows after FO Desk, Pre-Trade Analysis and Stress Testing V1.
 
 Suggested next version:
 
 - Keep the current portfolio pricing, exposure and CVA endpoints.
 - Keep the dashboard focused on visualization and workflow orchestration.
+- Use FO Desk as the operational FO landing page, Pre-Trade Analysis for trade impact, and Stress Testing for scenario matrices.
 - Do not move pricing, Monte Carlo or CVA calculations into the frontend.
 - Use real Blemberg as the source of `spot`, `volatility`, `riskFreeRate`, and `dividendYield` whenever it is running.
 - Keep the Blemberg response fixtures in `BlembergContractFixtures.md` aligned with NexusXVA adapter tests.

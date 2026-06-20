@@ -11,10 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexusxva.AbstractPostgresIntegrationTest;
-import com.nexusxva.shared.error.ConflictException;
 import com.nexusxva.tradebooking.application.CreateEuropeanOptionBookingCommand;
 import com.nexusxva.tradebooking.application.TradeBookingService;
 import com.nexusxva.tradebooking.domain.BookingActor;
+import com.nexusxva.tradinglimits.application.TradingLimitExceededException;
 import jakarta.servlet.http.Cookie;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -176,7 +176,7 @@ class TradingLimitIntegrationTest extends AbstractPostgresIntegrationTest {
                         actor
                 );
                 return "CREATED";
-            } catch (ConflictException exception) {
+            } catch (TradingLimitExceededException exception) {
                 return "CONFLICT";
             }
         };

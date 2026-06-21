@@ -28,6 +28,7 @@ export type EuropeanOptionPosition = {
   strike: number;
   maturityDate: string;
   quantity: number;
+  lifecycleStatus: "ACTIVE" | "CANCELLED" | "AMENDED";
   createdAt: string;
   updatedAt: string;
 };
@@ -95,6 +96,42 @@ export type FrontOfficeDeskResponse = {
 
 export type TradeBookingPage = {
   items: TradeBooking[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
+export type TradeLifecycleRequestType = "AMEND" | "CANCEL";
+export type TradeLifecycleRequestStatus = "PENDING_VALIDATION" | "APPROVED" | "REJECTED";
+
+export type TradeLifecycleRequest = {
+  id: string;
+  portfolioId: string | null;
+  portfolioName: string;
+  positionId: string | null;
+  requestType: TradeLifecycleRequestType;
+  status: TradeLifecycleRequestStatus;
+  originalUnderlyingSymbol: string;
+  originalOptionType: OptionType;
+  originalStrike: number;
+  originalMaturityDate: string;
+  originalQuantity: number;
+  requestedUnderlyingSymbol: string | null;
+  requestedOptionType: OptionType | null;
+  requestedStrike: number | null;
+  requestedMaturityDate: string | null;
+  requestedQuantity: number | null;
+  submittedBy: BookingActor;
+  submittedAt: string;
+  reviewedBy: BookingActor | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  resultingPositionId: string | null;
+};
+
+export type TradeLifecyclePage = {
+  items: TradeLifecycleRequest[];
   page: number;
   size: number;
   totalElements: number;
@@ -393,7 +430,7 @@ export type AdminWorkflowBooking = {
   portfolioId: string | null;
   portfolioName: string;
   node: string;
-  status: TradeBookingStatus;
+  status: string;
   underlyingSymbol: string;
   optionType: OptionType;
   strike: number;
@@ -440,6 +477,26 @@ export type AuthResponse = {
   user: AuthUser | null;
   activeGroup: string | null;
   csrfToken: string | null;
+};
+
+export type UserNotification = {
+  id: string;
+  notificationType: string;
+  title: string;
+  message: string;
+  linkPath: string | null;
+  unread: boolean;
+  createdAt: string;
+  readAt: string | null;
+};
+
+export type NotificationPage = {
+  items: UserNotification[];
+  unreadCount: number;
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
 };
 
 export type LoginRequest = {

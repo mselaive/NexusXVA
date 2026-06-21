@@ -37,7 +37,7 @@ class PortfolioBlackScholesPricingServiceTest {
         EuropeanOptionPosition position = position("AAPL", OptionType.CALL, "100.0", "2027-06-01", "2.0");
         PortfolioBlackScholesPricingService service = service(symbol -> Optional.of(pricingInput(symbol)));
         when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("USD")));
-        when(portfolioStore.findEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(position));
+        when(portfolioStore.findActiveEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(position));
 
         PortfolioBlackScholesPricingResult result = service.price(PORTFOLIO_ID, LocalDate.parse("2026-06-01"));
 
@@ -56,7 +56,7 @@ class PortfolioBlackScholesPricingServiceTest {
         EuropeanOptionPosition position = position("AAPL", OptionType.PUT, "100.0", "2027-06-01", "-3.0");
         PortfolioBlackScholesPricingService service = service(symbol -> Optional.of(pricingInput(symbol)));
         when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("USD")));
-        when(portfolioStore.findEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(position));
+        when(portfolioStore.findActiveEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(position));
 
         PortfolioBlackScholesPricingResult result = service.price(PORTFOLIO_ID, LocalDate.parse("2026-06-01"));
 
@@ -71,7 +71,7 @@ class PortfolioBlackScholesPricingServiceTest {
         EuropeanOptionPosition expired = position("AAPL", OptionType.CALL, "100.0", "2026-06-01", "2.0");
         PortfolioBlackScholesPricingService service = service(symbol -> Optional.of(pricingInput(symbol)));
         when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("USD")));
-        when(portfolioStore.findEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(expired));
+        when(portfolioStore.findActiveEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(expired));
 
         PortfolioBlackScholesPricingResult result = service.price(PORTFOLIO_ID, LocalDate.parse("2026-06-01"));
 
@@ -97,7 +97,7 @@ class PortfolioBlackScholesPricingServiceTest {
         EuropeanOptionPosition position = position("FAKE", OptionType.CALL, "100.0", "2027-06-01", "1.0");
         PortfolioBlackScholesPricingService service = service(symbol -> Optional.empty());
         when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("USD")));
-        when(portfolioStore.findEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(position));
+        when(portfolioStore.findActiveEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(position));
 
         assertThatThrownBy(() -> service.price(PORTFOLIO_ID, LocalDate.parse("2026-06-01")))
                 .isInstanceOf(IllegalArgumentException.class)

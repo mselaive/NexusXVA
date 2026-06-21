@@ -3,7 +3,7 @@
 import React from "react";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3,
+  Bell,
   BriefcaseBusiness,
   CircleDollarSign,
   FlaskConical,
@@ -20,9 +20,9 @@ import {
   SquarePen,
   Wallet,
 } from "lucide-react";
-import { authApi } from "@/lib/api";
+import { authApi, nexusApi } from "@/lib/api";
 import { groupForCode, isHrefAllowed, type WorkGroup } from "@/lib/authContext";
-import type { AuthUser } from "@/lib/types";
+import type { AuthUser, UserNotification } from "@/lib/types";
 import { MarketDataStatus } from "./MarketDataStatus";
 
 type AppShellProps = {
@@ -59,19 +59,54 @@ export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps
   const [authChecked, setAuthChecked] = React.useState(false);
   const [authUser, setAuthUser] = React.useState<AuthUser | null>(null);
   const [activeGroup, setActiveGroupState] = React.useState<WorkGroup | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = React.useState(false);
+  const [notifications, setNotifications] = React.useState<UserNotification[]>([]);
+  const [unreadCount, setUnreadCount] = React.useState(0);
+  const [notificationsError, setNotificationsError] = React.useState<string | null>(null);
   const howToRef = React.useRef<HTMLSpanElement | null>(null);
+  const notificationsRef = React.useRef<HTMLSpanElement | null>(null);
 
   React.useEffect(() => {
     function closeOnOutsideClick(event: MouseEvent) {
-      if (!howToRef.current || howToRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (howToRef.current?.contains(target) || notificationsRef.current?.contains(target)) {
         return;
       }
       setHowToOpen(false);
+      setNotificationsOpen(false);
     }
 
     document.addEventListener("mousedown", closeOnOutsideClick);
     return () => document.removeEventListener("mousedown", closeOnOutsideClick);
   }, []);
+
+  React.useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+    let cancelled = false;
+    async function load() {
+      try {
+        const response = await nexusApi.listNotifications(false, 0, 20);
+        if (cancelled) {
+          return;
+        }
+        setNotifications(response.items);
+        setUnreadCount(response.unreadCount);
+        setNotificationsError(null);
+      } catch (error) {
+        if (!cancelled) {
+          setNotificationsError(error instanceof Error ? error.message : "Notifications unavailable");
+        }
+      }
+    }
+    void load();
+    const interval = window.setInterval(load, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [authUser]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -120,6 +155,26 @@ export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps
     window.location.href = "/login";
   }
 
+  async function openNotification(notification: UserNotification) {
+    try {
+      if (notification.unread) {
+        const updated = await nexusApi.markNotificationRead(notification.id);
+        setNotifications((current) => current.map((item) => item.id === updated.id ? updated : item));
+        setUnreadCount((current) => Math.max(0, current - 1));
+      }
+    } finally {
+      if (notification.linkPath) {
+        window.location.href = notification.linkPath;
+      }
+    }
+  }
+
+  async function markAllNotificationsRead() {
+    await nexusApi.markAllNotificationsRead();
+    setNotifications((current) => current.map((item) => ({ ...item, unread: false, readAt: item.readAt ?? new Date().toISOString() })));
+    setUnreadCount(0);
+  }
+
   const visibleNavItems = activeGroup ? navItems.filter((item) => isHrefAllowed(activeGroup, item.href)) : navItems;
 
   return (
@@ -127,7 +182,7 @@ export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps
       <aside className="app-sidebar">
         <div className="app-brand">
           <div className="brand-mark">
-            <BarChart3 size={20} />
+            <img src="/nexusxva-logo.svg" alt="" />
           </div>
           <div>
             <strong>NexusXVA</strong>
@@ -175,6 +230,48 @@ export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps
                         <strong>{item.title}</strong>
                         <span>{item.body}</span>
                       </div>
+                    ))}
+                  </div>
+                ) : null}
+              </span>
+            ) : null}
+            {authUser ? (
+              <span className="notifications-wrap" ref={notificationsRef}>
+                <button
+                  className="header-action notifications-trigger"
+                  type="button"
+                  onClick={() => setNotificationsOpen((current) => !current)}
+                  title="Notifications"
+                >
+                  <Bell size={16} />
+                  <span>Notifications</span>
+                  {unreadCount > 0 ? <strong className="notification-count">{unreadCount > 99 ? "99+" : unreadCount}</strong> : null}
+                </button>
+                {notificationsOpen ? (
+                  <div className="notifications-panel" role="status">
+                    <div className="notifications-head">
+                      <strong>Notifications</strong>
+                      <button type="button" onClick={markAllNotificationsRead} disabled={unreadCount === 0}>
+                        Mark all read
+                      </button>
+                    </div>
+                    {notificationsError ? <span className="panel-error">{notificationsError}</span> : null}
+                    {!notificationsError && notifications.length === 0 ? (
+                      <span className="empty-inline">No notifications yet.</span>
+                    ) : null}
+                    {notifications.map((notification) => (
+                      <button
+                        className={`notification-row ${notification.unread ? "unread" : ""}`}
+                        key={notification.id}
+                        type="button"
+                        onClick={() => openNotification(notification)}
+                      >
+                        <span>
+                          <strong>{notification.title}</strong>
+                          <small>{new Date(notification.createdAt).toLocaleString()}</small>
+                        </span>
+                        <em>{notification.message}</em>
+                      </button>
                     ))}
                   </div>
                 ) : null}

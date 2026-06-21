@@ -2,6 +2,7 @@ package com.nexusxva.portfolio.api;
 
 import com.nexusxva.instruments.domain.OptionType;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
+import com.nexusxva.portfolio.domain.PositionLifecycleStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -16,6 +17,7 @@ public record EuropeanOptionPositionResponse(
         BigDecimal strike,
         LocalDate maturityDate,
         BigDecimal quantity,
+        PositionLifecycleStatus lifecycleStatus,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -29,6 +31,7 @@ public record EuropeanOptionPositionResponse(
                 position.strike(),
                 position.maturityDate(),
                 position.quantity(),
+                position.lifecycleStatus(),
                 position.createdAt(),
                 position.updatedAt()
         );

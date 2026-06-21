@@ -29,6 +29,14 @@ public interface PortfolioStore {
 
     List<EuropeanOptionPosition> findEuropeanOptionPositions(UUID portfolioId);
 
+    List<EuropeanOptionPosition> findActiveEuropeanOptionPositions(UUID portfolioId);
+
     Optional<EuropeanOptionPosition> findEuropeanOptionPosition(UUID portfolioId, UUID positionId);
+
+    Optional<EuropeanOptionPosition> findEuropeanOptionPosition(UUID positionId);
+
+    void markPositionCancelled(UUID positionId);
+
+    void markPositionAmended(UUID positionId);
 
 }

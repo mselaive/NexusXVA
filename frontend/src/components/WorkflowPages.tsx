@@ -30,7 +30,9 @@ import type {
   PortfolioSummary,
   BlembergMarketSnapshot,
   BlembergRefreshResponse,
+  EuropeanOptionPosition,
   TradeBooking,
+  TradeLifecycleRequest,
   TradingLimitSnapshot,
 } from "@/lib/types";
 import { AppShell } from "./AppShell";
@@ -222,6 +224,10 @@ export function PortfoliosPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [lifecycleAction, setLifecycleAction] = useState<"amend" | "cancel" | null>(null);
+  const [lifecyclePosition, setLifecyclePosition] = useState<EuropeanOptionPosition | null>(null);
+  const [lifecycleRequests, setLifecycleRequests] = useState<TradeLifecycleRequest[]>([]);
+  const [amendForm, setAmendForm] = useState<TradeTicketForm>(initialTradeFormFromUrl);
   const [portfolioPickerReloadKey, setPortfolioPickerReloadKey] = useState(0);
   const [portfolioForm, setPortfolioForm] = useState({
     name: "USD Equity Options Book",
@@ -236,7 +242,12 @@ export function PortfoliosPage() {
       const nextId = selectedId || result[0]?.id || "";
       setSelectedId(nextId);
       if (nextId) {
-        setPortfolio(await nexusApi.getPortfolio(nextId));
+        const [nextPortfolio, requests] = await Promise.all([
+          nexusApi.getPortfolio(nextId),
+          nexusApi.listMyLifecycleRequests(),
+        ]);
+        setPortfolio(nextPortfolio);
+        setLifecycleRequests(requests.filter((request) => request.portfolioId === nextId));
       }
     } catch (caught) {
       setError(errorMessage(caught));
@@ -248,7 +259,12 @@ export function PortfoliosPage() {
       return;
     }
     try {
-      setPortfolio(await nexusApi.getPortfolio(selectedId));
+      const [nextPortfolio, requests] = await Promise.all([
+        nexusApi.getPortfolio(selectedId),
+        nexusApi.listMyLifecycleRequests(),
+      ]);
+      setPortfolio(nextPortfolio);
+      setLifecycleRequests(requests.filter((request) => request.portfolioId === selectedId));
     } catch (caught) {
       setError(errorMessage(caught));
     }
@@ -266,8 +282,61 @@ export function PortfoliosPage() {
       });
       setSelectedId(created.id);
       setPortfolio(created);
+      setLifecycleRequests([]);
       setPortfolioPickerReloadKey((current) => current + 1);
       setSuccess("Portfolio created.");
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function openAmend(position: EuropeanOptionPosition) {
+    setLifecyclePosition(position);
+    setLifecycleAction("amend");
+    setAmendForm({
+      underlyingSymbol: position.underlyingSymbol,
+      optionType: position.optionType,
+      strike: String(position.strike),
+      maturityDate: position.maturityDate,
+      quantity: String(position.quantity),
+    });
+  }
+
+  function openCancel(position: EuropeanOptionPosition) {
+    setLifecyclePosition(position);
+    setLifecycleAction("cancel");
+  }
+
+  function closeLifecycleModal() {
+    setLifecycleAction(null);
+    setLifecyclePosition(null);
+  }
+
+  async function submitLifecycleRequest() {
+    if (!lifecyclePosition || !lifecycleAction) {
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      if (lifecycleAction === "cancel") {
+        await nexusApi.requestPositionCancel(lifecyclePosition.id);
+        setSuccess(`${lifecyclePosition.underlyingSymbol} cancellation request sent to BO. It will stay pending until Back Office reviews it.`);
+      } else {
+        await nexusApi.requestPositionAmend(lifecyclePosition.id, {
+          underlyingSymbol: amendForm.underlyingSymbol.trim().toUpperCase(),
+          optionType: amendForm.optionType,
+          strike: Number(amendForm.strike),
+          maturityDate: amendForm.maturityDate,
+          quantity: Number(amendForm.quantity),
+        });
+        setSuccess(`${lifecyclePosition.underlyingSymbol} amendment request sent to BO. The original position remains active until approval.`);
+      }
+      closeLifecycleModal();
+      await refreshSelectedPortfolio();
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -284,7 +353,12 @@ export function PortfoliosPage() {
     if (!selectedId) {
       return;
     }
-    nexusApi.getPortfolio(selectedId).then(setPortfolio).catch((caught) => setError(errorMessage(caught)));
+    Promise.all([nexusApi.getPortfolio(selectedId), nexusApi.listMyLifecycleRequests()])
+      .then(([nextPortfolio, requests]) => {
+        setPortfolio(nextPortfolio);
+        setLifecycleRequests(requests.filter((request) => request.portfolioId === selectedId));
+      })
+      .catch((caught) => setError(errorMessage(caught)));
   }, [selectedId]);
 
   return (
@@ -329,12 +403,27 @@ export function PortfoliosPage() {
           </div>
           <div className="panel section">
             <SectionTitle title="Position inventory" info="Portfolio stores trade terms only. Spot, rates, volatility and dividends come from marketdata during valuation." />
-            <PositionTable portfolio={portfolio} />
+            <PositionTable portfolio={portfolio} onAmend={openAmend} onCancel={openCancel} />
+          </div>
+          <div className="panel section">
+            <SectionTitle title="Lifecycle requests" info="Amendments and cancellations are maker-checker requests. AMENDED and CANCELLED positions are historical; only ACTIVE positions can be changed again." />
+            <LifecycleRequestTable requests={lifecycleRequests} />
           </div>
         </>
       ) : (
         <EmptyState text="No portfolio selected." />
       )}
+      {lifecycleAction && lifecyclePosition ? (
+        <LifecycleRequestModal
+          action={lifecycleAction}
+          position={lifecyclePosition}
+          amendForm={amendForm}
+          onAmendFormChange={setAmendForm}
+          loading={loading}
+          onClose={closeLifecycleModal}
+          onSubmit={submitLifecycleRequest}
+        />
+      ) : null}
     </AppShell>
   );
 }
@@ -351,6 +440,7 @@ export function UPadPage() {
   const [activeNotebookId, setActiveNotebookId] = useState(() => notebookIdForSymbol(initialTradeFormFromUrl().underlyingSymbol));
   const [marketSnapshots, setMarketSnapshots] = useState<BlembergMarketSnapshot[]>([]);
   const [tradeBookings, setTradeBookings] = useState<TradeBooking[]>([]);
+  const [lifecycleRequests, setLifecycleRequests] = useState<TradeLifecycleRequest[]>([]);
   const [myLimits, setMyLimits] = useState<TradingLimitSnapshot | null>(null);
 
   const [tradeForm, setTradeForm] = useState(initialTradeFormFromUrl);
@@ -370,6 +460,7 @@ export function UPadPage() {
     if (!selectedId) {
       setPortfolio(null);
       setTradeBookings([]);
+      setLifecycleRequests([]);
       return;
     }
     loadSelectedPortfolio(selectedId);
@@ -397,6 +488,7 @@ export function UPadPage() {
       ]);
       setPortfolio(selectedPortfolio);
       setTradeBookings(bookings.filter((booking) => booking.portfolioId === portfolioId));
+      setLifecycleRequests((await nexusApi.listMyLifecycleRequests()).filter((request) => request.portfolioId === portfolioId));
     } catch (caught) {
       setError(errorMessage(caught));
     }
@@ -517,6 +609,11 @@ export function UPadPage() {
         <section className="panel dealpad-blotter">
           <SectionTitle title="Confirmed positions" info="Only BO-approved positions live in the portfolio and participate in pricing, exposure and CVA." />
           {portfolio ? <PositionTable portfolio={portfolio} /> : <EmptyState text="Select a portfolio to see confirmed positions." />}
+        </section>
+
+        <section className="panel dealpad-blotter">
+          <SectionTitle title="Lifecycle requests" info="Amendments and cancellations wait for BO approval before changing confirmed positions." />
+          {portfolio ? <LifecycleRequestTable requests={lifecycleRequests} /> : <EmptyState text="Select a portfolio to see lifecycle requests." />}
         </section>
       </div>
     </AppShell>
@@ -1095,7 +1192,15 @@ function RunField({
   );
 }
 
-function PositionTable({ portfolio }: { portfolio: Portfolio }) {
+function PositionTable({
+  portfolio,
+  onAmend,
+  onCancel,
+}: {
+  portfolio: Portfolio;
+  onAmend?: (position: EuropeanOptionPosition) => void;
+  onCancel?: (position: EuropeanOptionPosition) => void;
+}) {
   if (portfolio.positions.length === 0) {
     return <EmptyState text="No positions in this portfolio." />;
   }
@@ -1110,18 +1215,136 @@ function PositionTable({ portfolio }: { portfolio: Portfolio }) {
             <th>Strike</th>
             <th>Maturity</th>
             <th>Quantity</th>
+            <th>Status</th>
             <th>Updated</th>
+            {onAmend || onCancel ? <th>Actions</th> : null}
           </tr>
         </thead>
         <tbody>
           {portfolio.positions.map((position) => (
-            <tr key={position.id}>
+            <tr className={(position.lifecycleStatus ?? "ACTIVE") !== "ACTIVE" ? "inactive-position-row" : ""} key={position.id}>
               <td>{position.underlyingSymbol}</td>
               <td>{position.optionType}</td>
               <td>{formatNumber(position.strike, 2)}</td>
               <td>{position.maturityDate}</td>
               <td>{formatNumber(position.quantity, 2)}</td>
+              <td><span className={`lifecycle-status ${(position.lifecycleStatus ?? "ACTIVE").toLowerCase()}`}>{position.lifecycleStatus ?? "ACTIVE"}</span></td>
               <td>{new Date(position.updatedAt).toLocaleString()}</td>
+              {onAmend || onCancel ? (
+                <td>
+                  {(position.lifecycleStatus ?? "ACTIVE") === "ACTIVE" ? (
+                    <div className="row-actions">
+                      {onAmend ? <button className="text-action" type="button" onClick={() => onAmend(position)}>Request Amend</button> : null}
+                      {onCancel ? <button className="text-action danger" type="button" onClick={() => onCancel(position)}>Request Cancel</button> : null}
+                    </div>
+                  ) : (
+                    <span className="muted-cell">
+                      {(position.lifecycleStatus ?? "ACTIVE") === "AMENDED" ? "Use replacement ACTIVE position" : "Closed history"}
+                    </span>
+                  )}
+                </td>
+              ) : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function LifecycleRequestModal({
+  action,
+  position,
+  amendForm,
+  onAmendFormChange,
+  loading,
+  onClose,
+  onSubmit,
+}: {
+  action: "amend" | "cancel";
+  position: EuropeanOptionPosition;
+  amendForm: TradeTicketForm;
+  onAmendFormChange: (next: TradeTicketForm) => void;
+  loading: boolean;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) {
+        onClose();
+      }
+    }}>
+      <div className="modal-panel" role="dialog" aria-modal="true">
+        <div>
+          <span className="page-eyebrow">Front Office lifecycle</span>
+          <h2>{action === "cancel" ? "Request cancellation" : "Request amendment"}</h2>
+          <p>{position.optionType} {position.underlyingSymbol} · {formatNumber(position.quantity, 2)} @ {formatNumber(position.strike, 2)}</p>
+        </div>
+        {action === "amend" ? (
+          <div className="form-grid">
+            <Field label="Underlying">
+              <input className="input ticker-input" value={amendForm.underlyingSymbol} onChange={(event) => onAmendFormChange({ ...amendForm, underlyingSymbol: event.target.value })} />
+            </Field>
+            <Field label="Option type">
+              <select className="select" value={amendForm.optionType} onChange={(event) => onAmendFormChange({ ...amendForm, optionType: event.target.value as OptionType })}>
+                <option value="CALL">CALL</option>
+                <option value="PUT">PUT</option>
+              </select>
+            </Field>
+            <Field label="Strike">
+              <input className="input" type="number" min="0.01" step="0.01" value={amendForm.strike} onChange={(event) => onAmendFormChange({ ...amendForm, strike: event.target.value })} />
+            </Field>
+            <Field label="Maturity">
+              <input className="input" type="date" value={amendForm.maturityDate} onChange={(event) => onAmendFormChange({ ...amendForm, maturityDate: event.target.value })} />
+            </Field>
+            <Field label="Quantity">
+              <input className="input" type="number" step="1" value={amendForm.quantity} onChange={(event) => onAmendFormChange({ ...amendForm, quantity: event.target.value })} />
+            </Field>
+          </div>
+        ) : (
+          <div className="mini-note">
+            This request closes the full position only after Back Office approval. Partial cancellation is not part of V1.
+          </div>
+        )}
+        <div className="modal-actions">
+          <button className="btn secondary" type="button" onClick={onClose}>Close</button>
+          <button className={`btn ${action === "cancel" ? "danger-button" : ""}`} type="button" onClick={onSubmit} disabled={loading}>
+            {loading ? <Loader2 size={16} /> : <Send size={16} />}
+            Send to BO
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LifecycleRequestTable({ requests }: { requests: TradeLifecycleRequest[] }) {
+  if (requests.length === 0) {
+    return <EmptyState text="No lifecycle requests for this portfolio." />;
+  }
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Type</th>
+            <th>Original</th>
+            <th>Requested</th>
+            <th>Submitted</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {requests.map((request) => (
+            <tr key={request.id}>
+              <td><span className={`booking-status ${request.status.toLowerCase()}`}>{request.status.replaceAll("_", " ")}</span></td>
+              <td>{request.requestType}</td>
+              <td>{request.originalOptionType} {request.originalUnderlyingSymbol} · {formatNumber(request.originalQuantity, 2)} @ {formatNumber(request.originalStrike, 2)}</td>
+              <td>{request.requestType === "AMEND" ? `${request.requestedOptionType} ${request.requestedUnderlyingSymbol} · ${formatNumber(request.requestedQuantity ?? 0, 2)} @ ${formatNumber(request.requestedStrike ?? 0, 2)}` : "Full cancellation"}</td>
+              <td>{new Date(request.submittedAt).toLocaleString()}</td>
+              <td>{request.rejectionReason ?? "—"}</td>
             </tr>
           ))}
         </tbody>

@@ -22,6 +22,15 @@ interface EuropeanOptionPositionJpaRepository extends JpaRepository<EuropeanOpti
             select position
             from EuropeanOptionPositionEntity position
             where position.portfolio.id = :portfolioId
+              and position.lifecycleStatus = com.nexusxva.portfolio.domain.PositionLifecycleStatus.ACTIVE
+            order by position.createdAt asc
+            """)
+    List<EuropeanOptionPositionEntity> findActiveByPortfolioId(@Param("portfolioId") UUID portfolioId);
+
+    @Query("""
+            select position
+            from EuropeanOptionPositionEntity position
+            where position.portfolio.id = :portfolioId
               and position.id = :positionId
             """)
     Optional<EuropeanOptionPositionEntity> findByPortfolioIdAndPositionId(

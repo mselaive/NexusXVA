@@ -36,7 +36,11 @@ public class AdminAccessService {
             new NodeDefinition("SUBMITTED", "Booked", "All trade requests submitted by Front Office."),
             new NodeDefinition("PENDING_VALIDATION", "Waiting BO", "Bookings waiting for Back Office review."),
             new NodeDefinition("CONFIRMED", "Accepted", "Bookings approved by BO and converted into confirmed positions."),
-            new NodeDefinition("REJECTED", "Rejected", "Bookings rejected by BO with a reason.")
+            new NodeDefinition("REJECTED", "Rejected", "Bookings rejected by BO with a reason."),
+            new NodeDefinition("LIFECYCLE_REQUESTED", "Lifecycle requested", "Amendment and cancellation requests submitted by Front Office."),
+            new NodeDefinition("LIFECYCLE_WAITING_BO", "Lifecycle waiting BO", "Lifecycle requests waiting for Back Office review."),
+            new NodeDefinition("LIFECYCLE_APPROVED", "Lifecycle approved", "Lifecycle requests approved by BO."),
+            new NodeDefinition("LIFECYCLE_REJECTED", "Lifecycle rejected", "Lifecycle requests rejected by BO.")
     );
 
     private final JdbcTemplate jdbcTemplate;
@@ -245,6 +249,11 @@ public class AdminAccessService {
         byNode.put("PENDING_VALIDATION", filterByStatus(bookings, "PENDING_VALIDATION"));
         byNode.put("CONFIRMED", filterByStatus(bookings, "CONFIRMED"));
         byNode.put("REJECTED", filterByStatus(bookings, "REJECTED"));
+        List<AdminWorkflowBookingResponse> lifecycleRequests = workflowLifecycleRequests(portfolioId);
+        byNode.put("LIFECYCLE_REQUESTED", lifecycleRequests);
+        byNode.put("LIFECYCLE_WAITING_BO", filterByStatus(lifecycleRequests, "PENDING_VALIDATION"));
+        byNode.put("LIFECYCLE_APPROVED", filterByStatus(lifecycleRequests, "APPROVED"));
+        byNode.put("LIFECYCLE_REJECTED", filterByStatus(lifecycleRequests, "REJECTED"));
 
         List<AdminWorkflowNodeResponse> nodes = NODES.stream()
                 .map(node -> new AdminWorkflowNodeResponse(
@@ -261,7 +270,10 @@ public class AdminAccessService {
                 List.of(
                         new AdminWorkflowLinkResponse("SUBMITTED", "PENDING_VALIDATION", byNode.get("PENDING_VALIDATION").size()),
                         new AdminWorkflowLinkResponse("PENDING_VALIDATION", "CONFIRMED", byNode.get("CONFIRMED").size()),
-                        new AdminWorkflowLinkResponse("PENDING_VALIDATION", "REJECTED", byNode.get("REJECTED").size())
+                        new AdminWorkflowLinkResponse("PENDING_VALIDATION", "REJECTED", byNode.get("REJECTED").size()),
+                        new AdminWorkflowLinkResponse("LIFECYCLE_REQUESTED", "LIFECYCLE_WAITING_BO", byNode.get("LIFECYCLE_WAITING_BO").size()),
+                        new AdminWorkflowLinkResponse("LIFECYCLE_WAITING_BO", "LIFECYCLE_APPROVED", byNode.get("LIFECYCLE_APPROVED").size()),
+                        new AdminWorkflowLinkResponse("LIFECYCLE_WAITING_BO", "LIFECYCLE_REJECTED", byNode.get("LIFECYCLE_REJECTED").size())
                 )
         );
     }
@@ -419,6 +431,30 @@ public class AdminAccessService {
         );
     }
 
+    private List<AdminWorkflowBookingResponse> workflowLifecycleRequests(UUID portfolioId) {
+        List<Object> params = new ArrayList<>();
+        String where = "";
+        if (portfolioId != null) {
+            where = "WHERE portfolio_id = ?";
+            params.add(portfolioId);
+        }
+        return jdbcTemplate.query(
+                """
+                SELECT id, portfolio_id, portfolio_name, status, request_type,
+                       original_underlying_symbol, original_option_type, original_strike,
+                       original_maturity_date, original_quantity, submitted_by_display_name,
+                       submitted_at, reviewed_by_display_name, reviewed_at, rejection_reason,
+                       resulting_position_id
+                FROM trade_lifecycle_requests
+                %s
+                ORDER BY submitted_at DESC
+                LIMIT 200
+                """.formatted(where),
+                this::workflowLifecycleRequest,
+                params.toArray()
+        );
+    }
+
     private List<AdminWorkflowBookingResponse> filterByStatus(List<AdminWorkflowBookingResponse> bookings, String status) {
         return bookings.stream().filter(booking -> booking.status().equals(status)).toList();
     }
@@ -468,6 +504,37 @@ public class AdminAccessService {
                 reviewedAt == null ? null : reviewedAt.toInstant(),
                 rs.getString("rejection_reason"),
                 rs.getObject("confirmed_position_id", UUID.class)
+        );
+    }
+
+    private AdminWorkflowBookingResponse workflowLifecycleRequest(ResultSet rs, int rowNum) throws SQLException {
+        Date maturityDate = rs.getDate("original_maturity_date");
+        Timestamp submittedAt = rs.getTimestamp("submitted_at");
+        Timestamp reviewedAt = rs.getTimestamp("reviewed_at");
+        String status = rs.getString("status");
+        String requestType = rs.getString("request_type");
+        return new AdminWorkflowBookingResponse(
+                rs.getObject("id", UUID.class),
+                rs.getObject("portfolio_id", UUID.class),
+                rs.getString("portfolio_name"),
+                switch (status) {
+                    case "PENDING_VALIDATION" -> "LIFECYCLE_WAITING_BO";
+                    case "APPROVED" -> "LIFECYCLE_APPROVED";
+                    case "REJECTED" -> "LIFECYCLE_REJECTED";
+                    default -> "LIFECYCLE_REQUESTED";
+                },
+                status,
+                rs.getString("original_underlying_symbol"),
+                requestType + " " + rs.getString("original_option_type"),
+                rs.getBigDecimal("original_strike"),
+                maturityDate == null ? null : maturityDate.toLocalDate(),
+                rs.getBigDecimal("original_quantity"),
+                rs.getString("submitted_by_display_name"),
+                submittedAt == null ? null : submittedAt.toInstant(),
+                rs.getString("reviewed_by_display_name"),
+                reviewedAt == null ? null : reviewedAt.toInstant(),
+                rs.getString("rejection_reason"),
+                rs.getObject("resulting_position_id", UUID.class)
         );
     }
 

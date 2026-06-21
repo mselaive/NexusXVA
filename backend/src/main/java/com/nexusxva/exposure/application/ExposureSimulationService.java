@@ -77,7 +77,7 @@ public class ExposureSimulationService {
         }
 
         List<EuropeanOptionPosition> priceablePositions = portfolioStore
-                .findEuropeanOptionPositions(command.portfolioId())
+                .findActiveEuropeanOptionPositions(command.portfolioId())
                 .stream()
                 .filter(position -> position.maturityDate().isAfter(command.valuationDate()))
                 .toList();

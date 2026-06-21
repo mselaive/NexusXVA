@@ -20,15 +20,20 @@ import type {
   FrontOfficeWhatIfRequest,
   FrontOfficeWhatIfResponse,
   LoginRequest,
+  NotificationPage,
   Portfolio,
   PortfolioPricingResponse,
   PortfolioSummary,
   TradeBooking,
   TradeBookingPage,
   TradeBookingStatus,
+  TradeLifecyclePage,
+  TradeLifecycleRequest,
+  TradeLifecycleRequestStatus,
   TradingLimitSnapshot,
   TradingLimitUserPage,
   UpdateTradingLimitRequest,
+  UserNotification,
 } from "./types";
 
 export const API_BASE_URL = (process.env.NEXT_PUBLIC_NEXUSXVA_API_BASE_URL ?? "/nexus-api").replace(/\/$/, "");
@@ -87,6 +92,21 @@ async function readErrorBody(response: Response): Promise<ApiError | string | nu
 }
 
 export const nexusApi = {
+  listNotifications: (unreadOnly = false, page = 0, size = 20) => {
+    const query = new URLSearchParams({ unreadOnly: String(unreadOnly), page: String(page), size: String(size) });
+    return request<NotificationPage>(`/notifications?${query.toString()}`);
+  },
+
+  markNotificationRead: (notificationId: string) =>
+    request<UserNotification>(`/notifications/${notificationId}/read`, {
+      method: "POST",
+    }),
+
+  markAllNotificationsRead: () =>
+    request<void>("/notifications/read-all", {
+      method: "POST",
+    }),
+
   listPortfolios: () => request<PortfolioSummary[]>("/portfolios"),
 
   getPortfolio: (portfolioId: string) => request<Portfolio>(`/portfolios/${portfolioId}`),
@@ -119,6 +139,19 @@ export const nexusApi = {
       body: JSON.stringify(body),
     }),
 
+  requestPositionAmend: (positionId: string, body: AddEuropeanOptionPositionRequest) =>
+    request<TradeLifecycleRequest>(`/front-office/lifecycle/positions/${positionId}/amend`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  requestPositionCancel: (positionId: string) =>
+    request<TradeLifecycleRequest>(`/front-office/lifecycle/positions/${positionId}/cancel`, {
+      method: "POST",
+    }),
+
+  listMyLifecycleRequests: () => request<TradeLifecycleRequest[]>("/front-office/lifecycle/mine"),
+
   listBackOfficeTradeBookings: (status?: TradeBookingStatus, page = 0, size = 50) => {
     const query = new URLSearchParams({ page: String(page), size: String(size) });
     if (status) {
@@ -137,6 +170,25 @@ export const nexusApi = {
 
   rejectTradeBooking: (bookingId: string, rejectionReason: string) =>
     request<TradeBooking>(`/back-office/trade-bookings/${bookingId}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ rejectionReason }),
+    }),
+
+  listBackOfficeLifecycleRequests: (status?: TradeLifecycleRequestStatus, page = 0, size = 50) => {
+    const query = new URLSearchParams({ page: String(page), size: String(size) });
+    if (status) {
+      query.set("status", status);
+    }
+    return request<TradeLifecyclePage>(`/back-office/lifecycle-requests?${query.toString()}`);
+  },
+
+  approveLifecycleRequest: (requestId: string) =>
+    request<TradeLifecycleRequest>(`/back-office/lifecycle-requests/${requestId}/approve`, {
+      method: "POST",
+    }),
+
+  rejectLifecycleRequest: (requestId: string, rejectionReason: string) =>
+    request<TradeLifecycleRequest>(`/back-office/lifecycle-requests/${requestId}/reject`, {
       method: "POST",
       body: JSON.stringify({ rejectionReason }),
     }),
@@ -189,6 +241,11 @@ export const nexusApi = {
   getAdminUser: (userId: string) => request<AdminUserAccess>(`/admin/users/${userId}`),
 
   listAdminPortfolios: () => request<AdminPortfolioSummary[]>("/admin/portfolios"),
+
+  deleteAdminPortfolio: (portfolioId: string) =>
+    request<void>(`/admin/portfolios/${portfolioId}`, {
+      method: "DELETE",
+    }),
 
   updateAdminUserGroups: (userId: string, groups: string[]) =>
     request<AdminUserAccess>(`/admin/users/${userId}/groups`, {

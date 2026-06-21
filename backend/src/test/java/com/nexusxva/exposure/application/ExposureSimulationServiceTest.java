@@ -40,7 +40,7 @@ class ExposureSimulationServiceTest {
             throw new AssertionError("market data should not be called for an empty portfolio");
         });
         when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("USD")));
-        when(portfolioStore.findEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of());
+        when(portfolioStore.findActiveEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of());
 
         ExposureSimulationResult result = service.simulate(command());
 
@@ -58,7 +58,7 @@ class ExposureSimulationServiceTest {
             throw new AssertionError("market data should not be called for expired positions");
         });
         when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("USD")));
-        when(portfolioStore.findEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(
+        when(portfolioStore.findActiveEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(
                 position("AAPL", OptionType.CALL, "100.0", "2026-06-05", "1.0")
         ));
 
@@ -72,7 +72,7 @@ class ExposureSimulationServiceTest {
     void simulatesPositiveExposureForPriceablePosition() {
         ExposureSimulationService service = service((symbol, maturityDate) -> Optional.of(pricingInput(symbol, "USD")));
         when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("USD")));
-        when(portfolioStore.findEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(
+        when(portfolioStore.findActiveEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(
                 position("AAPL", OptionType.CALL, "100.0", "2027-06-05", "1.0")
         ));
 
@@ -97,7 +97,7 @@ class ExposureSimulationServiceTest {
     void rejectsNonUsdMarketData() {
         ExposureSimulationService service = service((symbol, maturityDate) -> Optional.of(pricingInput(symbol, "EUR")));
         when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("USD")));
-        when(portfolioStore.findEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(
+        when(portfolioStore.findActiveEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(
                 position("AAPL", OptionType.CALL, "100.0", "2027-06-05", "1.0")
         ));
 

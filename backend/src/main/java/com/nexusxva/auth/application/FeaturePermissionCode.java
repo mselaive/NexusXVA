@@ -7,6 +7,7 @@ public final class FeaturePermissionCode {
     public static final String FO_RUN_CVA = "FO_RUN_CVA";
     public static final String FO_RUN_WHAT_IF = "FO_RUN_WHAT_IF";
     public static final String FO_RUN_STRESS_TEST = "FO_RUN_STRESS_TEST";
+    public static final String FO_REQUEST_LIFECYCLE = "FO_REQUEST_LIFECYCLE";
 
     private FeaturePermissionCode() {
     }

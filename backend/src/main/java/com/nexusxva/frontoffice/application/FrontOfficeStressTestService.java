@@ -13,6 +13,7 @@ import com.nexusxva.portfolio.application.PortfolioStore;
 import com.nexusxva.portfolio.application.UnpriceablePortfolioPosition;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.portfolio.domain.Portfolio;
+import com.nexusxva.portfolio.domain.PositionLifecycleStatus;
 import com.nexusxva.pricing.application.EuropeanOptionPricingService;
 import com.nexusxva.pricing.domain.BlackScholesInput;
 import com.nexusxva.pricing.domain.BlackScholesResult;
@@ -89,6 +90,7 @@ public class FrontOfficeStressTestService {
                     hypotheticalTrade.strike(),
                     hypotheticalTrade.maturityDate(),
                     hypotheticalTrade.quantity(),
+                    PositionLifecycleStatus.ACTIVE,
                     Instant.EPOCH,
                     Instant.EPOCH
             );
@@ -96,7 +98,7 @@ public class FrontOfficeStressTestService {
         PortfolioPositionPricingResult hypotheticalTradePricing = resolvedHypotheticalTradePricing;
         EuropeanOptionPosition hypotheticalPosition = resolvedHypotheticalPosition;
 
-        List<EuropeanOptionPosition> confirmedPositions = portfolioStore.findEuropeanOptionPositions(portfolioId);
+        List<EuropeanOptionPosition> confirmedPositions = portfolioStore.findActiveEuropeanOptionPositions(portfolioId);
         List<StressScenarioResult> scenarioResults = scenarios.stream()
                 .map(scenario -> priceScenario(
                         scenario,

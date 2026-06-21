@@ -94,8 +94,15 @@ a {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: #dff2ef;
-  color: var(--accent-strong);
+  overflow: hidden;
+  background: #032f5b;
+  box-shadow: var(--shadow);
+}
+
+.brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .app-nav {
@@ -184,11 +191,35 @@ a {
   width: 168px;
 }
 
+.notifications-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 168px;
+}
+
 .howto-trigger {
   height: 48px;
   width: 100%;
   justify-content: flex-start;
   padding: 8px 12px;
+}
+
+.notifications-trigger {
+  position: relative;
+}
+
+.notification-count {
+  display: inline-grid;
+  min-width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  margin-left: auto;
+  padding: 0 6px;
 }
 
 .howto-panel {
@@ -206,6 +237,106 @@ a {
   padding: 13px;
   box-shadow: var(--shadow-lift);
   animation: popIn 140ms ease-out both;
+}
+
+.notifications-panel {
+  position: absolute;
+  top: 56px;
+  right: 0;
+  z-index: 32;
+  display: grid;
+  gap: 8px;
+  width: min(430px, 88vw);
+  max-height: min(560px, 74vh);
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  padding: 12px;
+  box-shadow: var(--shadow-lift);
+  animation: popIn 140ms ease-out both;
+}
+
+.notifications-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 6px;
+}
+
+.notifications-head strong {
+  font-size: 14px;
+}
+
+.notifications-head button {
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.notifications-head button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.notification-row {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-left: 3px solid transparent;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.notification-row:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.notification-row.unread {
+  border-left-color: var(--accent);
+  background: #f5fbfa;
+}
+
+.notification-row span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notification-row strong {
+  font-size: 13px;
+}
+
+.notification-row small {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.notification-row em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.panel-error,
+.empty-inline {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 2px;
 }
 
 .howto-panel div {
@@ -328,8 +459,15 @@ a {
   width: 42px;
   height: 42px;
   border-radius: 8px;
-  background: #dff2ef;
-  color: var(--accent-strong);
+  overflow: hidden;
+  background: #032f5b;
+  box-shadow: var(--shadow);
+}
+
+.login-brand img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .login-brand strong,
@@ -1586,14 +1724,24 @@ a {
 
 .admin-check,
 .admin-permission,
-.portfolio-access-card {
+.portfolio-access-select {
   display: flex;
   align-items: flex-start;
   gap: 9px;
+}
+
+.admin-check,
+.admin-permission,
+.portfolio-access-card {
   border: 1px solid var(--line);
   border-radius: 7px;
   background: #ffffff;
   padding: 9px;
+}
+
+.portfolio-access-card {
+  display: grid;
+  gap: 8px;
 }
 
 .admin-check {
@@ -1614,7 +1762,7 @@ a {
 
 .admin-check input,
 .admin-permission input,
-.portfolio-access-card input {
+.portfolio-access-select input {
   margin-top: 2px;
 }
 
@@ -1624,16 +1772,44 @@ a {
 }
 
 .admin-permission span,
-.portfolio-access-card span {
+.portfolio-access-select span {
   display: grid;
   gap: 3px;
 }
 
 .admin-permission small,
-.portfolio-access-card small {
+.portfolio-access-select small {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.portfolio-delete-button {
+  justify-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  border: 1px solid #fac5bd;
+  border-radius: 7px;
+  background: #fff7f5;
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 150ms ease, background 150ms ease, border-color 150ms ease;
+}
+
+.portfolio-delete-button:hover {
+  border-color: var(--danger);
+  background: #fff1ee;
+  transform: translateY(-1px);
+}
+
+.portfolio-delete-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+  transform: none;
 }
 
 .admin-mode {
@@ -3389,6 +3565,61 @@ tr:last-child td {
   color: var(--danger) !important;
 }
 
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.text-action {
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0;
+}
+
+.text-action.danger {
+  color: var(--danger);
+}
+
+.muted-cell {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.inactive-position-row {
+  background: #f8fbfb;
+  color: var(--muted);
+}
+
+.lifecycle-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.lifecycle-status.active {
+  background: #e8f6ef;
+  color: #13734d;
+}
+
+.lifecycle-status.cancelled {
+  background: #fff1ee;
+  color: var(--danger);
+}
+
+.lifecycle-status.amended {
+  background: #edf2ff;
+  color: #3449a8;
+}
+
 .danger-button {
   background: var(--danger);
 }
@@ -3569,6 +3800,7 @@ tr:last-child td {
   }
 
   .howto-wrap,
+  .notifications-wrap,
   .howto-trigger,
   .header-action,
   .user-pill,

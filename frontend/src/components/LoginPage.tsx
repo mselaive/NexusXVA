@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { BadgeCheck, BriefcaseBusiness, Building2, LockKeyhole, ShieldCheck, UsersRound } from "lucide-react";
+import { BadgeCheck, BriefcaseBusiness, Building2, LockKeyhole, UsersRound } from "lucide-react";
 import { authApi, NexusApiError } from "@/lib/api";
 import { groupsForUser, type WorkGroup } from "@/lib/authContext";
 import type { AuthUser } from "@/lib/types";
@@ -74,7 +74,7 @@ export function LoginPage() {
         <div className="login-panel">
           <div className="login-brand">
             <span>
-              <ShieldCheck size={24} />
+              <img src="/nexusxva-logo.svg" alt="" />
             </span>
             <div>
               <strong>NexusXVA</strong>

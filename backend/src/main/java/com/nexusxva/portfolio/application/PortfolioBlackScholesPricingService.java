@@ -4,6 +4,7 @@ import com.nexusxva.marketdata.application.MarketDataPricingInputService;
 import com.nexusxva.marketdata.domain.MarketDataPricingInput;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.portfolio.domain.Portfolio;
+import com.nexusxva.portfolio.domain.PositionLifecycleStatus;
 import com.nexusxva.pricing.application.EuropeanOptionPricingService;
 import com.nexusxva.pricing.domain.BlackScholesInput;
 import com.nexusxva.pricing.domain.BlackScholesResult;
@@ -52,7 +53,7 @@ public class PortfolioBlackScholesPricingService {
         double totalPrice = 0.0;
         PortfolioGreeks totalGreeks = PortfolioGreeks.zero();
 
-        for (EuropeanOptionPosition position : portfolioStore.findEuropeanOptionPositions(portfolioId)) {
+        for (EuropeanOptionPosition position : portfolioStore.findActiveEuropeanOptionPositions(portfolioId)) {
             if (!position.maturityDate().isAfter(resolvedValuationDate)) {
                 unpriceablePositions.add(expiredPosition(position));
                 continue;
@@ -97,6 +98,7 @@ public class PortfolioBlackScholesPricingService {
                 command.strike(),
                 command.maturityDate(),
                 command.quantity(),
+                PositionLifecycleStatus.ACTIVE,
                 Instant.EPOCH,
                 Instant.EPOCH
         ), resolvedValuationDate);

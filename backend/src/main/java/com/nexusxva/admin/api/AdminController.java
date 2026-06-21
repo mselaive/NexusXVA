@@ -3,9 +3,12 @@ package com.nexusxva.admin.api;
 import com.nexusxva.admin.application.AdminAccessService;
 import com.nexusxva.auth.domain.AuthSession;
 import com.nexusxva.auth.infrastructure.AuthSessionFilter;
+import com.nexusxva.portfolio.application.PortfolioService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -19,9 +22,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminController {
 
     private final AdminAccessService service;
+    private final PortfolioService portfolioService;
 
-    public AdminController(AdminAccessService service) {
+    public AdminController(AdminAccessService service, PortfolioService portfolioService) {
         this.service = service;
+        this.portfolioService = portfolioService;
     }
 
     @GetMapping("/users")
@@ -41,6 +46,12 @@ public class AdminController {
     @GetMapping("/portfolios")
     public java.util.List<AdminPortfolioSummaryResponse> portfolios() {
         return service.portfolios();
+    }
+
+    @DeleteMapping("/portfolios/{portfolioId}")
+    public ResponseEntity<Void> deletePortfolio(@PathVariable UUID portfolioId) {
+        portfolioService.deletePortfolio(portfolioId);
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/users/{userId}/groups")

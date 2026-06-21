@@ -1,6 +1,7 @@
 package com.nexusxva.tradebooking.application;
 
 import com.nexusxva.marketdata.application.MarketDataValidationService;
+import com.nexusxva.notifications.application.NotificationService;
 import com.nexusxva.portfolio.application.PortfolioStore;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.portfolio.domain.Portfolio;
@@ -25,17 +26,20 @@ public class TradeBookingService {
     private final PortfolioStore portfolioStore;
     private final MarketDataValidationService marketDataValidationService;
     private final TradingLimitService tradingLimitService;
+    private final NotificationService notificationService;
 
     public TradeBookingService(
             TradeBookingStore tradeBookingStore,
             PortfolioStore portfolioStore,
             MarketDataValidationService marketDataValidationService,
-            TradingLimitService tradingLimitService
+            TradingLimitService tradingLimitService,
+            NotificationService notificationService
     ) {
         this.tradeBookingStore = tradeBookingStore;
         this.portfolioStore = portfolioStore;
         this.marketDataValidationService = marketDataValidationService;
         this.tradingLimitService = tradingLimitService;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -48,7 +52,9 @@ public class TradeBookingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
         marketDataValidationService.validateUnderlyingSymbol(command.underlyingSymbol());
         tradingLimitService.validateBooking(submittedBy, portfolio.baseCurrency(), command);
-        return tradeBookingStore.create(portfolioId, portfolio.name(), command, submittedBy);
+        TradeBookingRequest booking = tradeBookingStore.create(portfolioId, portfolio.name(), command, submittedBy);
+        notificationService.notifyTradeBookingSubmitted(booking);
+        return booking;
     }
 
     @Transactional(readOnly = true)
@@ -103,7 +109,9 @@ public class TradeBookingService {
                         booking.quantity()
                 ).toPositionCommand()
         );
-        return tradeBookingStore.confirm(bookingId, reviewer, position.id());
+        TradeBookingRequest reviewed = tradeBookingStore.confirm(bookingId, reviewer, position.id());
+        notificationService.notifyTradeBookingReviewed(reviewed);
+        return reviewed;
     }
 
     @Transactional
@@ -117,7 +125,9 @@ public class TradeBookingService {
         if (normalizedReason.length() > 500) {
             throw new IllegalArgumentException("rejectionReason must be at most 500 characters");
         }
-        return tradeBookingStore.reject(bookingId, reviewer, normalizedReason);
+        TradeBookingRequest reviewed = tradeBookingStore.reject(bookingId, reviewer, normalizedReason);
+        notificationService.notifyTradeBookingReviewed(reviewed);
+        return reviewed;
     }
 
     private void ensurePending(TradeBookingRequest booking) {

@@ -227,7 +227,8 @@ It does not persist exposure, default probabilities, or CVA results.
 
 Dashboard V1 is a Next.js frontend in `frontend/`.
 It does not implement financial formulas.
-The UI is split by active group. FO uses FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure and CVA. BO uses Trade Validation and Trading Limits. ADMIN uses Administration for memberships, FO feature permissions and portfolio visibility, plus Workflows for read-only workflow monitoring.
+The UI is split by active group. FO uses FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure and CVA. BO uses Trade Validation, Lifecycle Validation and Trading Limits. ADMIN uses Administration for memberships, FO feature permissions and portfolio visibility, plus Workflows for read-only workflow monitoring.
+The header includes a persisted notification inbox. Notifications belong to the user, not to the active group, so multi-group users keep one inbox while switching between FO, BO and ADMIN.
 
 The frontend flow is:
 
@@ -246,8 +247,11 @@ The dashboard uses the backend as the source of truth for:
 - Pending booking submission through `u-Pad`.
 - Stateless Pre-Trade Analysis through `/api/front-office/what-if/european-option`.
 - Stateless Stress Testing through `/api/front-office/stress-tests/european-options`.
+- FO lifecycle requests for amendments and cancellations over confirmed positions.
 - BO validation before confirmed positions are created.
+- BO lifecycle approval before confirmed positions are amended or cancelled.
 - FO limit visibility in `u-Pad` and BO policy management.
+- User notifications for booking and lifecycle review events.
 - ADMIN user/group access, FO feature checks, portfolio visibility, and read-only workflow map.
 - Portfolio-level Black-Scholes pricing.
 - Exposure simulation.
@@ -290,6 +294,21 @@ FO runs Stress Testing
 
 Stress Testing is stateless. It shocks `spot` by relative percent and shocks `volatility`, `riskFreeRate`, and `dividendYield` by basis points. V1 is pricing/Greeks-only; it does not run Exposure, CVA, or persist stress results. It can include one hypothetical trade, but that trade remains temporary and must still go through `u-Pad` and BO validation if FO wants to book it.
 
+## How Position Lifecycle Flows
+
+```text
+FO requests amend/cancel
+  -> trade_lifecycle_requests: PENDING_VALIDATION
+  -> notification to BO
+  -> BO opens Lifecycle in Trade Validation
+  -> approve: changes confirmed position lifecycle
+  -> notification to FO
+  -> reject: keeps the original position unchanged
+  -> notification to FO
+```
+
+Confirmed positions start as `ACTIVE`. Risk workflows use only `ACTIVE` positions. A cancellation approval marks the position `CANCELLED`. An amendment approval marks the original position `AMENDED` and creates a replacement `ACTIVE` position. Direct edits/deletes of confirmed positions remain out of scope.
+
 ## Administration V1
 
 Administration V1 adds access control without changing trade economics:
@@ -308,6 +327,7 @@ Group membership controls which area a user can enter. FO feature permissions th
 - `FO_RUN_CVA`
 - `FO_RUN_WHAT_IF`
 - `FO_RUN_STRESS_TEST`
+- `FO_REQUEST_LIFECYCLE`
 
 Portfolio visibility can be `ALL` or `SELECTED`. Pricing, exposure, CVA and trade booking requests all check portfolio access before operating.
 
@@ -318,14 +338,17 @@ The workflow map reads `trade_booking_requests` and shows entries as `Booked`, `
 ```text
 FO submits from u-Pad
   -> trade_booking_requests: PENDING_VALIDATION
+  -> notification to BO
   -> BO opens Trade Validation
   -> approve: create one confirmed position
+  -> notification to FO
   -> reject: retain the booking with a reason
+  -> notification to FO
 ```
 
 Pending and rejected bookings are not portfolio positions and never enter pricing, exposure, or CVA.
 Approval locks the request inside one transaction to prevent duplicate positions.
-Confirmed positions are immutable until controlled amendment and cancellation workflows exist.
+Confirmed positions are controlled through lifecycle requests; FO cannot edit them directly.
 
 A user may belong to several groups, but `auth_sessions.active_group_code` stores one active context. Backend authorization, not `localStorage`, enforces FO/BO access.
 

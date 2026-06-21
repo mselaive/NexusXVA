@@ -32,6 +32,10 @@ const nodeIcons = {
   PENDING_VALIDATION: Clock3,
   CONFIRMED: CheckCircle2,
   REJECTED: XCircle,
+  LIFECYCLE_REQUESTED: ClipboardList,
+  LIFECYCLE_WAITING_BO: Clock3,
+  LIFECYCLE_APPROVED: CheckCircle2,
+  LIFECYCLE_REJECTED: XCircle,
 } as const;
 
 export function AdminWorkflowPage() {

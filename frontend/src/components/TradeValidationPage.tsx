@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { nexusApi, NexusApiError } from "@/lib/api";
 import { formatNumber } from "@/lib/format";
-import type { TradeBooking } from "@/lib/types";
+import type { TradeBooking, TradeLifecycleRequest } from "@/lib/types";
 import { AppShell } from "./AppShell";
 
 const howTo = [
@@ -27,13 +27,18 @@ export function TradeValidationPage() {
   const [pending, setPending] = React.useState<TradeBooking[]>([]);
   const [confirmed, setConfirmed] = React.useState<TradeBooking[]>([]);
   const [rejected, setRejected] = React.useState<TradeBooking[]>([]);
+  const [lifecyclePending, setLifecyclePending] = React.useState<TradeLifecycleRequest[]>([]);
+  const [lifecycleHistory, setLifecycleHistory] = React.useState<TradeLifecycleRequest[]>([]);
+  const [queueMode, setQueueMode] = React.useState<"trades" | "lifecycle">("trades");
   const [activeTab, setActiveTab] = React.useState<"pending" | "history">("pending");
   const [selected, setSelected] = React.useState<TradeBooking | null>(null);
+  const [selectedLifecycle, setSelectedLifecycle] = React.useState<TradeLifecycleRequest | null>(null);
   const [query, setQuery] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [actionId, setActionId] = React.useState<string | null>(null);
   const [rejecting, setRejecting] = React.useState<TradeBooking | null>(null);
+  const [rejectingLifecycle, setRejectingLifecycle] = React.useState<TradeLifecycleRequest | null>(null);
   const [rejectionReason, setRejectionReason] = React.useState("");
 
   React.useEffect(() => {
@@ -49,11 +54,22 @@ export function TradeValidationPage() {
         nexusApi.listBackOfficeTradeBookings("CONFIRMED", 0, 100),
         nexusApi.listBackOfficeTradeBookings("REJECTED", 0, 100),
       ]);
+      const [lifecyclePendingPage, lifecycleApprovedPage, lifecycleRejectedPage] = await Promise.all([
+        nexusApi.listBackOfficeLifecycleRequests("PENDING_VALIDATION", 0, 100),
+        nexusApi.listBackOfficeLifecycleRequests("APPROVED", 0, 100),
+        nexusApi.listBackOfficeLifecycleRequests("REJECTED", 0, 100),
+      ]);
       setPending(pendingPage.items);
       setConfirmed(confirmedPage.items);
       setRejected(rejectedPage.items);
+      setLifecyclePending(lifecyclePendingPage.items);
+      const nextLifecycleHistory = [...lifecycleApprovedPage.items, ...lifecycleRejectedPage.items].sort((left, right) =>
+        (right.reviewedAt ?? right.submittedAt).localeCompare(left.reviewedAt ?? left.submittedAt));
+      setLifecycleHistory(nextLifecycleHistory);
       const all = [...pendingPage.items, ...confirmedPage.items, ...rejectedPage.items];
       setSelected(all.find((booking) => booking.id === preferredId) ?? pendingPage.items[0] ?? all[0] ?? null);
+      const allLifecycle = [...lifecyclePendingPage.items, ...nextLifecycleHistory];
+      setSelectedLifecycle(allLifecycle.find((request) => request.id === preferredId) ?? lifecyclePendingPage.items[0] ?? allLifecycle[0] ?? null);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -92,6 +108,37 @@ export function TradeValidationPage() {
     }
   }
 
+  async function approveLifecycle(request: TradeLifecycleRequest) {
+    setActionId(request.id);
+    setError(null);
+    try {
+      const reviewed = await nexusApi.approveLifecycleRequest(request.id);
+      await loadBookings(reviewed.id);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function rejectLifecycle() {
+    if (!rejectingLifecycle || !rejectionReason.trim()) {
+      return;
+    }
+    setActionId(rejectingLifecycle.id);
+    setError(null);
+    try {
+      const reviewed = await nexusApi.rejectLifecycleRequest(rejectingLifecycle.id, rejectionReason.trim());
+      setRejectingLifecycle(null);
+      setRejectionReason("");
+      await loadBookings(reviewed.id);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setActionId(null);
+    }
+  }
+
   const history = [...confirmed, ...rejected].sort((left, right) =>
     (right.reviewedAt ?? right.submittedAt).localeCompare(left.reviewedAt ?? left.submittedAt));
   const visibleRows = filterBookings(activeTab === "pending" ? pending : history, query);
@@ -104,9 +151,18 @@ export function TradeValidationPage() {
         <Metric icon={<Clock3 size={18} />} label="Pending" value={pending.length} tone="pending" />
         <Metric icon={<CheckCircle2 size={18} />} label="Confirmed" value={confirmed.length} tone="confirmed" />
         <Metric icon={<XCircle size={18} />} label="Rejected" value={rejected.length} tone="rejected" />
+        <Metric icon={<Clock3 size={18} />} label="Lifecycle pending" value={lifecyclePending.length} tone="pending" />
       </div>
 
       <div className="bo-toolbar">
+        <div className="segmented-control" aria-label="Validation queue type">
+          <button className={queueMode === "trades" ? "active" : ""} type="button" onClick={() => setQueueMode("trades")}>
+            New trades
+          </button>
+          <button className={queueMode === "lifecycle" ? "active" : ""} type="button" onClick={() => setQueueMode("lifecycle")}>
+            Lifecycle
+          </button>
+        </div>
         <div className="segmented-control" aria-label="Trade validation view">
           <button className={activeTab === "pending" ? "active" : ""} type="button" onClick={() => setActiveTab("pending")}>
             Pending
@@ -121,6 +177,20 @@ export function TradeValidationPage() {
         </label>
       </div>
 
+      {queueMode === "lifecycle" ? (
+        <LifecycleValidationView
+          pending={lifecyclePending}
+          history={lifecycleHistory}
+          activeTab={activeTab}
+          selected={selectedLifecycle}
+          query={query}
+          loading={loading}
+          actionId={actionId}
+          onSelect={setSelectedLifecycle}
+          onApprove={approveLifecycle}
+          onReject={setRejectingLifecycle}
+        />
+      ) : (
       <div className="bo-workspace">
         <section className="panel bo-queue">
           <div className="section-header">
@@ -206,6 +276,7 @@ export function TradeValidationPage() {
           )}
         </section>
       </div>
+      )}
 
       {rejecting ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
@@ -242,6 +313,16 @@ export function TradeValidationPage() {
           </div>
         </div>
       ) : null}
+      {rejectingLifecycle ? (
+        <RejectLifecycleModal
+          request={rejectingLifecycle}
+          rejectionReason={rejectionReason}
+          actionId={actionId}
+          onReasonChange={setRejectionReason}
+          onClose={() => { setRejectingLifecycle(null); setRejectionReason(""); }}
+          onReject={rejectLifecycle}
+        />
+      ) : null}
     </AppShell>
   );
 }
@@ -256,6 +337,172 @@ function filterBookings(bookings: TradeBooking[], query: string) {
     || booking.portfolioName.toLowerCase().includes(normalized)
     || booking.submittedBy.displayName.toLowerCase().includes(normalized)
     || booking.submittedBy.username.toLowerCase().includes(normalized));
+}
+
+function LifecycleValidationView({
+  pending,
+  history,
+  activeTab,
+  selected,
+  query,
+  loading,
+  actionId,
+  onSelect,
+  onApprove,
+  onReject,
+}: {
+  pending: TradeLifecycleRequest[];
+  history: TradeLifecycleRequest[];
+  activeTab: "pending" | "history";
+  selected: TradeLifecycleRequest | null;
+  query: string;
+  loading: boolean;
+  actionId: string | null;
+  onSelect: (request: TradeLifecycleRequest) => void;
+  onApprove: (request: TradeLifecycleRequest) => void;
+  onReject: (request: TradeLifecycleRequest) => void;
+}) {
+  const visibleRows = filterLifecycleRequests(activeTab === "pending" ? pending : history, query);
+  return (
+    <div className="bo-workspace">
+      <section className="panel bo-queue">
+        <div className="section-header">
+          <div>
+            <span className="page-eyebrow">{activeTab === "pending" ? "Oldest first" : "Most recently reviewed"}</span>
+            <h2>{activeTab === "pending" ? "Lifecycle queue" : "Lifecycle history"}</h2>
+          </div>
+          <span className="badge">{visibleRows.length} entries</span>
+        </div>
+        {loading ? (
+          <div className="empty"><Loader2 className="spin" size={18} /> Loading lifecycle requests</div>
+        ) : visibleRows.length === 0 ? (
+          <div className="empty">No lifecycle requests match this view.</div>
+        ) : (
+          <div className="booking-list">
+            {visibleRows.map((request) => (
+              <button
+                className={`booking-row ${selected?.id === request.id ? "selected" : ""}`}
+                key={request.id}
+                type="button"
+                onClick={() => onSelect(request)}
+              >
+                <span className={`booking-status ${request.status.toLowerCase()}`}>{request.status.replaceAll("_", " ")}</span>
+                <strong>{request.requestType} {request.originalUnderlyingSymbol}</strong>
+                <span>{request.portfolioName}</span>
+                <small>{request.originalOptionType} {formatNumber(request.originalQuantity, 2)} @ {formatNumber(request.originalStrike, 2)}</small>
+                <time>{new Date(request.submittedAt).toLocaleString()}</time>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="panel bo-detail">
+        {selected ? (
+          <>
+            <div className="bo-detail-head">
+              <div>
+                <span className={`booking-status ${selected.status.toLowerCase()}`}>{selected.status.replaceAll("_", " ")}</span>
+                <h2>{selected.requestType} {selected.originalUnderlyingSymbol}</h2>
+                <p>{selected.portfolioName}</p>
+              </div>
+              <ShieldCheck size={24} />
+            </div>
+            <div className="trade-terms-grid">
+              <Detail label="Original" value={`${selected.originalOptionType} ${formatNumber(selected.originalQuantity, 2)} @ ${formatNumber(selected.originalStrike, 2)}`} />
+              <Detail label="Original maturity" value={selected.originalMaturityDate} />
+              <Detail label="Requested" value={selected.requestType === "AMEND" ? `${selected.requestedOptionType} ${selected.requestedUnderlyingSymbol} ${formatNumber(selected.requestedQuantity ?? 0, 2)} @ ${formatNumber(selected.requestedStrike ?? 0, 2)}` : "Full cancellation"} />
+              <Detail label="Requested maturity" value={selected.requestedMaturityDate ?? "Cancel position"} />
+            </div>
+            <div className="audit-timeline">
+              <AuditPoint title="Submitted by" name={selected.submittedBy.displayName || selected.submittedBy.username} date={selected.submittedAt} complete />
+              <AuditPoint
+                title={selected.status === "PENDING_VALIDATION" ? "Awaiting BO review" : `Reviewed by ${selected.reviewedBy?.displayName ?? selected.reviewedBy?.username ?? "BO"}`}
+                name={selected.status === "REJECTED" ? selected.rejectionReason ?? "Rejected" : selected.status === "APPROVED" ? "Lifecycle approved" : "No action taken"}
+                date={selected.reviewedAt}
+                complete={selected.status !== "PENDING_VALIDATION"}
+              />
+            </div>
+            {selected.status === "PENDING_VALIDATION" ? (
+              <div className="bo-actions">
+                <button className="btn secondary danger-action" type="button" onClick={() => onReject(selected)}>
+                  <X size={16} /> Reject
+                </button>
+                <button className="btn" disabled={actionId === selected.id} type="button" onClick={() => onApprove(selected)}>
+                  {actionId === selected.id ? <Loader2 className="spin" size={16} /> : <Check size={16} />}
+                  Approve lifecycle
+                </button>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <div className="empty">Select a lifecycle request to inspect its terms and audit trail.</div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function filterLifecycleRequests(requests: TradeLifecycleRequest[], query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return requests;
+  }
+  return requests.filter((request) =>
+    request.originalUnderlyingSymbol.toLowerCase().includes(normalized)
+    || (request.requestedUnderlyingSymbol ?? "").toLowerCase().includes(normalized)
+    || request.portfolioName.toLowerCase().includes(normalized)
+    || request.submittedBy.displayName.toLowerCase().includes(normalized)
+    || request.submittedBy.username.toLowerCase().includes(normalized));
+}
+
+function RejectLifecycleModal({
+  request,
+  rejectionReason,
+  actionId,
+  onReasonChange,
+  onClose,
+  onReject,
+}: {
+  request: TradeLifecycleRequest;
+  rejectionReason: string;
+  actionId: string | null;
+  onReasonChange: (reason: string) => void;
+  onClose: () => void;
+  onReject: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) {
+        onClose();
+      }
+    }}>
+      <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="reject-lifecycle-title">
+        <div>
+          <span className="page-eyebrow">Back Office decision</span>
+          <h2 id="reject-lifecycle-title">Reject {request.requestType} {request.originalUnderlyingSymbol}</h2>
+          <p>The reason will be visible to Front Office and retained in lifecycle history.</p>
+        </div>
+        <label className="field full">
+          <span>Rejection reason</span>
+          <textarea
+            className="input rejection-input"
+            maxLength={500}
+            value={rejectionReason}
+            onChange={(event) => onReasonChange(event.target.value)}
+            placeholder="Describe what FO needs to correct"
+          />
+        </label>
+        <div className="modal-actions">
+          <button className="btn secondary" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn danger-button" disabled={!rejectionReason.trim() || actionId === request.id} type="button" onClick={onReject}>
+            {actionId === request.id ? <Loader2 className="spin" size={16} /> : <XCircle size={16} />}
+            Reject request
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function statusLabel(status: TradeBooking["status"]) {

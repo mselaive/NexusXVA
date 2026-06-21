@@ -91,14 +91,47 @@ class JpaPortfolioStore implements PortfolioStore {
     }
 
     @Override
+    public List<EuropeanOptionPosition> findActiveEuropeanOptionPositions(UUID portfolioId) {
+        return positionJpaRepository.findActiveByPortfolioId(portfolioId)
+                .stream()
+                .map(EuropeanOptionPositionEntity::toDomain)
+                .toList();
+    }
+
+    @Override
     public Optional<EuropeanOptionPosition> findEuropeanOptionPosition(UUID portfolioId, UUID positionId) {
         return positionJpaRepository.findByPortfolioIdAndPositionId(portfolioId, positionId)
                 .map(EuropeanOptionPositionEntity::toDomain);
     }
 
+    @Override
+    public Optional<EuropeanOptionPosition> findEuropeanOptionPosition(UUID positionId) {
+        return positionJpaRepository.findById(positionId)
+                .map(EuropeanOptionPositionEntity::toDomain);
+    }
+
+    @Override
+    public void markPositionCancelled(UUID positionId) {
+        EuropeanOptionPositionEntity position = findPositionEntity(positionId);
+        position.markCancelled();
+        positionJpaRepository.save(position);
+    }
+
+    @Override
+    public void markPositionAmended(UUID positionId) {
+        EuropeanOptionPositionEntity position = findPositionEntity(positionId);
+        position.markAmended();
+        positionJpaRepository.save(position);
+    }
+
     private PortfolioEntity findPortfolioEntity(UUID portfolioId) {
         return portfolioJpaRepository.findById(portfolioId)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
+    }
+
+    private EuropeanOptionPositionEntity findPositionEntity(UUID positionId) {
+        return positionJpaRepository.findById(positionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Position not found"));
     }
 
 }

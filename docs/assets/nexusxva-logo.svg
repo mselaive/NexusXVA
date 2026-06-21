@@ -1,0 +1,20 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">NexusXVA logo</title>
+  <desc id="desc">A navy rounded-square NexusXVA monogram.</desc>
+  <defs>
+    <linearGradient id="bg" x1="80" y1="60" x2="438" y2="462" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#064A7A"/>
+      <stop offset="0.55" stop-color="#032F5B"/>
+      <stop offset="1" stop-color="#011C3F"/>
+    </linearGradient>
+    <filter id="shadow" x="26" y="28" width="460" height="460" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="20" stdDeviation="20" flood-color="#0A2540" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+  <rect x="66" y="58" width="380" height="392" rx="78" fill="url(#bg)" filter="url(#shadow)"/>
+  <path d="M147 178C147 168.059 155.059 160 165 160H202.99C208.102 160 212.972 162.174 216.386 165.981L256 210.164L295.614 165.981C299.028 162.174 303.898 160 309.01 160H347C356.941 160 365 168.059 365 178V334C365 343.941 356.941 352 347 352H309.01C303.898 352 299.028 349.826 295.614 346.019L256 301.836L216.386 346.019C212.972 349.826 208.102 352 202.99 352H165C155.059 352 147 343.941 147 334V178Z" stroke="white" stroke-width="27" stroke-linejoin="round"/>
+  <path d="M162 337L350 175" stroke="white" stroke-width="27" stroke-linecap="round"/>
+  <path d="M162 175L350 337" stroke="white" stroke-width="27" stroke-linecap="round"/>
+  <path d="M185 198V314L236 256L185 198Z" fill="#053761"/>
+  <path d="M327 198V314L276 256L327 198Z" fill="#053761"/>
+</svg>

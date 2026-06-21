@@ -86,6 +86,7 @@ Permisos FO iniciales:
 - `FO_RUN_CVA`: permite ejecutar CVA.
 - `FO_RUN_WHAT_IF`: permite ejecutar Pre-Trade Analysis stateless.
 - `FO_RUN_STRESS_TEST`: permite ejecutar Stress Testing stateless.
+- `FO_REQUEST_LIFECYCLE`: permite solicitar amendments y cancellations de posiciones confirmadas.
 
 La visibilidad de portfolios puede ser `ALL` o `SELECTED`. Por defecto los usuarios existentes quedan con `ALL` y permisos habilitados, para no romper el flujo local hasta que ADMIN restrinja accesos.
 

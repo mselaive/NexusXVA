@@ -227,7 +227,8 @@ No persiste exposure, probabilidades de default ni resultados CVA.
 
 Dashboard V1 es un frontend Next.js en `frontend/`.
 No implementa formulas financieras.
-La UI esta separada por grupos. FO usa FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure y CVA. BO usa Trade Validation y Trading Limits. ADMIN usa Administration para membresias, permisos FO y visibilidad de portfolios, mas Workflows para monitoreo visual de workflow.
+La UI esta separada por grupos. FO usa FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure y CVA. BO usa Trade Validation, Lifecycle Validation y Trading Limits. ADMIN usa Administration para membresias, permisos FO y visibilidad de portfolios, mas Workflows para monitoreo visual de workflow.
+El header incluye una bandeja persistida de notificaciones. Las notificaciones pertenecen al usuario, no al grupo activo, por lo que usuarios multi-grupo mantienen un solo inbox al cambiar entre FO, BO y ADMIN.
 
 El flujo frontend es:
 
@@ -246,8 +247,11 @@ El dashboard usa el backend como fuente de verdad para:
 - Envio de bookings pendientes desde `u-Pad`.
 - Pre-Trade Analysis stateless mediante `/api/front-office/what-if/european-option`.
 - Stress Testing stateless mediante `/api/front-office/stress-tests/european-options`.
+- Solicitudes FO de lifecycle para amendments y cancellations sobre posiciones confirmadas.
 - Validacion BO antes de crear posiciones confirmadas.
+- Aprobacion BO de lifecycle antes de modificar o cancelar posiciones confirmadas.
 - Visibilidad de limites FO en `u-Pad` y administracion de politicas desde BO.
+- Notificaciones de usuario para eventos de review de bookings y lifecycle.
 - Administracion de usuarios/grupos, checks FO, visibilidad de portfolios y mapa de workflow desde ADMIN.
 - Pricing Black-Scholes a nivel portfolio.
 - Simulacion de exposure.
@@ -290,19 +294,37 @@ FO corre Stress Testing
 
 Stress Testing es stateless. Estresa `spot` como porcentaje relativo y estresa `volatility`, `riskFreeRate` y `dividendYield` en basis points. V1 es solo pricing/Greeks; no corre Exposure, CVA ni persiste resultados. Puede incluir un trade hipotetico, pero ese trade sigue siendo temporal y debe pasar por `u-Pad` y BO si FO quiere bookearlo.
 
+## Como fluye el lifecycle de posiciones
+
+```text
+FO solicita amend/cancel
+  -> trade_lifecycle_requests: PENDING_VALIDATION
+  -> notificacion a BO
+  -> BO abre Lifecycle en Trade Validation
+  -> approve: cambia el lifecycle de la posicion confirmada
+  -> notificacion a FO
+  -> reject: mantiene la posicion original sin cambios
+  -> notificacion a FO
+```
+
+Las posiciones confirmadas nacen como `ACTIVE`. Los workflows de riesgo usan solo posiciones `ACTIVE`. Una cancelacion aprobada marca la posicion como `CANCELLED`. Un amendment aprobado marca la posicion original como `AMENDED` y crea una posicion reemplazo `ACTIVE`. Las ediciones/borrados directos de posiciones confirmadas siguen fuera de scope.
+
 ## Como fluye Trade Validation
 
 ```text
 FO envia desde u-Pad
   -> trade_booking_requests: PENDING_VALIDATION
+  -> notificacion a BO
   -> BO abre Trade Validation
   -> approve: crea una posicion confirmada
+  -> notificacion a FO
   -> reject: conserva el booking con motivo
+  -> notificacion a FO
 ```
 
 Pending y rejected bookings no forman parte del portfolio y nunca entran en pricing, exposure o CVA.
 La aprobacion bloquea la solicitud dentro de una transaccion para impedir posiciones duplicadas.
-Las posiciones confirmadas son inmutables hasta implementar amendments y cancelaciones controladas.
+Las posiciones confirmadas se controlan mediante solicitudes lifecycle; FO no puede editarlas directamente.
 
 El usuario puede pertenecer a varios grupos, pero `auth_sessions.active_group_code` guarda un solo contexto activo. El backend, no `localStorage`, aplica los permisos FO/BO.
 

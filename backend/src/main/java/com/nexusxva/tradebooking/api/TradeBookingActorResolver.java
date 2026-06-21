@@ -5,12 +5,12 @@ import com.nexusxva.auth.infrastructure.AuthSessionFilter;
 import com.nexusxva.tradebooking.domain.BookingActor;
 import jakarta.servlet.http.HttpServletRequest;
 
-final class TradeBookingActorResolver {
+public final class TradeBookingActorResolver {
 
     private TradeBookingActorResolver() {
     }
 
-    static BookingActor resolve(HttpServletRequest request) {
+    public static BookingActor resolve(HttpServletRequest request) {
         Object value = request.getAttribute(AuthSessionFilter.SESSION_ATTRIBUTE);
         if (value instanceof AuthSession session) {
             return new BookingActor(
@@ -22,4 +22,3 @@ final class TradeBookingActorResolver {
         return BookingActor.system();
     }
 }
-

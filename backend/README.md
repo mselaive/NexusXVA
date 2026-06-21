@@ -62,6 +62,12 @@ Docker Compose enables Auth V1 by default. The initial development login is:
 - username: `admin`
 - password: `admin12345`
 
+Flyway also creates demo users for local testing:
+
+- FO only: `fo.trader` / `fo12345`
+- BO only: `bo.ops` / `bo12345`
+- Multi-group: `raul` / `multi12345` with `FO`, `BO`, and `ADMIN`
+
 Override it before sharing an environment:
 
 ```bash
@@ -168,10 +174,21 @@ Group membership decides which area a user can enter. FO feature permissions the
 - `FO_RUN_CVA`
 - `FO_RUN_WHAT_IF`
 - `FO_RUN_STRESS_TEST`
+- `FO_REQUEST_LIFECYCLE`
 
 Portfolio visibility supports `ALL` or `SELECTED`. The default is permissive (`ALL` portfolios and enabled FO features) so existing development users keep working until an admin tightens access.
 
 The workflow map is read-only. It visualizes trade booking requests across `Booked`, `Waiting BO`, `Accepted`, and `Rejected`; it does not approve or reject bookings. BO Trade Validation remains the owner of that maker-checker action.
+
+## Notifications V1
+
+NexusXVA persists user notifications so workflow events remain visible after refresh or a new session:
+
+- `GET /api/notifications`
+- `POST /api/notifications/{notificationId}/read`
+- `POST /api/notifications/read-all`
+
+FO receives notifications when BO approves or rejects trade bookings and lifecycle requests. BO receives notifications when FO submits a new booking, amend request or cancel request. Notifications belong to the user, not to the active group, so a multi-group user keeps one inbox while switching between FO, BO and ADMIN.
 
 ## Front Office Desk And Pre-Trade Analysis
 
@@ -234,6 +251,7 @@ The current test setup covers:
 - Exposure V1 Monte Carlo simulation, deterministic GBM paths, and exposure aggregation
 - simplified CVA V1.1 over the exposure profile
 - Dashboard V1 frontend workflow for FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, portfolios, pricing, exposure and flat CVA
+- FO trade lifecycle workflow for amendment and cancellation requests over confirmed positions
 
 The current suite has more than 150 tests, including one real Blemberg smoke test that is skipped unless explicitly enabled.
 
@@ -347,9 +365,21 @@ Confirmed position fields:
 - `strike`: must be greater than zero.
 - `maturityDate`: option maturity date.
 - `quantity`: can be positive or negative, but not zero.
+- `lifecycleStatus`: `ACTIVE`, `CANCELLED`, or `AMENDED`.
 - `createdAt` and `updatedAt`: position lifecycle timestamps.
 
-Confirmed positions are immutable in V1. Direct create/update/delete position endpoints are intentionally not exposed. Future amendments and cancellations should use their own controlled workflow.
+Confirmed positions cannot be edited directly by FO. Amendments and cancellations use controlled lifecycle requests:
+
+```text
+POST /api/front-office/lifecycle/positions/{positionId}/amend
+POST /api/front-office/lifecycle/positions/{positionId}/cancel
+GET /api/front-office/lifecycle/mine
+GET /api/back-office/lifecycle-requests
+POST /api/back-office/lifecycle-requests/{requestId}/approve
+POST /api/back-office/lifecycle-requests/{requestId}/reject
+```
+
+Approval of `CANCEL` marks the original position `CANCELLED`. Approval of `AMEND` marks the original position `AMENDED` and creates a replacement `ACTIVE` position. Pricing, exposure, CVA, pre-trade analysis and stress testing use only `ACTIVE` positions.
 
 Portfolio deletion returns `409 Conflict` while pending bookings exist. Reviewed booking history keeps portfolio and actor snapshots even if the portfolio is later deleted.
 

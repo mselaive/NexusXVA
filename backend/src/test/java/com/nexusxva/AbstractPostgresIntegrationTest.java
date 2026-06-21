@@ -44,9 +44,9 @@ public abstract class AbstractPostgresIntegrationTest {
                 """
                 INSERT INTO portfolio_european_option_positions (
                     id, portfolio_id, underlying_symbol, option_type, strike,
-                    maturity_date, quantity, created_at, updated_at
+                    maturity_date, quantity, lifecycle_status, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
                 """,
                 positionId,
                 portfolioId,

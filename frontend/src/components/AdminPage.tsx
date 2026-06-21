@@ -6,6 +6,7 @@ import {
   LockKeyhole,
   Search,
   Shield,
+  Trash2,
   UsersRound,
 } from "lucide-react";
 import { authApi, nexusApi, NexusApiError } from "@/lib/api";
@@ -22,6 +23,7 @@ const howTo = [
   { title: "Groups", body: "ADMIN controls which high-level group contexts a user can select after login." },
   { title: "FO checks", body: "Feature checks are user-level overrides. If no override exists, the FO group keeps its default capability." },
   { title: "Portfolio visibility", body: "Use ALL for normal users or SELECTED to restrict which portfolios they can see and run analytics on." },
+  { title: "Portfolio removal", body: "ADMIN can delete portfolios globally when they are no longer needed. Pending BO bookings protect a portfolio from deletion." },
   { title: "Self protection", body: "An ADMIN cannot remove their own ADMIN group; this keeps the current session from locking itself out." },
 ];
 
@@ -71,6 +73,25 @@ export function AdminPage() {
 
   async function savePortfolioAccess(user: AdminUserAccess, mode: "ALL" | "SELECTED", portfolioIds: string[]) {
     await save("portfolios", () => nexusApi.updateAdminPortfolioAccess(user.id, mode, portfolioIds));
+  }
+
+  async function deletePortfolio(portfolio: AdminPortfolioSummary) {
+    const confirmed = window.confirm(`Delete portfolio "${portfolio.name}"? Confirmed positions will be deleted. Portfolios with pending BO bookings are protected.`);
+    if (!confirmed) {
+      return;
+    }
+    setSaving(`delete-${portfolio.id}`);
+    setError(null);
+    setSuccess(null);
+    try {
+      await nexusApi.deleteAdminPortfolio(portfolio.id);
+      setSuccess(`Portfolio "${portfolio.name}" deleted.`);
+      await loadAccess(selected?.id);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setSaving(null);
+    }
   }
 
   async function save(label: string, operation: () => Promise<AdminUserAccess>) {
@@ -180,7 +201,7 @@ export function AdminPage() {
                     <div className="admin-card-head">
                       <div>
                         <h3>Portfolio visibility</h3>
-                        <p>Restricts portfolio list, details, booking, pricing, exposure and CVA.</p>
+                        <p>Restricts portfolio access by user. Delete removes a portfolio globally when there are no pending BO bookings.</p>
                       </div>
                       <LockKeyhole size={18} />
                     </div>
@@ -194,15 +215,28 @@ export function AdminPage() {
                         const checked = selected.portfolioAccess.accessMode === "ALL" || selectedIds.has(portfolio.id);
                         const next = checked ? [...selectedIds].filter((id) => id !== portfolio.id) : [...selectedIds, portfolio.id];
                         return (
-                          <label className="portfolio-access-card" key={portfolio.id}>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={selected.portfolioAccess.accessMode === "ALL"}
-                              onChange={() => savePortfolioAccess(selected, "SELECTED", next)}
-                            />
-                            <span><strong>{portfolio.name}</strong><small>{portfolio.baseCurrency} · {formatNumber(portfolio.positionCount, 0)} positions</small></span>
-                          </label>
+                          <div className="portfolio-access-card" key={portfolio.id}>
+                            <label className="portfolio-access-select">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={selected.portfolioAccess.accessMode === "ALL"}
+                                onChange={() => savePortfolioAccess(selected, "SELECTED", next)}
+                              />
+                              <span><strong>{portfolio.name}</strong><small>{portfolio.baseCurrency} · {formatNumber(portfolio.positionCount, 0)} positions</small></span>
+                            </label>
+                            <button
+                              className="portfolio-delete-button"
+                              type="button"
+                              onClick={() => deletePortfolio(portfolio)}
+                              disabled={saving === `delete-${portfolio.id}`}
+                              title="Delete portfolio"
+                              aria-label={`Delete ${portfolio.name}`}
+                            >
+                              {saving === `delete-${portfolio.id}` ? <Loader2 className="spin" size={14} /> : <Trash2 size={14} />}
+                              Delete
+                            </button>
+                          </div>
                         );
                       })}
                     </div>

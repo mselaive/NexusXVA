@@ -2,6 +2,7 @@ package com.nexusxva.portfolio.infrastructure;
 
 import com.nexusxva.instruments.domain.OptionType;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
+import com.nexusxva.portfolio.domain.PositionLifecycleStatus;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -45,6 +46,10 @@ class EuropeanOptionPositionEntity {
     @Column(nullable = false, precision = 19, scale = 8)
     private BigDecimal quantity;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "lifecycle_status", nullable = false, length = 16)
+    private PositionLifecycleStatus lifecycleStatus;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -62,6 +67,7 @@ class EuropeanOptionPositionEntity {
         this.strike = position.strike();
         this.maturityDate = position.maturityDate();
         this.quantity = position.quantity();
+        this.lifecycleStatus = position.lifecycleStatus();
         this.createdAt = position.createdAt();
         this.updatedAt = position.updatedAt();
     }
@@ -83,6 +89,7 @@ class EuropeanOptionPositionEntity {
                 strike,
                 maturityDate,
                 quantity,
+                PositionLifecycleStatus.ACTIVE,
                 now,
                 now
         );
@@ -99,9 +106,20 @@ class EuropeanOptionPositionEntity {
                 strike,
                 maturityDate,
                 quantity,
+                lifecycleStatus,
                 createdAt,
                 updatedAt
         );
+    }
+
+    void markCancelled() {
+        lifecycleStatus = PositionLifecycleStatus.CANCELLED;
+        updatedAt = Instant.now();
+    }
+
+    void markAmended() {
+        lifecycleStatus = PositionLifecycleStatus.AMENDED;
+        updatedAt = Instant.now();
     }
 
 }

@@ -16,6 +16,7 @@ public record TradeBookingRequest(
         BigDecimal strike,
         LocalDate maturityDate,
         BigDecimal quantity,
+        BigDecimal executionPrice,
         TradeBookingStatus status,
         BookingActor submittedBy,
         Instant submittedAt,
@@ -25,4 +26,3 @@ public record TradeBookingRequest(
         UUID confirmedPositionId
 ) {
 }
-

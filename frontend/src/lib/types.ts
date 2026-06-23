@@ -28,6 +28,7 @@ export type EuropeanOptionPosition = {
   strike: number;
   maturityDate: string;
   quantity: number;
+  executionPrice: number | null;
   lifecycleStatus: "ACTIVE" | "CANCELLED" | "AMENDED";
   createdAt: string;
   updatedAt: string;
@@ -45,6 +46,7 @@ export type AddEuropeanOptionPositionRequest = {
   strike: number;
   maturityDate: string;
   quantity: number;
+  executionPrice?: number | null;
 };
 
 export type TradeBookingStatus = "PENDING_VALIDATION" | "CONFIRMED" | "REJECTED";
@@ -65,6 +67,7 @@ export type TradeBooking = {
   strike: number;
   maturityDate: string;
   quantity: number;
+  executionPrice: number | null;
   status: TradeBookingStatus;
   submittedBy: BookingActor;
   submittedAt: string;
@@ -152,6 +155,9 @@ export type PortfolioPricingResponse = {
   model: string;
   baseCurrency: string;
   totalPrice: number;
+  totalTradeValue: number;
+  totalUnrealizedPnl: number;
+  positionsWithoutExecutionPrice: number;
   totalGreeks: Greeks;
   positions: PortfolioPositionPricing[];
   unpriceablePositions: UnpriceablePortfolioPosition[];
@@ -164,6 +170,9 @@ export type PortfolioPositionPricing = {
   quantity: number;
   unitPrice: number;
   positionPrice: number;
+  executionPrice: number | null;
+  tradeValue: number | null;
+  unrealizedPnl: number | null;
   unitGreeks: Greeks;
   positionGreeks: Greeks;
   marketData: PortfolioPositionMarketData;
@@ -178,6 +187,71 @@ export type PortfolioPositionMarketData = {
   asOf: string;
   source: string;
   stale: boolean;
+};
+
+export type PositionEodSnapshot = {
+  positionId: string;
+  underlyingSymbol: string;
+  quantity: number;
+  unitPrice: number;
+  marketValue: number;
+  executionPrice: number | null;
+  tradeValue: number | null;
+  unrealizedPnl: number | null;
+  marketDataAsOf: string;
+  marketDataSource: string;
+  stale: boolean;
+};
+
+export type PortfolioEodSnapshot = {
+  id: string;
+  portfolioId: string;
+  businessDate: string;
+  baseCurrency: string;
+  totalMarketValue: number;
+  totalTradeValue: number;
+  totalUnrealizedPnl: number;
+  positionsWithoutExecutionPrice: number;
+  capturedAt: string;
+  source: string;
+  positions: PositionEodSnapshot[];
+};
+
+export type EodBatchPortfolioResult = {
+  portfolioId: string;
+  portfolioName: string;
+  status: "CAPTURED" | "SKIPPED" | "FAILED";
+  message: string;
+};
+
+export type EodBatchResult = {
+  businessDate: string;
+  totalPortfolios: number;
+  captured: number;
+  skipped: number;
+  failed: number;
+  completedAt: string;
+  portfolios: EodBatchPortfolioResult[];
+};
+
+export type PositionDailyPnl = {
+  positionId: string;
+  underlyingSymbol: string;
+  currentMarketValue: number;
+  referenceValue: number | null;
+  dailyPnl: number | null;
+  referenceMethod: "PRIOR_EOD" | "EXECUTION" | "UNAVAILABLE";
+};
+
+export type PortfolioDailyPnl = {
+  portfolioId: string;
+  valuationDate: string;
+  previousEodDate: string | null;
+  baseCurrency: string;
+  currentMarketValue: number;
+  dailyPnl: number;
+  positionsWithoutReference: number;
+  positions: PositionDailyPnl[];
 };
 
 export type FrontOfficeWhatIfRequest = {

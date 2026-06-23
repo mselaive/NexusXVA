@@ -10,6 +10,9 @@ public record PortfolioBlackScholesPricingResult(
         String model,
         String baseCurrency,
         double totalPrice,
+        double totalTradeValue,
+        double totalUnrealizedPnl,
+        int positionsWithoutExecutionPrice,
         PortfolioGreeks totalGreeks,
         List<PortfolioPositionPricingResult> positions,
         List<UnpriceablePortfolioPosition> unpriceablePositions

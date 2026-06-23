@@ -23,7 +23,7 @@ export const WORK_GROUPS: Record<WorkGroupCode, WorkGroup> = {
     name: "Back Office",
     description: "Validate pending trades and manage preventive Front Office trading limits.",
     landingHref: "/trade-validation",
-    allowedHrefs: ["/trade-validation", "/trading-limits"],
+    allowedHrefs: ["/trade-validation", "/trading-limits", "/eod-control"],
   },
   ADMIN: {
     code: "ADMIN",

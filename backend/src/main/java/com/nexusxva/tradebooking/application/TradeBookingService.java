@@ -106,7 +106,8 @@ public class TradeBookingService {
                         booking.optionType(),
                         booking.strike(),
                         booking.maturityDate(),
-                        booking.quantity()
+                        booking.quantity(),
+                        booking.executionPrice()
                 ).toPositionCommand()
         );
         TradeBookingRequest reviewed = tradeBookingStore.confirm(bookingId, reviewer, position.id());

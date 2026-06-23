@@ -49,6 +49,9 @@ class TradeBookingEntity {
     @Column(nullable = false, precision = 19, scale = 8)
     private BigDecimal quantity;
 
+    @Column(name = "execution_price", precision = 19, scale = 8)
+    private BigDecimal executionPrice;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private TradeBookingStatus status;
@@ -105,6 +108,7 @@ class TradeBookingEntity {
         entity.strike = command.strike();
         entity.maturityDate = command.maturityDate();
         entity.quantity = command.quantity();
+        entity.executionPrice = command.executionPrice();
         entity.status = TradeBookingStatus.PENDING_VALIDATION;
         entity.submittedByUserId = submittedBy.userId();
         entity.submittedByUsername = submittedBy.username();
@@ -144,6 +148,7 @@ class TradeBookingEntity {
                 strike,
                 maturityDate,
                 quantity,
+                executionPrice,
                 status,
                 actor(submittedByUserId, submittedByUsername, submittedByDisplayName),
                 submittedAt,
@@ -161,4 +166,3 @@ class TradeBookingEntity {
         return new BookingActor(userId, username, displayName);
     }
 }
-

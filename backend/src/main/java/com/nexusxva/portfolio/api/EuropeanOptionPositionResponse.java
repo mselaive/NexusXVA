@@ -17,6 +17,7 @@ public record EuropeanOptionPositionResponse(
         BigDecimal strike,
         LocalDate maturityDate,
         BigDecimal quantity,
+        BigDecimal executionPrice,
         PositionLifecycleStatus lifecycleStatus,
         Instant createdAt,
         Instant updatedAt
@@ -31,6 +32,7 @@ public record EuropeanOptionPositionResponse(
                 position.strike(),
                 position.maturityDate(),
                 position.quantity(),
+                position.executionPrice(),
                 position.lifecycleStatus(),
                 position.createdAt(),
                 position.updatedAt()

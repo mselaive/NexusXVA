@@ -240,6 +240,7 @@ export function TradeValidationPage() {
               <div className="trade-terms-grid">
                 <Detail label="Strike" value={formatNumber(selected.strike, 2)} />
                 <Detail label="Quantity" value={formatNumber(selected.quantity, 2)} />
+                <Detail label="Execution premium" value={selected.executionPrice == null ? "Unavailable" : formatNumber(selected.executionPrice, 4)} />
                 <Detail label="Maturity" value={selected.maturityDate} />
                 <Detail label="Instrument" value="European option" />
               </div>

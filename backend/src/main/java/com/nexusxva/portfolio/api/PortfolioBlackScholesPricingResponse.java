@@ -12,6 +12,9 @@ public record PortfolioBlackScholesPricingResponse(
         String model,
         String baseCurrency,
         double totalPrice,
+        double totalTradeValue,
+        double totalUnrealizedPnl,
+        int positionsWithoutExecutionPrice,
         PortfolioGreeksResponse totalGreeks,
         List<PortfolioPositionPricingResponse> positions,
         List<UnpriceablePortfolioPositionResponse> unpriceablePositions
@@ -24,6 +27,9 @@ public record PortfolioBlackScholesPricingResponse(
                 result.model(),
                 result.baseCurrency(),
                 result.totalPrice(),
+                result.totalTradeValue(),
+                result.totalUnrealizedPnl(),
+                result.positionsWithoutExecutionPrice(),
                 PortfolioGreeksResponse.from(result.totalGreeks()),
                 result.positions().stream()
                         .map(PortfolioPositionPricingResponse::from)

@@ -11,8 +11,19 @@ public record AddEuropeanOptionPositionCommand(
         OptionType optionType,
         BigDecimal strike,
         LocalDate maturityDate,
-        BigDecimal quantity
+        BigDecimal quantity,
+        BigDecimal executionPrice
 ) {
+
+    public AddEuropeanOptionPositionCommand(
+            String underlyingSymbol,
+            OptionType optionType,
+            BigDecimal strike,
+            LocalDate maturityDate,
+            BigDecimal quantity
+    ) {
+        this(underlyingSymbol, optionType, strike, maturityDate, quantity, null);
+    }
 
     public AddEuropeanOptionPositionCommand {
         if (underlyingSymbol == null || underlyingSymbol.isBlank()) {
@@ -33,6 +44,9 @@ public record AddEuropeanOptionPositionCommand(
         }
         if (quantity == null || quantity.signum() == 0) {
             throw new IllegalArgumentException("quantity must be non-zero");
+        }
+        if (executionPrice != null && executionPrice.signum() < 0) {
+            throw new IllegalArgumentException("executionPrice must be greater than or equal to zero");
         }
 
     }

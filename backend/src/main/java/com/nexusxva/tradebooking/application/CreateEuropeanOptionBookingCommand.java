@@ -10,8 +10,19 @@ public record CreateEuropeanOptionBookingCommand(
         OptionType optionType,
         BigDecimal strike,
         LocalDate maturityDate,
-        BigDecimal quantity
+        BigDecimal quantity,
+        BigDecimal executionPrice
 ) {
+
+    public CreateEuropeanOptionBookingCommand(
+            String underlyingSymbol,
+            OptionType optionType,
+            BigDecimal strike,
+            LocalDate maturityDate,
+            BigDecimal quantity
+    ) {
+        this(underlyingSymbol, optionType, strike, maturityDate, quantity, null);
+    }
 
     public CreateEuropeanOptionBookingCommand {
         AddEuropeanOptionPositionCommand validated = new AddEuropeanOptionPositionCommand(
@@ -19,7 +30,8 @@ public record CreateEuropeanOptionBookingCommand(
                 optionType,
                 strike,
                 maturityDate,
-                quantity
+                quantity,
+                executionPrice
         );
         underlyingSymbol = validated.underlyingSymbol();
     }
@@ -30,8 +42,8 @@ public record CreateEuropeanOptionBookingCommand(
                 optionType,
                 strike,
                 maturityDate,
-                quantity
+                quantity,
+                executionPrice
         );
     }
 }
-

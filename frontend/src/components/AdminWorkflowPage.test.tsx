@@ -39,12 +39,16 @@ describe("AdminWorkflowPage", () => {
 
     render(<AdminWorkflowPage />);
 
-    expect(await screen.findByText("Trade booking lifecycle")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "New trade bookings" })).toBeInTheDocument();
     expect((await screen.findAllByText("Waiting BO")).length).toBeGreaterThan(0);
     expect(screen.getByText((_content, element) => element?.tagName === "TD" && element.textContent?.includes("AAPL"))).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /Accepted/i }));
     expect(await screen.findByText("No bookings in this node.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Position lifecycle" }));
+    expect(await screen.findByRole("heading", { name: "Position lifecycle" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Lifecycle waiting BO/i })).toBeInTheDocument();
   });
 });
 
@@ -81,6 +85,10 @@ function workflowMap() {
       },
       { id: "CONFIRMED", label: "Accepted", description: "Approved", count: 0, bookings: [] },
       { id: "REJECTED", label: "Rejected", description: "Rejected", count: 0, bookings: [] },
+      { id: "LIFECYCLE_REQUESTED", label: "Lifecycle requested", description: "All lifecycle requests", count: 1, bookings: [] },
+      { id: "LIFECYCLE_WAITING_BO", label: "Lifecycle waiting BO", description: "Needs lifecycle review", count: 1, bookings: [] },
+      { id: "LIFECYCLE_APPROVED", label: "Lifecycle approved", description: "Approved lifecycle", count: 0, bookings: [] },
+      { id: "LIFECYCLE_REJECTED", label: "Lifecycle rejected", description: "Rejected lifecycle", count: 0, bookings: [] },
     ],
     links: [],
   };

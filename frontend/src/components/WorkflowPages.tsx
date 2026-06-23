@@ -26,6 +26,8 @@ import type {
   ExposureSimulationResponse,
   OptionType,
   Portfolio,
+  PortfolioDailyPnl,
+  PortfolioEodSnapshot,
   PortfolioPricingResponse,
   PortfolioSummary,
   BlembergMarketSnapshot,
@@ -58,6 +60,7 @@ type TradeTicketForm = {
   strike: string;
   maturityDate: string;
   quantity: string;
+  executionPrice: string;
 };
 
 const defaultRunForm: RunForm = {
@@ -301,6 +304,7 @@ export function PortfoliosPage() {
       strike: String(position.strike),
       maturityDate: position.maturityDate,
       quantity: String(position.quantity),
+      executionPrice: position.executionPrice == null ? "" : String(position.executionPrice),
     });
   }
 
@@ -505,6 +509,7 @@ export function UPadPage() {
       strike: Number(tradeForm.strike),
       maturityDate: tradeForm.maturityDate,
       quantity: Number(tradeForm.quantity),
+      executionPrice: tradeForm.executionPrice === "" ? null : Number(tradeForm.executionPrice),
     };
 
     setLoading("trade");
@@ -583,6 +588,9 @@ export function UPadPage() {
             <Field label="Quantity">
               <input className="input" type="number" step="1" value={tradeForm.quantity} onChange={(event) => setTradeForm({ ...tradeForm, quantity: event.target.value })} />
             </Field>
+            <Field label="Execution premium">
+              <input className="input" type="number" min="0" step="0.01" placeholder="Optional" value={tradeForm.executionPrice} onChange={(event) => setTradeForm({ ...tradeForm, executionPrice: event.target.value })} />
+            </Field>
             <div className="field">
               <span>&nbsp;</span>
               <button className="btn trade-submit" type="button" onClick={bookTrade} disabled={loading === "trade"}>
@@ -636,6 +644,7 @@ function TradeBookingTable({ bookings }: { bookings: TradeBooking[] }) {
             <th>Strike</th>
             <th>Maturity</th>
             <th>Quantity</th>
+            <th>Execution premium</th>
             <th>Submitted</th>
             <th>Reason</th>
           </tr>
@@ -649,6 +658,7 @@ function TradeBookingTable({ bookings }: { bookings: TradeBooking[] }) {
               <td>{formatNumber(booking.strike, 2)}</td>
               <td>{booking.maturityDate}</td>
               <td>{formatNumber(booking.quantity, 2)}</td>
+              <td>{booking.executionPrice == null ? "Unavailable" : formatNumber(booking.executionPrice, 4)}</td>
               <td>{new Date(booking.submittedAt).toLocaleString()}</td>
               <td>{booking.rejectionReason ?? "—"}</td>
             </tr>
@@ -927,7 +937,10 @@ export function PricingPage() {
   const [selectedId, setSelectedId] = useState(initialPortfolioIdFromUrl);
   const [valuationDate, setValuationDate] = useState(todayIsoDate());
   const [pricing, setPricing] = useState<PortfolioPricingResponse | null>(null);
+  const [dailyPnl, setDailyPnl] = useState<PortfolioDailyPnl | null>(null);
+  const [latestEod, setLatestEod] = useState<PortfolioEodSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function runPricing(portfolioId = selectedId) {
@@ -937,8 +950,23 @@ export function PricingPage() {
     }
     setLoading(true);
     setError(null);
+    setSuccess(null);
     try {
-      setPricing(await nexusApi.runPortfolioPricing(portfolioId, valuationDate));
+      const [nextPricing, nextDailyPnl] = await Promise.all([
+        nexusApi.runPortfolioPricing(portfolioId, valuationDate),
+        nexusApi.getPortfolioDailyPnl(portfolioId, valuationDate),
+      ]);
+      setPricing(nextPricing);
+      setDailyPnl(nextDailyPnl);
+      try {
+        setLatestEod(await nexusApi.getLatestPortfolioEod(portfolioId));
+      } catch (caught) {
+        if (caught instanceof NexusApiError && caught.status === 404) {
+          setLatestEod(null);
+        } else {
+          throw caught;
+        }
+      }
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -957,6 +985,7 @@ export function PricingPage() {
   return (
     <AppShell title="Pricing" eyebrow="Black-Scholes valuation" howTo={howTo.pricing}>
       <Alert message={error} />
+      {success ? <div className="success">{success}</div> : null}
       <div className="panel section pricing-selector">
         <SectionTitle title="Open portfolio" info="Choose a portfolio and NexusXVA will price it automatically using the selected valuation date." />
         <div className="toolbar">
@@ -974,11 +1003,50 @@ export function PricingPage() {
           </button>
         </div>
       </div>
+      <div className="panel section">
+        <SectionTitle title="Daily P&L" info="Daily P&L consumes the latest immutable close produced by Back Office or the scheduled EOD process. Front Office cannot create or replace an EOD close." />
+        <div className="summary-strip">
+          <Metric label="Previous close" value={dailyPnl?.previousEodDate ?? "No EOD"} />
+          <Metric label="Daily P&L" value={dailyPnl ? formatCurrency(dailyPnl.dailyPnl, dailyPnl.baseCurrency) : "Unavailable"} />
+          <Metric label="No reference" value={formatNumber(dailyPnl?.positionsWithoutReference ?? 0, 0)} />
+          <Metric label="EOD source" value={latestEod?.source ?? "Not captured"} />
+        </div>
+        {dailyPnl ? <DailyPnlTable pnl={dailyPnl} /> : null}
+      </div>
       <div className="panel">
         <SectionTitle title="Portfolio valuation" info="The backend requests market-data pricing inputs and reuses the Black-Scholes calculator for each live position." />
         {pricing ? <PricingResult pricing={pricing} /> : <EmptyState text="Select a portfolio to run pricing automatically." />}
       </div>
     </AppShell>
+  );
+}
+
+function DailyPnlTable({ pnl }: { pnl: PortfolioDailyPnl }) {
+  return (
+    <div className="table-wrap table-spacing">
+      <table>
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>Current value</th>
+            <th>Reference value</th>
+            <th>Reference</th>
+            <th>Daily P&L</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pnl.positions.map((position) => (
+            <tr key={position.positionId}>
+              <td>{position.underlyingSymbol}</td>
+              <td>{formatCurrency(position.currentMarketValue, pnl.baseCurrency)}</td>
+              <td>{position.referenceValue == null ? "Unavailable" : formatCurrency(position.referenceValue, pnl.baseCurrency)}</td>
+              <td>{position.referenceMethod.replaceAll("_", " ")}</td>
+              <td>{position.dailyPnl == null ? "Unavailable" : formatCurrency(position.dailyPnl, pnl.baseCurrency)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -1215,6 +1283,7 @@ function PositionTable({
             <th>Strike</th>
             <th>Maturity</th>
             <th>Quantity</th>
+            <th>Execution premium</th>
             <th>Status</th>
             <th>Updated</th>
             {onAmend || onCancel ? <th>Actions</th> : null}
@@ -1228,6 +1297,7 @@ function PositionTable({
               <td>{formatNumber(position.strike, 2)}</td>
               <td>{position.maturityDate}</td>
               <td>{formatNumber(position.quantity, 2)}</td>
+              <td>{position.executionPrice == null ? "Unavailable" : formatNumber(position.executionPrice, 4)}</td>
               <td><span className={`lifecycle-status ${(position.lifecycleStatus ?? "ACTIVE").toLowerCase()}`}>{position.lifecycleStatus ?? "ACTIVE"}</span></td>
               <td>{new Date(position.updatedAt).toLocaleString()}</td>
               {onAmend || onCancel ? (
@@ -1357,7 +1427,10 @@ function PricingResult({ pricing }: { pricing: PortfolioPricingResponse }) {
   return (
     <div className="section">
       <div className="summary-strip">
-        <Metric label="Total price" value={formatCurrency(pricing.totalPrice, pricing.baseCurrency)} />
+        <Metric label="Market value" value={formatCurrency(pricing.totalPrice, pricing.baseCurrency)} />
+        <Metric label="Trade value" value={formatCurrency(pricing.totalTradeValue, pricing.baseCurrency)} />
+        <Metric label="Unrealized P&L" value={formatCurrency(pricing.totalUnrealizedPnl, pricing.baseCurrency)} />
+        <Metric label="P&L unavailable" value={formatNumber(pricing.positionsWithoutExecutionPrice, 0)} />
         <Metric label="Delta" value={formatNumber(pricing.totalGreeks.delta)} />
         <Metric label="Gamma" value={formatNumber(pricing.totalGreeks.gamma)} />
         <Metric label="Vega" value={formatNumber(pricing.totalGreeks.vega)} />
@@ -1369,8 +1442,10 @@ function PricingResult({ pricing }: { pricing: PortfolioPricingResponse }) {
               <th>Symbol</th>
               <th>Status</th>
               <th>Qty</th>
-              <th>Unit price</th>
-              <th>Position price</th>
+              <th>Execution</th>
+              <th>Market/unit</th>
+              <th>Market value</th>
+              <th>Unrealized P&L</th>
               <th>Spot</th>
               <th>Vol</th>
               <th>Rate</th>
@@ -1384,8 +1459,10 @@ function PricingResult({ pricing }: { pricing: PortfolioPricingResponse }) {
                 <td>{position.underlyingSymbol}</td>
                 <td>{position.status}</td>
                 <td>{formatNumber(position.quantity, 2)}</td>
+                <td>{position.executionPrice == null ? "Unavailable" : formatCurrency(position.executionPrice, pricing.baseCurrency)}</td>
                 <td>{formatCurrency(position.unitPrice, pricing.baseCurrency)}</td>
                 <td>{formatCurrency(position.positionPrice, pricing.baseCurrency)}</td>
+                <td>{position.unrealizedPnl == null ? "Unavailable" : formatCurrency(position.unrealizedPnl, pricing.baseCurrency)}</td>
                 <td>{formatNumber(position.marketData.spot, 2)}</td>
                 <td>{formatPercent(position.marketData.volatility)}</td>
                 <td>{formatPercent(position.marketData.riskFreeRate)}</td>
@@ -1397,7 +1474,7 @@ function PricingResult({ pricing }: { pricing: PortfolioPricingResponse }) {
               <tr key={position.positionId}>
                 <td>{position.positionId.slice(0, 8)}</td>
                 <td>{position.status}</td>
-                <td colSpan={8}>{position.reason}</td>
+                <td colSpan={11}>{position.reason}</td>
               </tr>
             ))}
           </tbody>
@@ -1540,6 +1617,7 @@ function initialTradeFormFromUrl(): TradeTicketForm {
     strike: "190",
     maturityDate: "2027-06-01",
     quantity: "10",
+    executionPrice: "",
   };
   if (typeof window === "undefined") {
     return fallback;
@@ -1552,6 +1630,7 @@ function initialTradeFormFromUrl(): TradeTicketForm {
     strike: params.get("strike") ?? fallback.strike,
     maturityDate: params.get("maturityDate") ?? fallback.maturityDate,
     quantity: params.get("quantity") ?? fallback.quantity,
+    executionPrice: params.get("executionPrice") ?? fallback.executionPrice,
   };
 }
 

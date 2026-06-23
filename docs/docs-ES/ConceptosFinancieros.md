@@ -598,7 +598,35 @@ En simple:
 
 ---
 
-## 31. Idea general del módulo
+## 31. Premium de ejecucion, market value y unrealized P&L
+
+Para una opcion, el **strike** es el precio contractual de ejercicio. No es el monto pagado por la opcion.
+
+El **premium de ejecucion** es el precio de la opcion acordado al ejecutar el trade. NexusXVA lo guarda como `executionPrice` por unidad.
+
+El **market value** es el valor teorico actual calculado por Black-Scholes usando market data actual.
+
+NexusXVA P&L V1 usa:
+
+```text
+tradeValue = executionPrice * quantity
+marketValue = theoreticalUnitPrice * quantity
+unrealizedPnl = marketValue - tradeValue
+```
+
+La cantidad con signo permite usar la misma formula para posiciones long y short. Si no conocemos el premium de ejecucion, el P&L queda no disponible en vez de asumir cero.
+
+**Daily P&L** usa el market value del EOD anterior en vez del premium original:
+
+```text
+dailyPnl = currentMarketValue - previousEodMarketValue
+```
+
+Para un trade creado despues del ultimo cierre, execution trade value pasa a ser su referencia intraday. EOD es un snapshot, no una reescritura del trade.
+
+---
+
+## 32. Idea general del módulo
 
 Este módulo busca implementar un cálculo financiero simple pero real.
 

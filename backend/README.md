@@ -150,7 +150,7 @@ Security model:
 Current group intent:
 
 - `FO`: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad booking submission, portfolios, pricing, exposure and CVA.
-- `BO`: Trade Validation and preventive Trading Limits for FO users.
+- `BO`: Trade Validation, preventive Trading Limits, and manual EOD Control.
 - `ADMIN`: user/group administration, FO feature permissions, portfolio visibility, and workflow monitoring.
 
 The backend enforces the active group. Frontend navigation is not the security boundary.
@@ -378,6 +378,46 @@ GET /api/back-office/lifecycle-requests
 POST /api/back-office/lifecycle-requests/{requestId}/approve
 POST /api/back-office/lifecycle-requests/{requestId}/reject
 ```
+
+### Trade Economics And P&L V1
+
+New European-option bookings may include an optional `executionPrice`, representing the premium negotiated per unit. It is copied into the confirmed position when BO approves the booking. Legacy positions remain valid with `executionPrice = null`.
+
+Portfolio pricing reports:
+
+```text
+tradeValue = executionPrice * quantity
+marketValue = BlackScholesUnitPrice * quantity
+unrealizedPnl = marketValue - tradeValue
+```
+
+If execution price is missing, position P&L is returned as `null` and `positionsWithoutExecutionPrice` is incremented. Strike and underlying spot are never treated as the option premium.
+
+### EOD Snapshots And Daily P&L
+
+EOD closes are immutable snapshots; they never overwrite trade economics or live positions.
+
+- `GET /api/portfolios/{portfolioId}/eod/latest`
+- `GET /api/portfolios/{portfolioId}/eod?limit=10`
+- `POST /api/portfolios/{portfolioId}/eod/pnl`
+- `POST /api/back-office/eod/run` for a global manual BO close
+- `POST /api/back-office/eod/portfolios/{portfolioId}` for targeted operational recovery
+- `GET /api/back-office/eod/portfolios/{portfolioId}` for BO history
+
+Existing positions use prior EOD market value as the Daily P&L reference. Positions created after the close use execution trade value. Missing references remain unavailable.
+
+The normal BO and scheduler process closes all portfolios. Each portfolio runs independently and is reported as `CAPTURED`, `SKIPPED`, or `FAILED`; a failed portfolio does not roll back successful closes from other books.
+
+Scheduled EOD is disabled by default:
+
+```text
+NEXUSXVA_EOD_ENABLED=false
+NEXUSXVA_EOD_CRON=0 15 17 * * MON-FRI
+NEXUSXVA_EOD_ZONE=America/New_York
+NEXUSXVA_EOD_ALLOW_STALE=false
+```
+
+The close rejects stale market data and active unpriceable positions. One portfolio/date can be captured only once.
 
 Approval of `CANCEL` marks the original position `CANCELLED`. Approval of `AMEND` marks the original position `AMENDED` and creates a replacement `ACTIVE` position. Pricing, exposure, CVA, pre-trade analysis and stress testing use only `ACTIVE` positions.
 

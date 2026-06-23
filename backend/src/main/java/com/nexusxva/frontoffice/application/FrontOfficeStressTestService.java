@@ -198,6 +198,10 @@ public class FrontOfficeStressTestService {
         ));
 
         double quantity = position.quantity().doubleValue();
+        double stressedPositionValue = unitResult.price() * quantity;
+        Double executionPrice = position.executionPrice() == null ? null : position.executionPrice().doubleValue();
+        Double tradeValue = executionPrice == null ? null : executionPrice * quantity;
+        Double unrealizedPnl = tradeValue == null ? null : stressedPositionValue - tradeValue;
         PortfolioGreeks unitGreeks = PortfolioGreeks.scaled(unitResult.greeks(), 1.0);
         PortfolioGreeks positionGreeks = PortfolioGreeks.scaled(unitResult.greeks(), quantity);
         return new PortfolioPositionPricingResult(
@@ -206,7 +210,10 @@ public class FrontOfficeStressTestService {
                 position.underlyingSymbol(),
                 quantity,
                 unitResult.price(),
-                unitResult.price() * quantity,
+                stressedPositionValue,
+                executionPrice,
+                tradeValue,
+                unrealizedPnl,
                 unitGreeks,
                 positionGreeks,
                 new PortfolioPositionMarketData(

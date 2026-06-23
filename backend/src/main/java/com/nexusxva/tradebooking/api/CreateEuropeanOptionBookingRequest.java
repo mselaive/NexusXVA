@@ -15,7 +15,8 @@ public record CreateEuropeanOptionBookingRequest(
         @NotNull OptionType optionType,
         @NotNull @DecimalMin(value = "0.0", inclusive = false) BigDecimal strike,
         @NotNull LocalDate maturityDate,
-        @NotNull BigDecimal quantity
+        @NotNull BigDecimal quantity,
+        @DecimalMin(value = "0.0") BigDecimal executionPrice
 ) {
 
     CreateEuropeanOptionBookingCommand toCommand() {
@@ -24,8 +25,8 @@ public record CreateEuropeanOptionBookingRequest(
                 optionType,
                 strike,
                 maturityDate,
-                quantity
+                quantity,
+                executionPrice
         );
     }
 }
-

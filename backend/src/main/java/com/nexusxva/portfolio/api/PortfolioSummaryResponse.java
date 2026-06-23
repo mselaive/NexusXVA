@@ -15,7 +15,7 @@ public record PortfolioSummaryResponse(
         long positionCount
 ) {
 
-    static PortfolioSummaryResponse from(PortfolioSummary portfolio) {
+    public static PortfolioSummaryResponse from(PortfolioSummary portfolio) {
         return new PortfolioSummaryResponse(
                 portfolio.id(),
                 portfolio.name(),

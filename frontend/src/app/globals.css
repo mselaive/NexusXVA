@@ -1925,6 +1925,40 @@ a {
   font-weight: 750;
 }
 
+.workflow-mode-tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f2f6f5;
+  padding: 4px;
+}
+
+.workflow-mode-tabs button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 16px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.workflow-mode-tabs button:hover {
+  color: var(--text);
+}
+
+.workflow-mode-tabs button.active {
+  background: #ffffff;
+  color: var(--accent-strong);
+  box-shadow: 0 1px 5px rgba(22, 50, 48, 0.12);
+}
+
 .workflow-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2035,6 +2069,18 @@ a {
 }
 
 .workflow-card.rejected::after {
+  background: var(--danger);
+}
+
+.workflow-card.lifecycle_waiting_bo::after {
+  background: var(--warn);
+}
+
+.workflow-card.lifecycle_approved::after {
+  background: var(--accent);
+}
+
+.workflow-card.lifecycle_rejected::after {
   background: var(--danger);
 }
 
@@ -3434,6 +3480,62 @@ tr:last-child td {
   color: var(--danger);
 }
 
+.booking-status.captured {
+  background: #e7f5f2;
+  color: var(--accent-strong);
+}
+
+.booking-status.skipped {
+  background: #fff7e6;
+  color: #9a4b08;
+}
+
+.booking-status.failed {
+  background: #fff0ee;
+  color: var(--danger);
+}
+
+.eod-summary-strip {
+  margin-bottom: 22px;
+}
+
+.eod-batch-results {
+  margin-bottom: 22px;
+}
+
+.eod-history-panel {
+  margin-top: 0;
+}
+
+.eod-history-toolbar {
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.eod-history-toolbar .field {
+  min-width: min(360px, 100%);
+}
+
+.eod-selected-close {
+  display: grid;
+  gap: 3px;
+  min-width: 180px;
+  margin-left: auto;
+  border-left: 1px solid var(--line);
+  padding: 7px 0 7px 16px;
+}
+
+.eod-selected-close span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.eod-selected-close strong {
+  font-size: 15px;
+}
+
 .bo-detail {
   display: flex;
   flex-direction: column;
@@ -3819,6 +3921,24 @@ tr:last-child td {
   .workflow-visual-map,
   .upad-limit-strip {
     grid-template-columns: 1fr;
+  }
+
+  .workflow-mode-tabs {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .eod-history-toolbar {
+    align-items: stretch;
+  }
+
+  .eod-selected-close {
+    width: 100%;
+    margin-left: 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+    padding: 12px 0 0;
   }
 
   .fo-hero {

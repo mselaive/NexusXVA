@@ -131,7 +131,8 @@ public class TradeLifecycleService {
                         request.requestedOptionType(),
                         request.requestedStrike(),
                         request.requestedMaturityDate(),
-                        request.requestedQuantity()
+                        request.requestedQuantity(),
+                        position.executionPrice()
                 )
         );
         TradeLifecycleRequest reviewed = lifecycleStore.approve(requestId, reviewer, replacement.id());

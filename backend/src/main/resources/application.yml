@@ -24,6 +24,11 @@ management:
         include: health,info
 
 nexusxva:
+  eod:
+    enabled: ${NEXUSXVA_EOD_ENABLED:false}
+    cron: ${NEXUSXVA_EOD_CRON:0 15 17 * * MON-FRI}
+    zone: ${NEXUSXVA_EOD_ZONE:America/New_York}
+    allow-stale: ${NEXUSXVA_EOD_ALLOW_STALE:false}
   auth:
     enabled: ${NEXUSXVA_AUTH_ENABLED:false}
     session-hours: ${NEXUSXVA_AUTH_SESSION_HOURS:8}

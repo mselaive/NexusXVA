@@ -67,6 +67,36 @@ class PortfolioBlackScholesPricingServiceTest {
     }
 
     @Test
+    void calculatesTradeValueAndUnrealizedPnlFromExecutionPrice() {
+        EuropeanOptionPosition position = new EuropeanOptionPosition(
+                UUID.randomUUID(),
+                PORTFOLIO_ID,
+                "AAPL",
+                OptionType.CALL,
+                new BigDecimal("100.0"),
+                LocalDate.parse("2027-06-01"),
+                new BigDecimal("2.0"),
+                new BigDecimal("8.0"),
+                com.nexusxva.portfolio.domain.PositionLifecycleStatus.ACTIVE,
+                NOW,
+                NOW
+        );
+        PortfolioBlackScholesPricingService service = service(symbol -> Optional.of(pricingInput(symbol)));
+        when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("USD")));
+        when(portfolioStore.findActiveEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(position));
+
+        PortfolioBlackScholesPricingResult result = service.price(PORTFOLIO_ID, LocalDate.parse("2026-06-01"));
+
+        PortfolioPositionPricingResult pricedPosition = result.positions().getFirst();
+        assertThat(pricedPosition.tradeValue()).isEqualTo(16.0);
+        assertThat(pricedPosition.unrealizedPnl())
+                .isCloseTo(pricedPosition.positionPrice() - 16.0, tolerance());
+        assertThat(result.totalTradeValue()).isEqualTo(16.0);
+        assertThat(result.totalUnrealizedPnl()).isEqualTo(pricedPosition.unrealizedPnl());
+        assertThat(result.positionsWithoutExecutionPrice()).isZero();
+    }
+
+    @Test
     void expiredPositionsAreUnpriceableAndExcludedFromTotals() {
         EuropeanOptionPosition expired = position("AAPL", OptionType.CALL, "100.0", "2026-06-01", "2.0");
         PortfolioBlackScholesPricingService service = service(symbol -> Optional.of(pricingInput(symbol)));

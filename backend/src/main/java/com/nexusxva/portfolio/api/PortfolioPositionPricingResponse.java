@@ -11,6 +11,9 @@ public record PortfolioPositionPricingResponse(
         double quantity,
         double unitPrice,
         double positionPrice,
+        Double executionPrice,
+        Double tradeValue,
+        Double unrealizedPnl,
         PortfolioGreeksResponse unitGreeks,
         PortfolioGreeksResponse positionGreeks,
         PortfolioPositionMarketDataResponse marketData
@@ -24,6 +27,9 @@ public record PortfolioPositionPricingResponse(
                 result.quantity(),
                 result.unitPrice(),
                 result.positionPrice(),
+                result.executionPrice(),
+                result.tradeValue(),
+                result.unrealizedPnl(),
                 PortfolioGreeksResponse.from(result.unitGreeks()),
                 PortfolioGreeksResponse.from(result.positionGreeks()),
                 PortfolioPositionMarketDataResponse.from(result.marketData())

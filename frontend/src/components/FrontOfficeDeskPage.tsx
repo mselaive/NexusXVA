@@ -202,6 +202,7 @@ function BookingBlotter({ bookings }: { bookings: FrontOfficeDeskBooking[] }) {
             <th>Strike</th>
             <th>Maturity</th>
             <th>Qty</th>
+            <th>Execution premium</th>
             <th>Submitted</th>
             <th>Action</th>
           </tr>
@@ -221,6 +222,7 @@ function BookingBlotter({ bookings }: { bookings: FrontOfficeDeskBooking[] }) {
               <td>{formatNumber(booking.strike, 2)}</td>
               <td>{booking.maturityDate}</td>
               <td>{formatNumber(booking.quantity, 2)}</td>
+              <td>{booking.executionPrice == null ? "Unavailable" : formatNumber(booking.executionPrice, 4)}</td>
               <td>{new Date(booking.submittedAt).toLocaleString()}</td>
               <td>
                 <BookingAction booking={booking} />

@@ -16,6 +16,7 @@ public record EuropeanOptionPosition(
         BigDecimal strike,
         LocalDate maturityDate,
         BigDecimal quantity,
+        BigDecimal executionPrice,
         PositionLifecycleStatus lifecycleStatus,
         Instant createdAt,
         Instant updatedAt
@@ -40,10 +41,26 @@ public record EuropeanOptionPosition(
                 strike,
                 maturityDate,
                 quantity,
+                null,
                 PositionLifecycleStatus.ACTIVE,
                 createdAt,
                 updatedAt
         );
+    }
+
+    public EuropeanOptionPosition(
+            UUID id,
+            UUID portfolioId,
+            String underlyingSymbol,
+            OptionType optionType,
+            BigDecimal strike,
+            LocalDate maturityDate,
+            BigDecimal quantity,
+            PositionLifecycleStatus lifecycleStatus,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
+        this(id, portfolioId, underlyingSymbol, optionType, strike, maturityDate, quantity, null, lifecycleStatus, createdAt, updatedAt);
     }
 
     public EuropeanOptionPosition {
@@ -71,6 +88,9 @@ public record EuropeanOptionPosition(
         }
         if (quantity == null || quantity.signum() == 0) {
             throw new IllegalArgumentException("quantity must be non-zero");
+        }
+        if (executionPrice != null && executionPrice.signum() < 0) {
+            throw new IllegalArgumentException("executionPrice must be greater than or equal to zero");
         }
         if (lifecycleStatus == null) {
             throw new IllegalArgumentException("position lifecycleStatus is required");

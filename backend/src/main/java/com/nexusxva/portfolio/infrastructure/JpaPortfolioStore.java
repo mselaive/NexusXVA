@@ -76,7 +76,8 @@ class JpaPortfolioStore implements PortfolioStore {
                 command.optionType(),
                 command.strike(),
                 command.maturityDate(),
-                command.quantity()
+                command.quantity(),
+                command.executionPrice()
         );
 
         return positionJpaRepository.save(position).toDomain();

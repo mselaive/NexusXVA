@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Bell,
   BriefcaseBusiness,
+  CalendarCheck,
   CircleDollarSign,
   FlaskConical,
   Gauge,
@@ -49,6 +50,7 @@ const navItems = [
   { href: "/cva", label: "CVA", icon: Shield },
   { href: "/trade-validation", label: "Trade Validation", icon: ListChecks },
   { href: "/trading-limits", label: "Trading Limits", icon: SlidersHorizontal },
+  { href: "/eod-control", label: "EOD Control", icon: CalendarCheck },
   { href: "/admin", label: "Administration", icon: Settings },
   { href: "/workflows", label: "Workflows", icon: GitBranch },
 ];
@@ -87,7 +89,7 @@ export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps
     let cancelled = false;
     async function load() {
       try {
-        const response = await nexusApi.listNotifications(false, 0, 20);
+        const response = await nexusApi.listNotifications(true, 0, 20);
         if (cancelled) {
           return;
         }
@@ -158,8 +160,8 @@ export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps
   async function openNotification(notification: UserNotification) {
     try {
       if (notification.unread) {
-        const updated = await nexusApi.markNotificationRead(notification.id);
-        setNotifications((current) => current.map((item) => item.id === updated.id ? updated : item));
+        await nexusApi.markNotificationRead(notification.id);
+        setNotifications((current) => current.filter((item) => item.id !== notification.id));
         setUnreadCount((current) => Math.max(0, current - 1));
       }
     } finally {
@@ -171,7 +173,7 @@ export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps
 
   async function markAllNotificationsRead() {
     await nexusApi.markAllNotificationsRead();
-    setNotifications((current) => current.map((item) => ({ ...item, unread: false, readAt: item.readAt ?? new Date().toISOString() })));
+    setNotifications([]);
     setUnreadCount(0);
   }
 
@@ -257,7 +259,7 @@ export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps
                     </div>
                     {notificationsError ? <span className="panel-error">{notificationsError}</span> : null}
                     {!notificationsError && notifications.length === 0 ? (
-                      <span className="empty-inline">No notifications yet.</span>
+                      <span className="empty-inline">You are all caught up.</span>
                     ) : null}
                     {notifications.map((notification) => (
                       <button

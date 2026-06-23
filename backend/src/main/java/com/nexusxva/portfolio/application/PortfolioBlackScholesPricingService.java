@@ -51,6 +51,9 @@ public class PortfolioBlackScholesPricingService {
         List<PortfolioPositionPricingResult> pricedPositions = new ArrayList<>();
         List<UnpriceablePortfolioPosition> unpriceablePositions = new ArrayList<>();
         double totalPrice = 0.0;
+        double totalTradeValue = 0.0;
+        double totalUnrealizedPnl = 0.0;
+        int positionsWithoutExecutionPrice = 0;
         PortfolioGreeks totalGreeks = PortfolioGreeks.zero();
 
         for (EuropeanOptionPosition position : portfolioStore.findActiveEuropeanOptionPositions(portfolioId)) {
@@ -62,6 +65,12 @@ public class PortfolioBlackScholesPricingService {
             PortfolioPositionPricingResult pricedPosition = pricePosition(position, resolvedValuationDate);
             pricedPositions.add(pricedPosition);
             totalPrice += pricedPosition.positionPrice();
+            if (pricedPosition.tradeValue() == null) {
+                positionsWithoutExecutionPrice++;
+            } else {
+                totalTradeValue += pricedPosition.tradeValue();
+                totalUnrealizedPnl += pricedPosition.unrealizedPnl();
+            }
             totalGreeks = totalGreeks.plus(pricedPosition.positionGreeks());
         }
 
@@ -71,6 +80,9 @@ public class PortfolioBlackScholesPricingService {
                 MODEL,
                 portfolio.baseCurrency(),
                 totalPrice,
+                totalTradeValue,
+                totalUnrealizedPnl,
+                positionsWithoutExecutionPrice,
                 totalGreeks,
                 pricedPositions,
                 unpriceablePositions
@@ -139,6 +151,9 @@ public class PortfolioBlackScholesPricingService {
 
         double quantity = position.quantity().doubleValue();
         double positionPrice = unitResult.price() * quantity;
+        Double executionPrice = position.executionPrice() == null ? null : position.executionPrice().doubleValue();
+        Double tradeValue = executionPrice == null ? null : executionPrice * quantity;
+        Double unrealizedPnl = tradeValue == null ? null : positionPrice - tradeValue;
         PortfolioGreeks unitGreeks = PortfolioGreeks.scaled(unitResult.greeks(), 1.0);
         PortfolioGreeks positionGreeks = PortfolioGreeks.scaled(unitResult.greeks(), quantity);
 
@@ -149,6 +164,9 @@ public class PortfolioBlackScholesPricingService {
                 quantity,
                 unitResult.price(),
                 positionPrice,
+                executionPrice,
+                tradeValue,
+                unrealizedPnl,
                 unitGreeks,
                 positionGreeks,
                 new PortfolioPositionMarketData(

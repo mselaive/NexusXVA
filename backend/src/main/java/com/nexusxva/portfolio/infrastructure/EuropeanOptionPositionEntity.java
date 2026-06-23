@@ -46,6 +46,9 @@ class EuropeanOptionPositionEntity {
     @Column(nullable = false, precision = 19, scale = 8)
     private BigDecimal quantity;
 
+    @Column(name = "execution_price", precision = 19, scale = 8)
+    private BigDecimal executionPrice;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "lifecycle_status", nullable = false, length = 16)
     private PositionLifecycleStatus lifecycleStatus;
@@ -67,6 +70,7 @@ class EuropeanOptionPositionEntity {
         this.strike = position.strike();
         this.maturityDate = position.maturityDate();
         this.quantity = position.quantity();
+        this.executionPrice = position.executionPrice();
         this.lifecycleStatus = position.lifecycleStatus();
         this.createdAt = position.createdAt();
         this.updatedAt = position.updatedAt();
@@ -78,7 +82,8 @@ class EuropeanOptionPositionEntity {
             OptionType optionType,
             BigDecimal strike,
             LocalDate maturityDate,
-            BigDecimal quantity
+            BigDecimal quantity,
+            BigDecimal executionPrice
     ) {
         Instant now = Instant.now();
         EuropeanOptionPosition position = new EuropeanOptionPosition(
@@ -89,6 +94,7 @@ class EuropeanOptionPositionEntity {
                 strike,
                 maturityDate,
                 quantity,
+                executionPrice,
                 PositionLifecycleStatus.ACTIVE,
                 now,
                 now
@@ -106,6 +112,7 @@ class EuropeanOptionPositionEntity {
                 strike,
                 maturityDate,
                 quantity,
+                executionPrice,
                 lifecycleStatus,
                 createdAt,
                 updatedAt

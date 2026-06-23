@@ -77,6 +77,10 @@
 - Stress Testing is stateless and pricing/Greeks-only in V1. It may include one hypothetical trade, but must not create bookings, confirmed positions, market data, exposure runs, CVA runs, or persisted stress results.
 - Confirmed positions are changed only through lifecycle requests. Risk workflows must use only `ACTIVE` positions and treat `CANCELLED`/`AMENDED` as history.
 - User notifications are persisted in NexusXVA and belong to the user, not the active group. Workflow events should notify the maker/checker users, but notifications must not replace backend workflow state.
+- Option `executionPrice` means premium per unit. Never substitute strike, spot, notional, or theoretical price for missing execution economics; return P&L as unavailable.
+- EOD snapshots are immutable per portfolio/business date and must not overwrite trades or positions. Daily P&L uses prior EOD, falling back to execution value only for positions absent from that close.
+- Manual EOD capture belongs to BO. FO may read EOD/Daily P&L, while scheduled EOD runs as a system process.
+- The normal EOD operation is a global batch over all portfolios. Process books independently and report `CAPTURED`, `SKIPPED`, or `FAILED`; one failed book must not roll back successful closes for other portfolios.
 - Trading-limit usage is derived from submitted booking history; do not maintain a second mutable counter.
 - Trading-limit enforcement and booking creation must share a transaction and lock the policy row.
 - V1 controlled notional is `abs(quantity) * strike` in USD. Never describe it as premium, cash spent, P&L, or market value.

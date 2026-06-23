@@ -206,12 +206,15 @@ Current notes:
 - `u-Pad` submits pending bookings; BO Trade Validation decides whether they become confirmed positions.
 - FO Trade Lifecycle V1 lets FO request amendments and cancellations over confirmed positions; BO approval marks positions `CANCELLED` or `AMENDED`, and amendments create replacement `ACTIVE` positions.
 - Notifications V1 persists user inbox events for BO pending work and FO review outcomes.
+- Trade Economics V1 captures optional option premium per unit and reports trade value plus unrealized P&L during portfolio pricing.
+- EOD V1 persists immutable portfolio/position closes and calculates Daily P&L from prior close or same-day execution reference.
+- Manual EOD capture is exposed only to BO through EOD Control and runs globally across portfolios with per-book results; FO consumes the close in Pricing.
 - `u-Pad` shows the active FO user's remaining capacity; BO Trading Limits manages preventive policies.
 - Administration V1 manages user group memberships, FO permission checks, portfolio access mode, and a read-only booking workflow map.
 - The frontend consumes NexusXVA backend APIs for calculations. FO market-watch widgets may call `/blemberg-api/*` for cached snapshot display, but pricing, exposure, CVA, and stress calculations stay in NexusXVA backend services.
 - The frontend must not reimplement Black-Scholes, Monte Carlo, exposure aggregation, or CVA.
 - The first CVA UI uses flat CVA inputs; curve-mode UI can be added after the basic workflow is stable.
-- Natural next user-workflow candidates are persisted valuation run history and richer lifecycle reporting.
+- The next FO product slice is multi-leg option strategies, followed by cash equities/delta hedging and a richer FO risk blotter.
 
 ## Milestone 8: Hardening
 

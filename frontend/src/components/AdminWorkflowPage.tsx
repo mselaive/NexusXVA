@@ -38,9 +38,39 @@ const nodeIcons = {
   LIFECYCLE_REJECTED: XCircle,
 } as const;
 
+type WorkflowMode = "BOOKINGS" | "LIFECYCLE";
+
+const workflowModes = {
+  BOOKINGS: {
+    title: "New trade bookings",
+    description: "Follow FO submissions from capture through BO validation and confirmed position creation.",
+    nodeIds: ["SUBMITTED", "PENDING_VALIDATION", "CONFIRMED", "REJECTED"],
+    defaultNode: "PENDING_VALIDATION",
+    kpis: [
+      { id: "SUBMITTED", label: "Submitted", tone: "submitted" },
+      { id: "PENDING_VALIDATION", label: "Waiting BO", tone: "pending_validation" },
+      { id: "CONFIRMED", label: "Accepted", tone: "confirmed" },
+      { id: "REJECTED", label: "Rejected", tone: "rejected" },
+    ],
+  },
+  LIFECYCLE: {
+    title: "Position lifecycle",
+    description: "Inspect amendment and cancellation requests without mixing them with new trade bookings.",
+    nodeIds: ["LIFECYCLE_REQUESTED", "LIFECYCLE_WAITING_BO", "LIFECYCLE_APPROVED", "LIFECYCLE_REJECTED"],
+    defaultNode: "LIFECYCLE_WAITING_BO",
+    kpis: [
+      { id: "LIFECYCLE_REQUESTED", label: "Requested", tone: "submitted" },
+      { id: "LIFECYCLE_WAITING_BO", label: "Waiting BO", tone: "pending_validation" },
+      { id: "LIFECYCLE_APPROVED", label: "Approved", tone: "confirmed" },
+      { id: "LIFECYCLE_REJECTED", label: "Rejected", tone: "rejected" },
+    ],
+  },
+} as const;
+
 export function AdminWorkflowPage() {
   const [portfolios, setPortfolios] = React.useState<AdminPortfolioSummary[]>([]);
   const [workflow, setWorkflow] = React.useState<AdminWorkflowMap | null>(null);
+  const [workflowMode, setWorkflowMode] = React.useState<WorkflowMode>("BOOKINGS");
   const [selectedNode, setSelectedNode] = React.useState("PENDING_VALIDATION");
   const [portfolioId, setPortfolioId] = React.useState("");
   const [loading, setLoading] = React.useState(true);
@@ -78,11 +108,14 @@ export function AdminWorkflowPage() {
     }
   }
 
-  const visibleNode = workflow?.nodes.find((node) => node.id === selectedNode) ?? workflow?.nodes[0] ?? null;
-  const totalBookings = workflow?.nodes.find((node) => node.id === "SUBMITTED")?.count ?? 0;
-  const pending = workflow?.nodes.find((node) => node.id === "PENDING_VALIDATION")?.count ?? 0;
-  const accepted = workflow?.nodes.find((node) => node.id === "CONFIRMED")?.count ?? 0;
-  const rejected = workflow?.nodes.find((node) => node.id === "REJECTED")?.count ?? 0;
+  const mode = workflowModes[workflowMode];
+  const visibleNodes = workflow?.nodes.filter((node) => mode.nodeIds.includes(node.id as never)) ?? [];
+  const visibleNode = visibleNodes.find((node) => node.id === selectedNode) ?? visibleNodes[0] ?? null;
+
+  function selectWorkflowMode(nextMode: WorkflowMode) {
+    setWorkflowMode(nextMode);
+    setSelectedNode(workflowModes[nextMode].defaultNode);
+  }
 
   return (
     <AppShell title="Workflows" eyebrow="Administration" howTo={howTo}>
@@ -91,8 +124,8 @@ export function AdminWorkflowPage() {
       <section className="workflow-hero panel">
         <div>
           <span className="badge">Maker-checker flow</span>
-          <h2>Trade booking lifecycle</h2>
-          <p>Follow FO booking requests from submission through BO decision and confirmed portfolio position creation.</p>
+          <h2>{mode.title}</h2>
+          <p>{mode.description}</p>
         </div>
         <div className="workflow-filter">
           <label>
@@ -107,11 +140,36 @@ export function AdminWorkflowPage() {
         </div>
       </section>
 
+      <div className="workflow-mode-tabs" role="tablist" aria-label="Workflow process">
+        <button
+          className={workflowMode === "BOOKINGS" ? "active" : ""}
+          type="button"
+          role="tab"
+          aria-selected={workflowMode === "BOOKINGS"}
+          onClick={() => selectWorkflowMode("BOOKINGS")}
+        >
+          New trade bookings
+        </button>
+        <button
+          className={workflowMode === "LIFECYCLE" ? "active" : ""}
+          type="button"
+          role="tab"
+          aria-selected={workflowMode === "LIFECYCLE"}
+          onClick={() => selectWorkflowMode("LIFECYCLE")}
+        >
+          Position lifecycle
+        </button>
+      </div>
+
       <div className="workflow-kpis">
-        <WorkflowKpi label="Submitted" value={totalBookings} tone="submitted" />
-        <WorkflowKpi label="Waiting BO" value={pending} tone="pending_validation" />
-        <WorkflowKpi label="Accepted" value={accepted} tone="confirmed" />
-        <WorkflowKpi label="Rejected" value={rejected} tone="rejected" />
+        {mode.kpis.map((kpi) => (
+          <WorkflowKpi
+            key={kpi.id}
+            label={kpi.label}
+            value={workflow?.nodes.find((node) => node.id === kpi.id)?.count ?? 0}
+            tone={kpi.tone}
+          />
+        ))}
       </div>
 
       <div className="admin-workflow-layout visual">
@@ -125,8 +183,8 @@ export function AdminWorkflowPage() {
           </div>
           {loading ? (
             <div className="empty"><Loader2 className="spin" size={18} /> Loading workflow</div>
-          ) : workflow ? (
-            <VisualWorkflow workflow={workflow} selectedNode={selectedNode} onSelect={setSelectedNode} />
+          ) : visibleNodes.length > 0 ? (
+            <VisualWorkflow nodes={visibleNodes} selectedNode={selectedNode} onSelect={setSelectedNode} />
           ) : (
             <div className="empty">No workflow data available.</div>
           )}
@@ -149,20 +207,20 @@ function WorkflowKpi({ label, value, tone }: { label: string; value: number; ton
 }
 
 function VisualWorkflow({
-  workflow,
+  nodes,
   selectedNode,
   onSelect,
 }: {
-  workflow: AdminWorkflowMap;
+  nodes: AdminWorkflowNode[];
   selectedNode: string;
   onSelect: (node: string) => void;
 }) {
   return (
     <div className="workflow-visual-map">
-      {workflow.nodes.map((node, index) => (
+      {nodes.map((node, index) => (
         <React.Fragment key={node.id}>
           <WorkflowNodeCard node={node} selected={selectedNode === node.id} onSelect={() => onSelect(node.id)} />
-          {index < workflow.nodes.length - 1 ? (
+          {index < nodes.length - 1 ? (
             <div className="workflow-connector" aria-hidden="true">
               <ArrowRight size={18} />
             </div>

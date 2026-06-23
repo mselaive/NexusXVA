@@ -9,6 +9,9 @@ public record PortfolioPositionPricingResult(
         double quantity,
         double unitPrice,
         double positionPrice,
+        Double executionPrice,
+        Double tradeValue,
+        Double unrealizedPnl,
         PortfolioGreeks unitGreeks,
         PortfolioGreeks positionGreeks,
         PortfolioPositionMarketData marketData

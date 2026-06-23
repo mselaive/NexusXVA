@@ -14,6 +14,7 @@ import type {
   CvaCalculationResponse,
   ExposureSimulationRequest,
   ExposureSimulationResponse,
+  EodBatchResult,
   FrontOfficeDeskResponse,
   FrontOfficeStressTestRequest,
   FrontOfficeStressTestResponse,
@@ -22,6 +23,8 @@ import type {
   LoginRequest,
   NotificationPage,
   Portfolio,
+  PortfolioDailyPnl,
+  PortfolioEodSnapshot,
   PortfolioPricingResponse,
   PortfolioSummary,
   TradeBooking,
@@ -216,6 +219,36 @@ export const nexusApi = {
     request<PortfolioPricingResponse>(`/portfolios/${portfolioId}/pricing/black-scholes`, {
       method: "POST",
       body: JSON.stringify({ valuationDate }),
+    }),
+
+  listBackOfficeEodPortfolios: () =>
+    request<PortfolioSummary[]>("/back-office/eod/portfolios"),
+
+  captureBackOfficePortfolioEod: (portfolioId: string, businessDate: string) =>
+    request<PortfolioEodSnapshot>(`/back-office/eod/portfolios/${portfolioId}`, {
+      method: "POST",
+      body: JSON.stringify({ businessDate }),
+    }),
+
+  runBackOfficeEodBatch: (businessDate: string) =>
+    request<EodBatchResult>("/back-office/eod/run", {
+      method: "POST",
+      body: JSON.stringify({ businessDate }),
+    }),
+
+  getBackOfficeLatestPortfolioEod: (portfolioId: string) =>
+    request<PortfolioEodSnapshot>(`/back-office/eod/portfolios/${portfolioId}/latest`),
+
+  getBackOfficePortfolioEodHistory: (portfolioId: string, limit = 10) =>
+    request<PortfolioEodSnapshot[]>(`/back-office/eod/portfolios/${portfolioId}?limit=${limit}`),
+
+  getLatestPortfolioEod: (portfolioId: string) =>
+    request<PortfolioEodSnapshot>(`/portfolios/${portfolioId}/eod/latest`),
+
+  getPortfolioDailyPnl: (portfolioId: string, valuationDate: string) =>
+    request<PortfolioDailyPnl>(`/portfolios/${portfolioId}/eod/pnl`, {
+      method: "POST",
+      body: JSON.stringify({ businessDate: valuationDate }),
     }),
 
   runExposure: (body: ExposureSimulationRequest) =>

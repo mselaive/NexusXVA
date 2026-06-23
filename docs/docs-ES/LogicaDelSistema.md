@@ -227,7 +227,7 @@ No persiste exposure, probabilidades de default ni resultados CVA.
 
 Dashboard V1 es un frontend Next.js en `frontend/`.
 No implementa formulas financieras.
-La UI esta separada por grupos. FO usa FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure y CVA. BO usa Trade Validation, Lifecycle Validation y Trading Limits. ADMIN usa Administration para membresias, permisos FO y visibilidad de portfolios, mas Workflows para monitoreo visual de workflow.
+La UI esta separada por grupos. FO usa FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure y CVA. BO usa Trade Validation, Lifecycle Validation, Trading Limits y EOD Control. ADMIN usa Administration para membresias, permisos FO y visibilidad de portfolios, mas Workflows para monitoreo visual de workflow.
 El header incluye una bandeja persistida de notificaciones. Las notificaciones pertenecen al usuario, no al grupo activo, por lo que usuarios multi-grupo mantienen un solo inbox al cambiar entre FO, BO y ADMIN.
 
 El flujo frontend es:
@@ -259,6 +259,10 @@ El dashboard usa el backend como fuente de verdad para:
 
 Para desarrollo local, el frontend llama `/nexus-api/*`, que Next.js proxya a NexusXVA. Tambien puede llamar `/blemberg-api/*` para mostrar snapshots cacheados en pantallas FO. Pricing, exposure, CVA y stress calculations siguen pasando por servicios backend de NexusXVA.
 `u-Pad` envia terminos del trade solamente; market data sigue siendo responsabilidad de `marketdata`/Blemberg.
+
+`u-Pad` tambien puede capturar `executionPrice`, que representa el premium negociado por unidad. Al aprobar BO se copia a la posicion confirmada. Portfolio pricing compara ese premium con el valor unitario Black-Scholes actual para calcular unrealized P&L. Si una posicion historica no tiene economics, el P&L queda no disponible en vez de asumir costo cero.
+
+EOD es un control inmutable separado y pertenece a BO o al scheduler del sistema. FO consume el cierre pero no puede crearlo. El proceso normal recorre todos los portfolios y entrega un resultado independiente por libro (`CAPTURED`, `SKIPPED` o `FAILED`). Guarda market values de portfolio y posicion sin cambiar economics de ejecucion. Daily P&L usa el EOD anterior para posiciones existentes y execution value para posiciones creadas despues del cierre. El scheduler EOD es configurable y esta apagado por default.
 
 Los portafolios demo grandes viven en `backend/src/main/resources/db/demo/demo_portfolios.sql`. No son migraciones Flyway; los devs los cargan explicitamente cuando quieren libros locales realistas para demos del dashboard, pricing, exposure, CVA, pre-trade analysis y stress testing. Ver `docs/docs-ES/PortafoliosDemo.md`.
 

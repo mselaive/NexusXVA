@@ -18,6 +18,7 @@ public record TradeBookingResponse(
         BigDecimal strike,
         LocalDate maturityDate,
         BigDecimal quantity,
+        BigDecimal executionPrice,
         TradeBookingStatus status,
         BookingActorResponse submittedBy,
         Instant submittedAt,
@@ -38,6 +39,7 @@ public record TradeBookingResponse(
                 booking.strike(),
                 booking.maturityDate(),
                 booking.quantity(),
+                booking.executionPrice(),
                 booking.status(),
                 BookingActorResponse.from(booking.submittedBy()),
                 booking.submittedAt(),
@@ -48,4 +50,3 @@ public record TradeBookingResponse(
         );
     }
 }
-

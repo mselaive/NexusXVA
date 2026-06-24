@@ -3,6 +3,7 @@
 import React from "react";
 import { Activity, CircleDollarSign, FlaskConical, Loader2, RefreshCw, Send } from "lucide-react";
 import { blembergApi, nexusApi, NexusApiError } from "@/lib/api";
+import { logBlembergRefreshOutcome, summarizeBlembergRefresh } from "@/lib/blembergRefresh";
 import { formatCurrency, formatNumber, formatPercent, todayIsoDate } from "@/lib/format";
 import type {
   AddEuropeanOptionPositionRequest,
@@ -84,6 +85,36 @@ export function FrontOfficeWhatIfPage() {
     }
   }
 
+  async function refreshMarketSnapshots() {
+    const activeNotebook = notebooks.find((notebook) => notebook.id === activeNotebookId) ?? notebooks[0];
+    const snapshotSymbols = new Set(marketSnapshots.map((snapshot) => snapshot.symbol.toUpperCase()));
+    const activeMissingSymbols = activeNotebook.symbols.filter((symbol) => !snapshotSymbols.has(symbol));
+    const prioritySymbols = activeMissingSymbols.length > 0 ? activeMissingSymbols : activeNotebook.symbols;
+
+    setMarketLoading(true);
+    setMarketError(null);
+    try {
+      console.info("[Pre-Trade Analysis] Requesting Blemberg refresh", { prioritySymbols });
+      const refresh = await blembergApi.refreshMarketData(prioritySymbols);
+      const [snapshotResponse, coverage] = await Promise.all([
+        blembergApi.snapshots(allNotebookSymbols),
+        blembergApi.coverage(prioritySymbols),
+      ]);
+      setMarketSnapshots(snapshotResponse.snapshots ?? []);
+      setMissingSymbols(snapshotResponse.missingSymbols ?? []);
+      logBlembergRefreshOutcome("Pre-Trade Analysis refresh", refresh, prioritySymbols, coverage);
+      const summary = summarizeBlembergRefresh(refresh, prioritySymbols, coverage);
+      if (summary.shouldWarn) {
+        setMarketError(summary.message);
+      }
+    } catch (caught) {
+      setMarketError(errorMessage(caught));
+      console.error("[Pre-Trade Analysis] Blemberg refresh failed", caught);
+    } finally {
+      setMarketLoading(false);
+    }
+  }
+
   function pickSymbol(symbol: string, snapshot?: BlembergMarketSnapshot) {
     const lastPrice = snapshot?.lastPrice ?? marketSnapshotBySymbol.get(symbol.toUpperCase())?.lastPrice;
     setTradeForm((current) => ({
@@ -145,7 +176,7 @@ export function FrontOfficeWhatIfPage() {
             loading={marketLoading}
             error={marketError}
             onNotebookChange={setActiveNotebookId}
-            onRefresh={() => loadMarketSnapshots()}
+            onRefresh={refreshMarketSnapshots}
             onPick={pickSymbol}
           />
           <div className="form-grid">

@@ -17,6 +17,10 @@ public record EuropeanOptionPosition(
         LocalDate maturityDate,
         BigDecimal quantity,
         BigDecimal executionPrice,
+        UUID strategyId,
+        String strategyType,
+        String strategyName,
+        Integer strategyLegIndex,
         PositionLifecycleStatus lifecycleStatus,
         Instant createdAt,
         Instant updatedAt
@@ -42,6 +46,10 @@ public record EuropeanOptionPosition(
                 maturityDate,
                 quantity,
                 null,
+                null,
+                null,
+                null,
+                null,
                 PositionLifecycleStatus.ACTIVE,
                 createdAt,
                 updatedAt
@@ -60,7 +68,23 @@ public record EuropeanOptionPosition(
             Instant createdAt,
             Instant updatedAt
     ) {
-        this(id, portfolioId, underlyingSymbol, optionType, strike, maturityDate, quantity, null, lifecycleStatus, createdAt, updatedAt);
+        this(id, portfolioId, underlyingSymbol, optionType, strike, maturityDate, quantity, null, null, null, null, null, lifecycleStatus, createdAt, updatedAt);
+    }
+
+    public EuropeanOptionPosition(
+            UUID id,
+            UUID portfolioId,
+            String underlyingSymbol,
+            OptionType optionType,
+            BigDecimal strike,
+            LocalDate maturityDate,
+            BigDecimal quantity,
+            BigDecimal executionPrice,
+            PositionLifecycleStatus lifecycleStatus,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
+        this(id, portfolioId, underlyingSymbol, optionType, strike, maturityDate, quantity, executionPrice, null, null, null, null, lifecycleStatus, createdAt, updatedAt);
     }
 
     public EuropeanOptionPosition {
@@ -91,6 +115,15 @@ public record EuropeanOptionPosition(
         }
         if (executionPrice != null && executionPrice.signum() < 0) {
             throw new IllegalArgumentException("executionPrice must be greater than or equal to zero");
+        }
+        if (strategyType != null) {
+            strategyType = strategyType.trim().toUpperCase(Locale.ROOT);
+        }
+        if (strategyName != null) {
+            strategyName = strategyName.trim();
+        }
+        if (strategyLegIndex != null && strategyLegIndex < 0) {
+            throw new IllegalArgumentException("strategyLegIndex must be greater than or equal to zero");
         }
         if (lifecycleStatus == null) {
             throw new IllegalArgumentException("position lifecycleStatus is required");

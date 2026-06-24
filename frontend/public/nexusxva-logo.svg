@@ -1,20 +1,18 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">NexusXVA logo</title>
-  <desc id="desc">A navy rounded-square NexusXVA monogram.</desc>
+  <desc id="desc">NexusXVA navy app icon with a white interlocking monogram.</desc>
   <defs>
-    <linearGradient id="bg" x1="80" y1="60" x2="438" y2="462" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#064A7A"/>
-      <stop offset="0.55" stop-color="#032F5B"/>
-      <stop offset="1" stop-color="#011C3F"/>
+    <linearGradient id="nexusxva-bg" x1="80" y1="44" x2="442" y2="472" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#07598C"/>
+      <stop offset="0.52" stop-color="#033E70"/>
+      <stop offset="1" stop-color="#011E44"/>
     </linearGradient>
-    <filter id="shadow" x="26" y="28" width="460" height="460" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="20" stdDeviation="20" flood-color="#0A2540" flood-opacity="0.22"/>
-    </filter>
   </defs>
-  <rect x="66" y="58" width="380" height="392" rx="78" fill="url(#bg)" filter="url(#shadow)"/>
-  <path d="M147 178C147 168.059 155.059 160 165 160H202.99C208.102 160 212.972 162.174 216.386 165.981L256 210.164L295.614 165.981C299.028 162.174 303.898 160 309.01 160H347C356.941 160 365 168.059 365 178V334C365 343.941 356.941 352 347 352H309.01C303.898 352 299.028 349.826 295.614 346.019L256 301.836L216.386 346.019C212.972 349.826 208.102 352 202.99 352H165C155.059 352 147 343.941 147 334V178Z" stroke="white" stroke-width="27" stroke-linejoin="round"/>
-  <path d="M162 337L350 175" stroke="white" stroke-width="27" stroke-linecap="round"/>
-  <path d="M162 175L350 337" stroke="white" stroke-width="27" stroke-linecap="round"/>
-  <path d="M185 198V314L236 256L185 198Z" fill="#053761"/>
-  <path d="M327 198V314L276 256L327 198Z" fill="#053761"/>
+  <rect x="18" y="18" width="476" height="476" rx="96" fill="url(#nexusxva-bg)"/>
+  <rect x="34" y="34" width="444" height="444" rx="84" stroke="#0B5D93" stroke-opacity="0.35" stroke-width="10"/>
+  <path d="M148 178C148 165.85 157.85 156 170 156H204.7C210.9 156 216.81 158.61 220.98 163.2L256 201.73L291.02 163.2C295.19 158.61 301.1 156 307.3 156H342C354.15 156 364 165.85 364 178V334C364 346.15 354.15 356 342 356H307.3C301.1 356 295.19 353.39 291.02 348.8L256 310.27L220.98 348.8C216.81 353.39 210.9 356 204.7 356H170C157.85 356 148 346.15 148 334V178Z" stroke="#FFFFFF" stroke-width="28" stroke-linejoin="round"/>
+  <path d="M176 333L336 179" stroke="#FFFFFF" stroke-width="28" stroke-linecap="round"/>
+  <path d="M176 179L336 333" stroke="#FFFFFF" stroke-width="28" stroke-linecap="round"/>
+  <path d="M190 204V308L235 256L190 204Z" fill="#043A69"/>
+  <path d="M322 204V308L277 256L322 204Z" fill="#043A69"/>
 </svg>

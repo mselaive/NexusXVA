@@ -49,6 +49,18 @@ class EuropeanOptionPositionEntity {
     @Column(name = "execution_price", precision = 19, scale = 8)
     private BigDecimal executionPrice;
 
+    @Column(name = "strategy_id")
+    private UUID strategyId;
+
+    @Column(name = "strategy_type", length = 32)
+    private String strategyType;
+
+    @Column(name = "strategy_name", length = 120)
+    private String strategyName;
+
+    @Column(name = "strategy_leg_index")
+    private Integer strategyLegIndex;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "lifecycle_status", nullable = false, length = 16)
     private PositionLifecycleStatus lifecycleStatus;
@@ -71,6 +83,10 @@ class EuropeanOptionPositionEntity {
         this.maturityDate = position.maturityDate();
         this.quantity = position.quantity();
         this.executionPrice = position.executionPrice();
+        this.strategyId = position.strategyId();
+        this.strategyType = position.strategyType();
+        this.strategyName = position.strategyName();
+        this.strategyLegIndex = position.strategyLegIndex();
         this.lifecycleStatus = position.lifecycleStatus();
         this.createdAt = position.createdAt();
         this.updatedAt = position.updatedAt();
@@ -83,7 +99,11 @@ class EuropeanOptionPositionEntity {
             BigDecimal strike,
             LocalDate maturityDate,
             BigDecimal quantity,
-            BigDecimal executionPrice
+            BigDecimal executionPrice,
+            UUID strategyId,
+            String strategyType,
+            String strategyName,
+            Integer strategyLegIndex
     ) {
         Instant now = Instant.now();
         EuropeanOptionPosition position = new EuropeanOptionPosition(
@@ -95,6 +115,10 @@ class EuropeanOptionPositionEntity {
                 maturityDate,
                 quantity,
                 executionPrice,
+                strategyId,
+                strategyType,
+                strategyName,
+                strategyLegIndex,
                 PositionLifecycleStatus.ACTIVE,
                 now,
                 now
@@ -113,6 +137,10 @@ class EuropeanOptionPositionEntity {
                 maturityDate,
                 quantity,
                 executionPrice,
+                strategyId,
+                strategyType,
+                strategyName,
+                strategyLegIndex,
                 lifecycleStatus,
                 createdAt,
                 updatedAt

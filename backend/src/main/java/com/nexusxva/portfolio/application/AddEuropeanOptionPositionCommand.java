@@ -5,6 +5,7 @@ import com.nexusxva.instruments.domain.OptionType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Locale;
+import java.util.UUID;
 
 public record AddEuropeanOptionPositionCommand(
         String underlyingSymbol,
@@ -12,7 +13,11 @@ public record AddEuropeanOptionPositionCommand(
         BigDecimal strike,
         LocalDate maturityDate,
         BigDecimal quantity,
-        BigDecimal executionPrice
+        BigDecimal executionPrice,
+        UUID strategyId,
+        String strategyType,
+        String strategyName,
+        Integer strategyLegIndex
 ) {
 
     public AddEuropeanOptionPositionCommand(
@@ -23,6 +28,17 @@ public record AddEuropeanOptionPositionCommand(
             BigDecimal quantity
     ) {
         this(underlyingSymbol, optionType, strike, maturityDate, quantity, null);
+    }
+
+    public AddEuropeanOptionPositionCommand(
+            String underlyingSymbol,
+            OptionType optionType,
+            BigDecimal strike,
+            LocalDate maturityDate,
+            BigDecimal quantity,
+            BigDecimal executionPrice
+    ) {
+        this(underlyingSymbol, optionType, strike, maturityDate, quantity, executionPrice, null, null, null, null);
     }
 
     public AddEuropeanOptionPositionCommand {
@@ -47,6 +63,25 @@ public record AddEuropeanOptionPositionCommand(
         }
         if (executionPrice != null && executionPrice.signum() < 0) {
             throw new IllegalArgumentException("executionPrice must be greater than or equal to zero");
+        }
+        if (strategyName != null) {
+            strategyName = strategyName.trim();
+            if (strategyName.isBlank()) {
+                strategyName = null;
+            } else if (strategyName.length() > 120) {
+                throw new IllegalArgumentException("strategyName must be at most 120 characters");
+            }
+        }
+        if (strategyType != null) {
+            strategyType = strategyType.trim().toUpperCase(Locale.ROOT);
+            if (strategyType.isBlank()) {
+                strategyType = null;
+            } else if (!strategyType.matches("[A-Z_]{1,32}")) {
+                throw new IllegalArgumentException("strategyType must use 1-32 uppercase letters or underscores");
+            }
+        }
+        if (strategyLegIndex != null && strategyLegIndex < 0) {
+            throw new IllegalArgumentException("strategyLegIndex must be greater than or equal to zero");
         }
 
     }

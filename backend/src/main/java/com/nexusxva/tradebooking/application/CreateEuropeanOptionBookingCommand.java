@@ -4,6 +4,7 @@ import com.nexusxva.instruments.domain.OptionType;
 import com.nexusxva.portfolio.application.AddEuropeanOptionPositionCommand;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.UUID;
 
 public record CreateEuropeanOptionBookingCommand(
         String underlyingSymbol,
@@ -44,6 +45,26 @@ public record CreateEuropeanOptionBookingCommand(
                 maturityDate,
                 quantity,
                 executionPrice
+        );
+    }
+
+    public AddEuropeanOptionPositionCommand toPositionCommand(
+            UUID strategyId,
+            String strategyType,
+            String strategyName,
+            Integer strategyLegIndex
+    ) {
+        return new AddEuropeanOptionPositionCommand(
+                underlyingSymbol,
+                optionType,
+                strike,
+                maturityDate,
+                quantity,
+                executionPrice,
+                strategyId,
+                strategyType,
+                strategyName,
+                strategyLegIndex
         );
     }
 }

@@ -4,6 +4,7 @@ import com.nexusxva.notifications.domain.UserNotification;
 import com.nexusxva.shared.error.ResourceNotFoundException;
 import com.nexusxva.tradebooking.domain.TradeBookingRequest;
 import com.nexusxva.tradebooking.domain.TradeBookingStatus;
+import com.nexusxva.tradebooking.domain.TradeBookingType;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequest;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequestStatus;
 import java.time.Instant;
@@ -49,14 +50,19 @@ public class NotificationService {
 
     @Transactional
     public void notifyTradeBookingSubmitted(TradeBookingRequest booking) {
+        String bookingDescription = booking.bookingType() == TradeBookingType.OPTION_STRATEGY
+                ? "%s %s (%d legs)".formatted(booking.strategyType(), booking.underlyingSymbol(), booking.legs().size())
+                : "%s %s %s".formatted(
+                        booking.optionType(),
+                        booking.underlyingSymbol(),
+                        booking.quantity().stripTrailingZeros().toPlainString()
+                );
         notificationStore.createForGroup(
                 BO_GROUP,
                 "TRADE_BOOKING_SUBMITTED",
                 "New trade booking awaiting BO",
-                "%s %s %s in %s was sent by %s.".formatted(
-                        booking.optionType(),
-                        booking.underlyingSymbol(),
-                        booking.quantity().stripTrailingZeros().toPlainString(),
+                "%s in %s was sent by %s.".formatted(
+                        bookingDescription,
                         booking.portfolioName(),
                         booking.submittedBy().displayName()
                 ),
@@ -71,13 +77,15 @@ public class NotificationService {
             return;
         }
         String outcome = booking.status() == TradeBookingStatus.CONFIRMED ? "approved" : "rejected";
+        String bookingDescription = booking.bookingType() == TradeBookingType.OPTION_STRATEGY
+                ? "%s %s".formatted(booking.strategyType(), booking.underlyingSymbol())
+                : "%s %s".formatted(booking.optionType(), booking.underlyingSymbol());
         notificationStore.createForUser(
                 booking.submittedBy().userId(),
                 "TRADE_BOOKING_" + booking.status().name(),
                 "Trade booking %s".formatted(outcome),
-                "%s %s in %s was %s by BO%s.".formatted(
-                        booking.optionType(),
-                        booking.underlyingSymbol(),
+                "%s in %s was %s by BO%s.".formatted(
+                        bookingDescription,
                         booking.portfolioName(),
                         outcome,
                         booking.rejectionReason() == null ? "" : ": " + booking.rejectionReason()

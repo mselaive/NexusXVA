@@ -18,6 +18,10 @@ public record EuropeanOptionPositionResponse(
         LocalDate maturityDate,
         BigDecimal quantity,
         BigDecimal executionPrice,
+        UUID strategyId,
+        String strategyType,
+        String strategyName,
+        Integer strategyLegIndex,
         PositionLifecycleStatus lifecycleStatus,
         Instant createdAt,
         Instant updatedAt
@@ -33,6 +37,10 @@ public record EuropeanOptionPositionResponse(
                 position.maturityDate(),
                 position.quantity(),
                 position.executionPrice(),
+                position.strategyId(),
+                position.strategyType(),
+                position.strategyName(),
+                position.strategyLegIndex(),
                 position.lifecycleStatus(),
                 position.createdAt(),
                 position.updatedAt()

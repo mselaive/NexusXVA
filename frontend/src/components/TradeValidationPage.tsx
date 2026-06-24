@@ -215,9 +215,9 @@ export function TradeValidationPage() {
                   onClick={() => setSelected(booking)}
                 >
                   <span className={`booking-status ${booking.status.toLowerCase()}`}>{statusLabel(booking.status)}</span>
-                  <strong>{booking.optionType} {booking.underlyingSymbol}</strong>
+                  <strong>{bookingTitle(booking)}</strong>
                   <span>{booking.portfolioName}</span>
-                  <small>{formatNumber(booking.quantity, 2)} @ {formatNumber(booking.strike, 2)}</small>
+                  <small>{bookingSummary(booking)}</small>
                   <time>{new Date(booking.submittedAt).toLocaleString()}</time>
                 </button>
               ))}
@@ -231,19 +231,24 @@ export function TradeValidationPage() {
               <div className="bo-detail-head">
                 <div>
                   <span className={`booking-status ${selected.status.toLowerCase()}`}>{statusLabel(selected.status)}</span>
-                  <h2>{selected.optionType} {selected.underlyingSymbol}</h2>
+                  <h2>{bookingTitle(selected)}</h2>
                   <p>{selected.portfolioName}</p>
                 </div>
                 <ShieldCheck size={24} />
               </div>
 
               <div className="trade-terms-grid">
+                <Detail label="Booking type" value={selected.bookingType === "OPTION_STRATEGY" ? "Option strategy" : "Single option"} />
+                {selected.strategyType ? <Detail label="Strategy" value={selected.strategyName || selected.strategyType.replaceAll("_", " ")} /> : null}
                 <Detail label="Strike" value={formatNumber(selected.strike, 2)} />
                 <Detail label="Quantity" value={formatNumber(selected.quantity, 2)} />
                 <Detail label="Execution premium" value={selected.executionPrice == null ? "Unavailable" : formatNumber(selected.executionPrice, 4)} />
                 <Detail label="Maturity" value={selected.maturityDate} />
                 <Detail label="Instrument" value="European option" />
+                <Detail label="Limit notional" value={selected.bookingNotional == null ? "Unavailable" : formatNumber(selected.bookingNotional, 2)} />
               </div>
+
+              {selected.legs.length > 0 ? <BookingLegTable booking={selected} /> : null}
 
               <div className="audit-timeline">
                 <AuditPoint
@@ -289,7 +294,7 @@ export function TradeValidationPage() {
           <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="reject-title">
             <div>
               <span className="page-eyebrow">Back Office decision</span>
-              <h2 id="reject-title">Reject {rejecting.optionType} {rejecting.underlyingSymbol}</h2>
+                  <h2 id="reject-title">Reject {bookingTitle(rejecting)}</h2>
               <p>The reason will be visible to Front Office and retained in history.</p>
             </div>
             <label className="field full">
@@ -338,6 +343,37 @@ function filterBookings(bookings: TradeBooking[], query: string) {
     || booking.portfolioName.toLowerCase().includes(normalized)
     || booking.submittedBy.displayName.toLowerCase().includes(normalized)
     || booking.submittedBy.username.toLowerCase().includes(normalized));
+}
+
+function BookingLegTable({ booking }: { booking: TradeBooking }) {
+  return (
+    <div className="table-wrap compact-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Leg</th>
+            <th>Type</th>
+            <th>Strike</th>
+            <th>Maturity</th>
+            <th>Quantity</th>
+            <th>Execution premium</th>
+          </tr>
+        </thead>
+        <tbody>
+          {booking.legs.map((leg) => (
+            <tr key={leg.legIndex}>
+              <td>{leg.legIndex + 1}</td>
+              <td>{leg.optionType}</td>
+              <td>{formatNumber(leg.strike, 2)}</td>
+              <td>{leg.maturityDate}</td>
+              <td>{formatNumber(leg.quantity, 2)}</td>
+              <td>{leg.executionPrice == null ? "Unavailable" : formatNumber(leg.executionPrice, 4)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function LifecycleValidationView({
@@ -455,6 +491,20 @@ function filterLifecycleRequests(requests: TradeLifecycleRequest[], query: strin
     || request.portfolioName.toLowerCase().includes(normalized)
     || request.submittedBy.displayName.toLowerCase().includes(normalized)
     || request.submittedBy.username.toLowerCase().includes(normalized));
+}
+
+function bookingTitle(booking: TradeBooking) {
+  if (booking.bookingType === "OPTION_STRATEGY") {
+    return `${booking.strategyName || booking.strategyType?.replaceAll("_", " ") || "Strategy"} ${booking.underlyingSymbol}`;
+  }
+  return `${booking.optionType} ${booking.underlyingSymbol}`;
+}
+
+function bookingSummary(booking: TradeBooking) {
+  if (booking.bookingType === "OPTION_STRATEGY") {
+    return `${booking.legs.length} legs · notional ${formatNumber(booking.bookingNotional ?? 0, 2)}`;
+  }
+  return `${formatNumber(booking.quantity, 2)} @ ${formatNumber(booking.strike, 2)}`;
 }
 
 function RejectLifecycleModal({

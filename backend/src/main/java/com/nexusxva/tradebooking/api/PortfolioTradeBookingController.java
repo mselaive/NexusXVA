@@ -44,4 +44,22 @@ public class PortfolioTradeBookingController {
                 .created(URI.create("/api/trade-bookings/" + booking.id()))
                 .body(TradeBookingResponse.from(booking));
     }
+
+    @PostMapping("/option-strategies")
+    public ResponseEntity<TradeBookingResponse> submitStrategy(
+            @PathVariable UUID portfolioId,
+            @Valid @RequestBody CreateOptionStrategyBookingRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_BOOK_TRADES);
+        userAccessService.requirePortfolioAccess(servletRequest, portfolioId);
+        TradeBookingRequest booking = service.submitOptionStrategy(
+                portfolioId,
+                request.toCommand(),
+                TradeBookingActorResolver.resolve(servletRequest)
+        );
+        return ResponseEntity
+                .created(URI.create("/api/trade-bookings/" + booking.id()))
+                .body(TradeBookingResponse.from(booking));
+    }
 }

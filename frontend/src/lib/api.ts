@@ -7,9 +7,11 @@ import type {
   ApiError,
   AuthResponse,
   BlembergHealthResponse,
+  BlembergCoverageResponse,
   BlembergSnapshotsResponse,
   BlembergRefreshResponse,
   CreatePortfolioRequest,
+  CreateOptionStrategyBookingRequest,
   CvaCalculationRequest,
   CvaCalculationResponse,
   ExposureSimulationRequest,
@@ -122,6 +124,12 @@ export const nexusApi = {
 
   submitEuropeanOptionBooking: (portfolioId: string, body: AddEuropeanOptionPositionRequest) =>
     request<TradeBooking>(`/portfolios/${portfolioId}/trade-bookings/european-options`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  submitOptionStrategyBooking: (portfolioId: string, body: CreateOptionStrategyBookingRequest) =>
+    request<TradeBooking>(`/portfolios/${portfolioId}/trade-bookings/option-strategies`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -343,6 +351,9 @@ export const blembergApi = {
 
   snapshots: (symbols: string[]) =>
     externalRequest<BlembergSnapshotsResponse>(`${BLEMBERG_API_BASE_URL}/api/market-data/snapshots?symbols=${encodeURIComponent(symbols.join(","))}`),
+
+  coverage: (symbols: string[]) =>
+    externalRequest<BlembergCoverageResponse>(`${BLEMBERG_API_BASE_URL}/api/market-data/coverage?symbols=${encodeURIComponent(symbols.join(","))}`),
 
   refreshMarketData: (prioritySymbols?: string[]) =>
     externalRequest<BlembergRefreshResponse>(`${BLEMBERG_API_BASE_URL}/api/admin/market-data/refresh`, {

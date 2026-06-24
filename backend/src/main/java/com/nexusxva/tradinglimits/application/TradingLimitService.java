@@ -11,6 +11,7 @@ import com.nexusxva.tradinglimits.domain.TradingLimitWindows;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,27 @@ public class TradingLimitService {
             String portfolioCurrency,
             CreateEuropeanOptionBookingCommand command
     ) {
+        validateBooking(actor, portfolioCurrency, 1, command.quantity().abs().multiply(command.strike()));
+    }
+
+    @Transactional
+    public void validateStrategyBooking(
+            BookingActor actor,
+            String portfolioCurrency,
+            List<CreateEuropeanOptionBookingCommand> legs
+    ) {
+        BigDecimal requestedNotional = legs.stream()
+                .map(leg -> leg.quantity().abs().multiply(leg.strike()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        validateBooking(actor, portfolioCurrency, 1, requestedNotional);
+    }
+
+    private void validateBooking(
+            BookingActor actor,
+            String portfolioCurrency,
+            int requestedTrades,
+            BigDecimal requestedNotional
+    ) {
         if (actor.userId() == null) {
             return;
         }
@@ -51,20 +73,19 @@ public class TradingLimitService {
 
         TradingLimitWindows windows = TradingLimitWindows.at(Instant.now(clock));
         TradingLimitUsage usage = store.usage(actor.userId(), windows);
-        BigDecimal requestedNotional = command.quantity().abs().multiply(command.strike());
 
         enforce(
                 "TRADES_PER_HOUR",
                 policy.maxTradesPerHour(),
                 usage.tradesThisHour(),
-                1,
+                requestedTrades,
                 windows.hourEndsAt()
         );
         enforce(
                 "TRADES_PER_DAY",
                 policy.maxTradesPerDay(),
                 usage.tradesToday(),
-                1,
+                requestedTrades,
                 windows.dayEndsAt()
         );
         enforce(

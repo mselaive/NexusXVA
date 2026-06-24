@@ -2,9 +2,16 @@ package com.nexusxva.tradebooking.infrastructure;
 
 import com.nexusxva.instruments.domain.OptionType;
 import com.nexusxva.tradebooking.application.CreateEuropeanOptionBookingCommand;
+import com.nexusxva.tradebooking.application.CreateOptionStrategyBookingCommand;
 import com.nexusxva.tradebooking.domain.BookingActor;
+import com.nexusxva.tradebooking.domain.OptionStrategyType;
+import com.nexusxva.tradebooking.domain.TradeBookingLeg;
 import com.nexusxva.tradebooking.domain.TradeBookingRequest;
 import com.nexusxva.tradebooking.domain.TradeBookingStatus;
+import com.nexusxva.tradebooking.domain.TradeBookingType;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,11 +22,18 @@ import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
 @Table(name = "trade_booking_requests")
 class TradeBookingEntity {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().findAndRegisterModules();
+    private static final TypeReference<List<TradeBookingLeg>> LEGS_TYPE = new TypeReference<>() {
+    };
+    private static final TypeReference<List<UUID>> IDS_TYPE = new TypeReference<>() {
+    };
 
     @Id
     private UUID id;
@@ -32,6 +46,20 @@ class TradeBookingEntity {
 
     @Column(name = "instrument_type", nullable = false, length = 32)
     private String instrumentType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "booking_type", nullable = false, length = 32)
+    private TradeBookingType bookingType;
+
+    @Column(name = "strategy_id")
+    private UUID strategyId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "strategy_type", length = 32)
+    private OptionStrategyType strategyType;
+
+    @Column(name = "strategy_name", length = 120)
+    private String strategyName;
 
     @Column(name = "underlying_symbol", nullable = false, length = 32)
     private String underlyingSymbol;
@@ -51,6 +79,12 @@ class TradeBookingEntity {
 
     @Column(name = "execution_price", precision = 19, scale = 8)
     private BigDecimal executionPrice;
+
+    @Column(name = "booking_notional", precision = 19, scale = 8)
+    private BigDecimal bookingNotional;
+
+    @Column(name = "strategy_legs_json")
+    private String strategyLegsJson;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
@@ -86,6 +120,9 @@ class TradeBookingEntity {
     @Column(name = "confirmed_position_id")
     private UUID confirmedPositionId;
 
+    @Column(name = "confirmed_position_ids_json")
+    private String confirmedPositionIdsJson;
+
     @Version
     private long version;
 
@@ -103,12 +140,14 @@ class TradeBookingEntity {
         entity.portfolioId = portfolioId;
         entity.portfolioName = portfolioName;
         entity.instrumentType = "EUROPEAN_OPTION";
+        entity.bookingType = TradeBookingType.SINGLE_OPTION;
         entity.underlyingSymbol = command.underlyingSymbol();
         entity.optionType = command.optionType();
         entity.strike = command.strike();
         entity.maturityDate = command.maturityDate();
         entity.quantity = command.quantity();
         entity.executionPrice = command.executionPrice();
+        entity.bookingNotional = command.quantity().abs().multiply(command.strike());
         entity.status = TradeBookingStatus.PENDING_VALIDATION;
         entity.submittedByUserId = submittedBy.userId();
         entity.submittedByUsername = submittedBy.username();
@@ -117,13 +156,47 @@ class TradeBookingEntity {
         return entity;
     }
 
-    void confirm(BookingActor reviewer, UUID positionId) {
+    static TradeBookingEntity createStrategy(
+            UUID portfolioId,
+            String portfolioName,
+            CreateOptionStrategyBookingCommand command,
+            UUID strategyId,
+            BookingActor submittedBy
+    ) {
+        TradeBookingEntity entity = new TradeBookingEntity();
+        CreateEuropeanOptionBookingCommand firstLeg = command.legs().getFirst();
+        entity.id = UUID.randomUUID();
+        entity.portfolioId = portfolioId;
+        entity.portfolioName = portfolioName;
+        entity.instrumentType = "EUROPEAN_OPTION";
+        entity.bookingType = TradeBookingType.OPTION_STRATEGY;
+        entity.strategyId = strategyId;
+        entity.strategyType = command.strategyType();
+        entity.strategyName = command.strategyName();
+        entity.underlyingSymbol = command.underlyingSymbol();
+        entity.optionType = firstLeg.optionType();
+        entity.strike = firstLeg.strike();
+        entity.maturityDate = firstLeg.maturityDate();
+        entity.quantity = firstLeg.quantity();
+        entity.executionPrice = null;
+        entity.bookingNotional = command.bookingNotional();
+        entity.strategyLegsJson = writeLegs(command);
+        entity.status = TradeBookingStatus.PENDING_VALIDATION;
+        entity.submittedByUserId = submittedBy.userId();
+        entity.submittedByUsername = submittedBy.username();
+        entity.submittedByDisplayName = submittedBy.displayName();
+        entity.submittedAt = Instant.now();
+        return entity;
+    }
+
+    void confirm(BookingActor reviewer, List<UUID> positionIds) {
         status = TradeBookingStatus.CONFIRMED;
         reviewedByUserId = reviewer.userId();
         reviewedByUsername = reviewer.username();
         reviewedByDisplayName = reviewer.displayName();
         reviewedAt = Instant.now();
-        confirmedPositionId = positionId;
+        confirmedPositionId = positionIds == null || positionIds.isEmpty() ? null : positionIds.getFirst();
+        confirmedPositionIdsJson = write(positionIds == null ? List.of() : positionIds);
         rejectionReason = null;
     }
 
@@ -135,6 +208,7 @@ class TradeBookingEntity {
         reviewedAt = Instant.now();
         rejectionReason = reason;
         confirmedPositionId = null;
+        confirmedPositionIdsJson = null;
     }
 
     TradeBookingRequest toDomain() {
@@ -143,20 +217,63 @@ class TradeBookingEntity {
                 portfolioId,
                 portfolioName,
                 instrumentType,
+                bookingType == null ? TradeBookingType.SINGLE_OPTION : bookingType,
+                strategyId,
+                strategyType,
+                strategyName,
                 underlyingSymbol,
                 optionType,
                 strike,
                 maturityDate,
                 quantity,
                 executionPrice,
+                bookingNotional,
+                read(strategyLegsJson, LEGS_TYPE),
                 status,
                 actor(submittedByUserId, submittedByUsername, submittedByDisplayName),
                 submittedAt,
                 actor(reviewedByUserId, reviewedByUsername, reviewedByDisplayName),
                 reviewedAt,
                 rejectionReason,
-                confirmedPositionId
+                confirmedPositionId,
+                read(confirmedPositionIdsJson, IDS_TYPE)
         );
+    }
+
+    private static String writeLegs(CreateOptionStrategyBookingCommand command) {
+        List<TradeBookingLeg> legs = command.legs().stream()
+                .map(leg -> new TradeBookingLeg(
+                        command.legs().indexOf(leg),
+                        leg.optionType(),
+                        leg.strike(),
+                        leg.maturityDate(),
+                        leg.quantity(),
+                        leg.executionPrice()
+                ))
+                .toList();
+        return write(legs);
+    }
+
+    private static String write(Object value) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException("Could not serialize trade booking strategy payload", exception);
+        }
+    }
+
+    private static <T> T read(String json, TypeReference<T> type) {
+        if (json == null || json.isBlank()) {
+            if (type == LEGS_TYPE || type == IDS_TYPE) {
+                return (T) List.of();
+            }
+            return null;
+        }
+        try {
+            return OBJECT_MAPPER.readValue(json, type);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Could not deserialize trade booking strategy payload", exception);
+        }
     }
 
     private BookingActor actor(UUID userId, String username, String displayName) {

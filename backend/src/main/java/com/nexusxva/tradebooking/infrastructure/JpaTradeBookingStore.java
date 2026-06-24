@@ -38,6 +38,19 @@ class JpaTradeBookingStore implements TradeBookingStore {
     }
 
     @Override
+    public TradeBookingRequest createStrategy(
+            UUID portfolioId,
+            String portfolioName,
+            com.nexusxva.tradebooking.application.CreateOptionStrategyBookingCommand command,
+            UUID strategyId,
+            BookingActor submittedBy
+    ) {
+        return repository.save(
+                TradeBookingEntity.createStrategy(portfolioId, portfolioName, command, strategyId, submittedBy)
+        ).toDomain();
+    }
+
+    @Override
     public Optional<TradeBookingRequest> findById(UUID bookingId) {
         return repository.findById(bookingId).map(TradeBookingEntity::toDomain);
     }
@@ -87,9 +100,9 @@ class JpaTradeBookingStore implements TradeBookingStore {
     }
 
     @Override
-    public TradeBookingRequest confirm(UUID bookingId, BookingActor reviewer, UUID confirmedPositionId) {
+    public TradeBookingRequest confirm(UUID bookingId, BookingActor reviewer, List<UUID> confirmedPositionIds) {
         TradeBookingEntity entity = findEntityForUpdate(bookingId);
-        entity.confirm(reviewer, confirmedPositionId);
+        entity.confirm(reviewer, confirmedPositionIds);
         return repository.save(entity).toDomain();
     }
 
@@ -110,4 +123,3 @@ class JpaTradeBookingStore implements TradeBookingStore {
                 .orElseThrow(() -> new ResourceNotFoundException("Trade booking not found"));
     }
 }
-

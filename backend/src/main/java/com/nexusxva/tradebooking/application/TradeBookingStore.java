@@ -18,6 +18,14 @@ public interface TradeBookingStore {
             BookingActor submittedBy
     );
 
+    TradeBookingRequest createStrategy(
+            UUID portfolioId,
+            String portfolioName,
+            CreateOptionStrategyBookingCommand command,
+            UUID strategyId,
+            BookingActor submittedBy
+    );
+
     Optional<TradeBookingRequest> findById(UUID bookingId);
 
     TradeBookingRequest findByIdForUpdate(UUID bookingId);
@@ -33,10 +41,9 @@ public interface TradeBookingStore {
             Pageable pageable
     );
 
-    TradeBookingRequest confirm(UUID bookingId, BookingActor reviewer, UUID confirmedPositionId);
+    TradeBookingRequest confirm(UUID bookingId, BookingActor reviewer, List<UUID> confirmedPositionIds);
 
     TradeBookingRequest reject(UUID bookingId, BookingActor reviewer, String reason);
 
     boolean existsPendingForPortfolio(UUID portfolioId);
 }
-

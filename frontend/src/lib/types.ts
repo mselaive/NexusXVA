@@ -29,6 +29,10 @@ export type EuropeanOptionPosition = {
   maturityDate: string;
   quantity: number;
   executionPrice: number | null;
+  strategyId: string | null;
+  strategyType: OptionStrategyType | null;
+  strategyName: string | null;
+  strategyLegIndex: number | null;
   lifecycleStatus: "ACTIVE" | "CANCELLED" | "AMENDED";
   createdAt: string;
   updatedAt: string;
@@ -50,6 +54,32 @@ export type AddEuropeanOptionPositionRequest = {
 };
 
 export type TradeBookingStatus = "PENDING_VALIDATION" | "CONFIRMED" | "REJECTED";
+export type TradeBookingType = "SINGLE_OPTION" | "OPTION_STRATEGY";
+export type OptionStrategyType = "CALL_SPREAD" | "PUT_SPREAD" | "STRADDLE" | "STRANGLE" | "RISK_REVERSAL" | "BUTTERFLY" | "CUSTOM";
+
+export type OptionStrategyLegRequest = {
+  optionType: OptionType;
+  strike: number;
+  maturityDate: string;
+  quantity: number;
+  executionPrice?: number | null;
+};
+
+export type CreateOptionStrategyBookingRequest = {
+  strategyType: OptionStrategyType;
+  strategyName?: string | null;
+  underlyingSymbol: string;
+  legs: OptionStrategyLegRequest[];
+};
+
+export type TradeBookingLeg = {
+  legIndex: number;
+  optionType: OptionType;
+  strike: number;
+  maturityDate: string;
+  quantity: number;
+  executionPrice: number | null;
+};
 
 export type BookingActor = {
   userId: string | null;
@@ -62,12 +92,18 @@ export type TradeBooking = {
   portfolioId: string | null;
   portfolioName: string;
   instrumentType: "EUROPEAN_OPTION";
+  bookingType: TradeBookingType;
+  strategyId: string | null;
+  strategyType: OptionStrategyType | null;
+  strategyName: string | null;
   underlyingSymbol: string;
   optionType: OptionType;
   strike: number;
   maturityDate: string;
   quantity: number;
   executionPrice: number | null;
+  bookingNotional: number | null;
+  legs: TradeBookingLeg[];
   status: TradeBookingStatus;
   submittedBy: BookingActor;
   submittedAt: string;
@@ -75,6 +111,7 @@ export type TradeBooking = {
   reviewedAt: string | null;
   rejectionReason: string | null;
   confirmedPositionId: string | null;
+  confirmedPositionIds: string[];
 };
 
 export type FrontOfficeDeskBooking = TradeBooking & {
@@ -588,6 +625,12 @@ export type BlembergRefreshResponse = {
   symbolsRequested?: number;
   symbolsSucceeded?: number;
   symbolsFailed?: number;
+  requestedSymbols?: string[];
+  attemptedSymbols?: string[];
+  succeededSymbols?: string[];
+  skippedRateLimitSymbols?: string[];
+  missingSnapshotSymbols?: string[];
+  pricingNotReadySymbols?: string[];
   jobSummaries?: BlembergRefreshJobSummary[];
   errors?: BlembergRefreshError[];
 };
@@ -625,4 +668,28 @@ export type BlembergMarketSnapshot = {
 export type BlembergSnapshotsResponse = {
   snapshots: BlembergMarketSnapshot[];
   missingSymbols: string[];
+};
+
+export type BlembergCoverageItem = {
+  symbol: string;
+  pricingReady?: boolean;
+  readyForPricing?: boolean;
+  hasSnapshot?: boolean;
+  snapshotReady?: boolean;
+  hasEnoughDailyBars?: boolean;
+  barsReady?: boolean;
+  hasRiskFreeRate?: boolean;
+  riskFreeRateReady?: boolean;
+  hasDividendYield?: boolean;
+  dividendYieldReady?: boolean;
+  missingReasons?: string[];
+  reasons?: string[];
+  status?: string;
+};
+
+export type BlembergCoverageResponse = {
+  symbols?: BlembergCoverageItem[];
+  coverage?: BlembergCoverageItem[];
+  items?: BlembergCoverageItem[];
+  results?: BlembergCoverageItem[];
 };

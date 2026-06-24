@@ -10,6 +10,7 @@ import com.nexusxva.shared.error.ResourceNotFoundException;
 import com.nexusxva.tradebooking.domain.BookingActor;
 import com.nexusxva.tradebooking.domain.TradeBookingRequest;
 import com.nexusxva.tradebooking.domain.TradeBookingStatus;
+import com.nexusxva.tradebooking.domain.TradeBookingType;
 import com.nexusxva.tradinglimits.application.TradingLimitService;
 import java.util.List;
 import java.util.UUID;
@@ -57,6 +58,28 @@ public class TradeBookingService {
         return booking;
     }
 
+    @Transactional
+    public TradeBookingRequest submitOptionStrategy(
+            UUID portfolioId,
+            CreateOptionStrategyBookingCommand command,
+            BookingActor submittedBy
+    ) {
+        Portfolio portfolio = portfolioStore.findPortfolio(portfolioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
+        marketDataValidationService.validateUnderlyingSymbol(command.underlyingSymbol());
+        tradingLimitService.validateStrategyBooking(submittedBy, portfolio.baseCurrency(), command.legs());
+        UUID strategyId = command.newStrategyId();
+        TradeBookingRequest booking = tradeBookingStore.createStrategy(
+                portfolioId,
+                portfolio.name(),
+                command,
+                strategyId,
+                submittedBy
+        );
+        notificationService.notifyTradeBookingSubmitted(booking);
+        return booking;
+    }
+
     @Transactional(readOnly = true)
     public List<TradeBookingRequest> mine(BookingActor actor) {
         if (actor.userId() == null) {
@@ -99,7 +122,16 @@ public class TradeBookingService {
             throw new ConflictException("Portfolio no longer exists");
         }
 
-        EuropeanOptionPosition position = portfolioStore.addEuropeanOptionPosition(
+        List<UUID> confirmedPositionIds = booking.bookingType() == TradeBookingType.OPTION_STRATEGY
+                ? approveStrategyBooking(booking)
+                : List.of(approveSingleOptionBooking(booking).id());
+        TradeBookingRequest reviewed = tradeBookingStore.confirm(bookingId, reviewer, confirmedPositionIds);
+        notificationService.notifyTradeBookingReviewed(reviewed);
+        return reviewed;
+    }
+
+    private EuropeanOptionPosition approveSingleOptionBooking(TradeBookingRequest booking) {
+        return portfolioStore.addEuropeanOptionPosition(
                 booking.portfolioId(),
                 new CreateEuropeanOptionBookingCommand(
                         booking.underlyingSymbol(),
@@ -110,9 +142,30 @@ public class TradeBookingService {
                         booking.executionPrice()
                 ).toPositionCommand()
         );
-        TradeBookingRequest reviewed = tradeBookingStore.confirm(bookingId, reviewer, position.id());
-        notificationService.notifyTradeBookingReviewed(reviewed);
-        return reviewed;
+    }
+
+    private List<UUID> approveStrategyBooking(TradeBookingRequest booking) {
+        if (booking.legs() == null || booking.legs().isEmpty()) {
+            throw new ConflictException("Trade booking strategy has no legs");
+        }
+        return booking.legs().stream()
+                .map(leg -> portfolioStore.addEuropeanOptionPosition(
+                        booking.portfolioId(),
+                        new CreateEuropeanOptionBookingCommand(
+                                booking.underlyingSymbol(),
+                                leg.optionType(),
+                                leg.strike(),
+                                leg.maturityDate(),
+                                leg.quantity(),
+                                leg.executionPrice()
+                        ).toPositionCommand(
+                                booking.strategyId(),
+                                booking.strategyType().name(),
+                                booking.strategyName(),
+                                leg.legIndex()
+                        )
+                ).id())
+                .toList();
     }
 
     @Transactional

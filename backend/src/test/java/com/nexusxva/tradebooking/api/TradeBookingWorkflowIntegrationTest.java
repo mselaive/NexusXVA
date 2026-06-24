@@ -146,6 +146,58 @@ class TradeBookingWorkflowIntegrationTest extends AbstractPostgresIntegrationTes
     }
 
     @Test
+    void optionStrategyApprovalCreatesGroupedConfirmedLegs() throws Exception {
+        AuthClient client = selectGroup(login("workflow-admin", "workflow-password"), "FO");
+        String portfolioId = createPortfolio(client, "Strategy Workflow Book");
+
+        MvcResult submitted = mockMvc.perform(post("/api/portfolios/{portfolioId}/trade-bookings/option-strategies", portfolioId)
+                        .cookie(client.cookie())
+                        .header("X-CSRF-Token", client.csrfToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "strategyType": "CALL_SPREAD",
+                                  "strategyName": "AAPL Call Spread",
+                                  "underlyingSymbol": "AAPL",
+                                  "legs": [
+                                    {
+                                      "optionType": "CALL",
+                                      "strike": 190.0,
+                                      "maturityDate": "2027-12-31",
+                                      "quantity": 10.0
+                                    },
+                                    {
+                                      "optionType": "CALL",
+                                      "strike": 210.0,
+                                      "maturityDate": "2027-12-31",
+                                      "quantity": -10.0
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.bookingType").value("OPTION_STRATEGY"))
+                .andExpect(jsonPath("$.legs", hasSize(2)))
+                .andReturn();
+
+        String bookingId = objectMapper.readTree(submitted.getResponse().getContentAsString()).get("id").asText();
+        client = selectGroup(client, "BO");
+        mockMvc.perform(post("/api/back-office/trade-bookings/{bookingId}/approve", bookingId)
+                        .cookie(client.cookie())
+                        .header("X-CSRF-Token", client.csrfToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.confirmedPositionIds", hasSize(2)));
+
+        client = selectGroup(client, "FO");
+        mockMvc.perform(get("/api/portfolios/{portfolioId}", portfolioId).cookie(client.cookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.positions", hasSize(2)))
+                .andExpect(jsonPath("$.positions[0].strategyName").value("AAPL Call Spread"))
+                .andExpect(jsonPath("$.positions[1].strategyName").value("AAPL Call Spread"));
+    }
+
+    @Test
     void portfolioWithPendingBookingCannotBeDeleted() throws Exception {
         AuthClient client = selectGroup(login("workflow-admin", "workflow-password"), "FO");
         String portfolioId = createPortfolio(client, "Pending Delete Guard Book");

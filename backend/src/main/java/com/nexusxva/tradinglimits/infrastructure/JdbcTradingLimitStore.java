@@ -245,7 +245,7 @@ public class JdbcTradingLimitStore implements TradingLimitStore {
         return jdbcTemplate.queryForObject(
                 """
                 SELECT count(*) AS trades,
-                       COALESCE(sum(abs(quantity) * strike), 0) AS notional
+                       COALESCE(sum(COALESCE(booking_notional, abs(quantity) * strike)), 0) AS notional
                 FROM trade_booking_requests
                 WHERE submitted_by_user_id = ?
                   AND submitted_at >= ?

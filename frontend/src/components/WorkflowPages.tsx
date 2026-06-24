@@ -19,19 +19,21 @@ import {
   Waves,
 } from "lucide-react";
 import { blembergApi, nexusApi, NexusApiError } from "@/lib/api";
+import { logBlembergRefreshOutcome, summarizeBlembergRefresh } from "@/lib/blembergRefresh";
 import { formatCurrency, formatNumber, formatPercent, todayIsoDate } from "@/lib/format";
 import type {
   AddEuropeanOptionPositionRequest,
+  CreateOptionStrategyBookingRequest,
   CvaCalculationResponse,
   ExposureSimulationResponse,
   OptionType,
+  OptionStrategyType,
   Portfolio,
   PortfolioDailyPnl,
   PortfolioEodSnapshot,
   PortfolioPricingResponse,
   PortfolioSummary,
   BlembergMarketSnapshot,
-  BlembergRefreshResponse,
   EuropeanOptionPosition,
   TradeBooking,
   TradeLifecycleRequest,
@@ -61,6 +63,18 @@ type TradeTicketForm = {
   maturityDate: string;
   quantity: string;
   executionPrice: string;
+};
+
+type StrategyTicketForm = {
+  strategyType: OptionStrategyType;
+  strategyName: string;
+  strike1: string;
+  strike2: string;
+  maturityDate: string;
+  quantity: string;
+  executionPrice1: string;
+  executionPrice2: string;
+  executionPrice3: string;
 };
 
 const defaultRunForm: RunForm = {
@@ -107,6 +121,16 @@ const notebooks = [
 ];
 
 const allNotebookSymbols = notebooks.flatMap((notebook) => notebook.symbols);
+
+const strategyLabels: Record<OptionStrategyType, string> = {
+  CALL_SPREAD: "Call Spread",
+  PUT_SPREAD: "Put Spread",
+  STRADDLE: "Straddle",
+  STRANGLE: "Strangle",
+  RISK_REVERSAL: "Risk Reversal",
+  BUTTERFLY: "Butterfly",
+  CUSTOM: "Custom",
+};
 
 const howTo = {
   overview: [
@@ -446,8 +470,10 @@ export function UPadPage() {
   const [tradeBookings, setTradeBookings] = useState<TradeBooking[]>([]);
   const [lifecycleRequests, setLifecycleRequests] = useState<TradeLifecycleRequest[]>([]);
   const [myLimits, setMyLimits] = useState<TradingLimitSnapshot | null>(null);
+  const [ticketMode, setTicketMode] = useState<"single" | "strategy">("single");
 
   const [tradeForm, setTradeForm] = useState(initialTradeFormFromUrl);
+  const [strategyForm, setStrategyForm] = useState(initialStrategyForm);
 
   const marketSnapshotBySymbol = new Map(marketSnapshots.map((snapshot) => [snapshot.symbol.toUpperCase(), snapshot]));
 
@@ -458,6 +484,13 @@ export function UPadPage() {
       underlyingSymbol: symbol,
       strike: lastPrice != null && Number.isFinite(lastPrice) ? formatTicketNumber(lastPrice) : current.strike,
     }));
+    if (lastPrice != null && Number.isFinite(lastPrice)) {
+      setStrategyForm((current) => ({
+        ...current,
+        strike1: formatTicketNumber(lastPrice),
+        strike2: formatTicketNumber(lastPrice * 1.05),
+      }));
+    }
   }
 
   useEffect(() => {
@@ -526,6 +559,32 @@ export function UPadPage() {
     }
   }
 
+  async function bookStrategy() {
+    if (!selectedId) {
+      setError("Select a portfolio first. Create portfolios from the Portfolios page.");
+      return;
+    }
+    const request: CreateOptionStrategyBookingRequest = {
+      strategyType: strategyForm.strategyType,
+      strategyName: strategyForm.strategyName.trim() || null,
+      underlyingSymbol: tradeForm.underlyingSymbol.trim().toUpperCase(),
+      legs: buildStrategyLegs(strategyForm),
+    };
+
+    setLoading("strategy");
+    setError(null);
+    setSuccess(null);
+    try {
+      await nexusApi.submitOptionStrategyBooking(selectedId, request);
+      await Promise.all([loadSelectedPortfolio(selectedId), loadMyLimits()]);
+      setSuccess(`${strategyLabels[request.strategyType]} ${request.underlyingSymbol} sent for BO validation.`);
+    } catch (caught) {
+      setError(tradingLimitError(caught));
+    } finally {
+      setLoading(null);
+    }
+  }
+
   return (
     <AppShell title="u-Pad" eyebrow="Trade capture" howTo={howTo.upad}>
       <Alert message={error} />
@@ -535,6 +594,14 @@ export function UPadPage() {
           <SectionTitle title="Trade Ticket" info="Submitting validates the symbol and creates a pending booking. It does not enter the confirmed portfolio until Back Office approves it." />
           <PortfolioPicker value={selectedId} onChange={setSelectedId} onError={setError} />
           {myLimits ? <MyTradingLimits snapshot={myLimits} /> : null}
+          <div className="segmented-control" aria-label="u-Pad ticket mode">
+            <button className={ticketMode === "single" ? "active" : ""} type="button" onClick={() => setTicketMode("single")}>
+              Single Trade
+            </button>
+            <button className={ticketMode === "strategy" ? "active" : ""} type="button" onClick={() => setTicketMode("strategy")}>
+              Strategy
+            </button>
+          </div>
           <div className="notebook-grid" aria-label="u-Pad notebooks">
             {notebooks.map((notebook) => {
               const Icon = notebook.icon;
@@ -569,6 +636,15 @@ export function UPadPage() {
               ))}
             </div>
           </div>
+          {ticketMode === "strategy" ? (
+            <StrategyTicket
+              underlyingSymbol={tradeForm.underlyingSymbol}
+              form={strategyForm}
+              onChange={setStrategyForm}
+              onSubmit={bookStrategy}
+              loading={loading === "strategy"}
+            />
+          ) : (
           <div className="form-grid">
             <Field label="Underlying">
               <input className="input ticker-input" value={tradeForm.underlyingSymbol} onChange={(event) => setTradeForm({ ...tradeForm, underlyingSymbol: event.target.value })} />
@@ -599,6 +675,7 @@ export function UPadPage() {
               </button>
             </div>
           </div>
+          )}
         </section>
 
         <NotebookMarketWatch
@@ -640,6 +717,7 @@ function TradeBookingTable({ bookings }: { bookings: TradeBooking[] }) {
           <tr>
             <th>Status</th>
             <th>Symbol</th>
+            <th>Strategy</th>
             <th>Type</th>
             <th>Strike</th>
             <th>Maturity</th>
@@ -653,8 +731,8 @@ function TradeBookingTable({ bookings }: { bookings: TradeBooking[] }) {
           {bookings.map((booking) => (
             <tr key={booking.id}>
               <td><span className={`booking-status ${booking.status.toLowerCase()}`}>{booking.status.replaceAll("_", " ")}</span></td>
-              <td>{booking.underlyingSymbol}</td>
-              <td>{booking.optionType}</td>
+              <td>{booking.bookingType === "OPTION_STRATEGY" ? booking.strategyName ?? booking.underlyingSymbol : booking.underlyingSymbol}</td>
+              <td>{booking.bookingType === "OPTION_STRATEGY" ? `${booking.strategyType?.replaceAll("_", " ")} (${booking.legs.length} legs)` : booking.optionType}</td>
               <td>{formatNumber(booking.strike, 2)}</td>
               <td>{booking.maturityDate}</td>
               <td>{formatNumber(booking.quantity, 2)}</td>
@@ -694,6 +772,89 @@ function MyTradingLimits({ snapshot }: { snapshot: TradingLimitSnapshot }) {
         currency
       />
       <small>UTC resets: hour {new Date(snapshot.usage.hourEndsAt).toLocaleTimeString()} · day {new Date(snapshot.usage.dayEndsAt).toLocaleString()}</small>
+    </div>
+  );
+}
+
+function StrategyTicket({
+  underlyingSymbol,
+  form,
+  onChange,
+  onSubmit,
+  loading,
+}: {
+  underlyingSymbol: string;
+  form: StrategyTicketForm;
+  onChange: (form: StrategyTicketForm) => void;
+  onSubmit: () => void;
+  loading: boolean;
+}) {
+  const preview = buildStrategyLegs(form);
+  const totalNotional = preview.reduce((sum, leg) => sum + Math.abs(leg.quantity) * leg.strike, 0);
+  return (
+    <div className="strategy-ticket">
+      <div className="form-grid">
+        <Field label="Strategy">
+          <select className="select" value={form.strategyType} onChange={(event) => onChange({ ...form, strategyType: event.target.value as OptionStrategyType })}>
+            {(["CALL_SPREAD", "PUT_SPREAD", "STRADDLE", "STRANGLE", "RISK_REVERSAL", "BUTTERFLY"] as OptionStrategyType[]).map((type) => (
+              <option key={type} value={type}>{strategyLabels[type]}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Strategy name">
+          <input className="input" placeholder={`${strategyLabels[form.strategyType]} ${underlyingSymbol.toUpperCase()}`} value={form.strategyName} onChange={(event) => onChange({ ...form, strategyName: event.target.value })} />
+        </Field>
+        <Field label="Lower/ATM strike">
+          <input className="input" type="number" min="0.01" step="0.01" value={form.strike1} onChange={(event) => onChange({ ...form, strike1: event.target.value })} />
+        </Field>
+        <Field label="Upper strike">
+          <input className="input" type="number" min="0.01" step="0.01" value={form.strike2} onChange={(event) => onChange({ ...form, strike2: event.target.value })} />
+        </Field>
+        <Field label="Maturity">
+          <input className="input" type="date" value={form.maturityDate} onChange={(event) => onChange({ ...form, maturityDate: event.target.value })} />
+        </Field>
+        <Field label="Base quantity">
+          <input className="input" type="number" step="1" value={form.quantity} onChange={(event) => onChange({ ...form, quantity: event.target.value })} />
+        </Field>
+        <Field label="Premium leg 1">
+          <input className="input" type="number" min="0" step="0.01" placeholder="Optional" value={form.executionPrice1} onChange={(event) => onChange({ ...form, executionPrice1: event.target.value })} />
+        </Field>
+        <Field label="Premium leg 2">
+          <input className="input" type="number" min="0" step="0.01" placeholder="Optional" value={form.executionPrice2} onChange={(event) => onChange({ ...form, executionPrice2: event.target.value })} />
+        </Field>
+      </div>
+      <div className="table-wrap compact-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Leg</th>
+              <th>Type</th>
+              <th>Strike</th>
+              <th>Qty</th>
+              <th>Maturity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {preview.map((leg, index) => (
+              <tr key={`${leg.optionType}-${leg.strike}-${index}`}>
+                <td>{index + 1}</td>
+                <td>{leg.optionType}</td>
+                <td>{formatNumber(leg.strike, 2)}</td>
+                <td>{formatNumber(leg.quantity, 2)}</td>
+                <td>{leg.maturityDate}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="strategy-summary">
+        <span>{preview.length} legs</span>
+        <span>Limit notional {formatCurrency(totalNotional, "USD")}</span>
+        <button className="btn trade-submit" type="button" onClick={onSubmit} disabled={loading}>
+          {loading ? <Loader2 size={16} /> : <Send size={16} />}
+          Send Strategy to BO
+        </button>
+      </div>
     </div>
   );
 }
@@ -777,12 +938,21 @@ function NotebookMarketWatch({
     try {
       console.info("[u-Pad] Requesting Blemberg refresh", {
         prioritySymbols: requestedPriority,
-        note: "Blemberg may ignore prioritySymbols if V1 endpoint does not support targeted refresh yet.",
       });
       const refresh = await blembergApi.refreshMarketData(requestedPriority);
       console.info("[u-Pad] Blemberg refresh response", refresh);
-      setRefreshSummary(refreshMessage(refresh, requestedPriority));
-      await loadSnapshots([...requestedPriority, ...allNotebookSymbols.filter((symbol) => !requestedPriority.includes(symbol))]);
+      const orderedSymbols = [...requestedPriority, ...allNotebookSymbols.filter((symbol) => !requestedPriority.includes(symbol))];
+      const [snapshotResult, coverage] = await Promise.all([
+        blembergApi.snapshots(orderedSymbols),
+        requestedPriority.length > 0 ? blembergApi.coverage(requestedPriority) : Promise.resolve(undefined),
+      ]);
+      setSnapshots(snapshotResult.snapshots ?? []);
+      onSnapshotsLoaded(snapshotResult.snapshots ?? []);
+      setMissingSymbols(snapshotResult.missingSymbols ?? []);
+      const summary = summarizeBlembergRefresh(refresh, requestedPriority, coverage);
+      setRefreshSummary(summary.message);
+      setStatusMessage(`Loaded ${snapshotResult.snapshots?.length ?? 0} snapshots, ${snapshotResult.missingSymbols?.length ?? 0} missing`);
+      logBlembergRefreshOutcome("u-Pad refresh", refresh, requestedPriority, coverage);
     } catch (caught) {
       setError(errorMessage(caught));
       setStatusMessage("Blemberg refresh failed");
@@ -892,16 +1062,6 @@ function formatMarketNumber(value: number) {
     maximumFractionDigits: value >= 100 ? 2 : 4,
     minimumFractionDigits: 2,
   });
-}
-
-function refreshMessage(refresh: BlembergRefreshResponse, prioritySymbols: string[]) {
-  const skipped = refresh.jobSummaries?.reduce((sum, job) => sum + (job.skippedRateLimit ?? 0), 0) ?? 0;
-  const requested = refresh.symbolsRequested ?? prioritySymbols.length;
-  const succeeded = refresh.symbolsSucceeded ?? 0;
-  const priorityIgnored = prioritySymbols.length > 0 && requested > prioritySymbols.length;
-  const priorityNote = priorityIgnored ? " Blemberg refreshed the full watchlist, so prioritySymbols are not honored yet." : "";
-  const rateNote = skipped > 0 ? ` ${skipped} items were skipped by provider rate limit.` : "";
-  return `Refresh ${refresh.status ?? "completed"}: ${succeeded}/${requested} symbols succeeded.${rateNote}${priorityNote}`;
 }
 
 function formatTicketNumber(value: number) {
@@ -1293,6 +1453,7 @@ function PositionTable({
           {portfolio.positions.map((position) => (
             <tr className={(position.lifecycleStatus ?? "ACTIVE") !== "ACTIVE" ? "inactive-position-row" : ""} key={position.id}>
               <td>{position.underlyingSymbol}</td>
+              <td>{position.strategyName ?? position.strategyType?.replaceAll("_", " ") ?? "-"}</td>
               <td>{position.optionType}</td>
               <td>{formatNumber(position.strike, 2)}</td>
               <td>{position.maturityDate}</td>
@@ -1632,6 +1793,90 @@ function initialTradeFormFromUrl(): TradeTicketForm {
     quantity: params.get("quantity") ?? fallback.quantity,
     executionPrice: params.get("executionPrice") ?? fallback.executionPrice,
   };
+}
+
+function initialStrategyForm(): StrategyTicketForm {
+  return {
+    strategyType: "CALL_SPREAD",
+    strategyName: "",
+    strike1: "190",
+    strike2: "210",
+    maturityDate: "2027-06-01",
+    quantity: "10",
+    executionPrice1: "",
+    executionPrice2: "",
+    executionPrice3: "",
+  };
+}
+
+function buildStrategyLegs(form: StrategyTicketForm) {
+  const strike1 = Number(form.strike1);
+  const strike2 = Number(form.strike2);
+  const lowerStrike = Math.min(strike1, strike2);
+  const upperStrike = Math.max(strike1, strike2);
+  const middleStrike = Number(((lowerStrike + upperStrike) / 2).toFixed(4));
+  const quantity = Number(form.quantity);
+  const maturityDate = form.maturityDate;
+  const premium1 = optionalNumber(form.executionPrice1);
+  const premium2 = optionalNumber(form.executionPrice2);
+  const premium3 = optionalNumber(form.executionPrice3);
+
+  switch (form.strategyType) {
+    case "CALL_SPREAD":
+      return [
+        strategyLeg("CALL", lowerStrike, maturityDate, quantity, premium1),
+        strategyLeg("CALL", upperStrike, maturityDate, -quantity, premium2),
+      ];
+    case "PUT_SPREAD":
+      return [
+        strategyLeg("PUT", upperStrike, maturityDate, quantity, premium1),
+        strategyLeg("PUT", lowerStrike, maturityDate, -quantity, premium2),
+      ];
+    case "STRADDLE":
+      return [
+        strategyLeg("CALL", strike1, maturityDate, quantity, premium1),
+        strategyLeg("PUT", strike1, maturityDate, quantity, premium2),
+      ];
+    case "STRANGLE":
+      return [
+        strategyLeg("PUT", lowerStrike, maturityDate, quantity, premium1),
+        strategyLeg("CALL", upperStrike, maturityDate, quantity, premium2),
+      ];
+    case "RISK_REVERSAL":
+      return [
+        strategyLeg("PUT", lowerStrike, maturityDate, -quantity, premium1),
+        strategyLeg("CALL", upperStrike, maturityDate, quantity, premium2),
+      ];
+    case "BUTTERFLY":
+      return [
+        strategyLeg("CALL", lowerStrike, maturityDate, quantity, premium1),
+        strategyLeg("CALL", middleStrike, maturityDate, -2 * quantity, premium2),
+        strategyLeg("CALL", upperStrike, maturityDate, quantity, premium3),
+      ];
+    default:
+      return [
+        strategyLeg("CALL", lowerStrike, maturityDate, quantity, premium1),
+        strategyLeg("CALL", upperStrike, maturityDate, -quantity, premium2),
+      ];
+  }
+}
+
+function strategyLeg(optionType: OptionType, strike: number, maturityDate: string, quantity: number, executionPrice: number | null) {
+  return {
+    optionType,
+    strike,
+    maturityDate,
+    quantity,
+    executionPrice,
+  };
+}
+
+function optionalNumber(value: string) {
+  if (value === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function notebookIdForSymbol(symbol: string) {

@@ -2,7 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, RefreshCw } from "lucide-react";
-import { blembergApi } from "@/lib/api";
+import { blembergApi, NexusApiError } from "@/lib/api";
+import { logBlembergRefreshOutcome, summarizeBlembergRefresh } from "@/lib/blembergRefresh";
+import { WATCHLIST_SYMBOLS } from "@/lib/marketUniverse";
+
+const POST_REFRESH_SNAPSHOT_DELAY_MS = 1200;
 
 export function MarketDataStatus() {
   const [status, setStatus] = useState<"checking" | "online" | "offline" | "refreshing">("checking");
@@ -28,18 +32,52 @@ export function MarketDataStatus() {
 
   async function refreshBlemberg() {
     setStatus("refreshing");
-    setMessage("Refreshing market data");
+    setMessage("Checking missing symbols");
     try {
-      await blembergApi.refreshMarketData();
-      const health = await blembergApi.health();
+      const missingBeforeRefresh = await loadMissingSymbols();
+      const prioritySymbols = missingBeforeRefresh.length > 0 ? missingBeforeRefresh : undefined;
+      setMessage(prioritySymbols ? `Refreshing missing: ${shortSymbolList(prioritySymbols)}` : "Refreshing market data");
+      console.info("[Blemberg] Header refresh requested", {
+        mode: prioritySymbols ? "missing-first" : "global",
+        prioritySymbols: prioritySymbols ?? [],
+      });
+
+      const refresh = await blembergApi.refreshMarketData(prioritySymbols);
+      await delay(POST_REFRESH_SNAPSHOT_DELAY_MS);
+      const [snapshots, coverage, health] = await Promise.all([
+        blembergApi.snapshots(WATCHLIST_SYMBOLS).catch((caught) => {
+          console.warn("[Blemberg] Post-refresh snapshot reload failed", caught);
+          return undefined;
+        }),
+        prioritySymbols ? blembergApi.coverage(prioritySymbols).catch((caught) => {
+          console.warn("[Blemberg] Post-refresh coverage reload failed", caught);
+          return undefined;
+        }) : Promise.resolve(undefined),
+        blembergApi.health(),
+      ]);
+
+      const loggedPrioritySymbols = prioritySymbols ?? refresh.requestedSymbols ?? [];
+      logBlembergRefreshOutcome("Header refresh", refresh, loggedPrioritySymbols, coverage);
+      const summary = summarizeBlembergRefresh(refresh, loggedPrioritySymbols, coverage);
+      const missingAfterRefresh = snapshots?.missingSymbols ?? [];
       setStatus(health.status === "UP" ? "online" : "offline");
-      setMessage(health.status === "UP" ? "Refresh requested" : "Refresh sent, health not UP");
-      console.info("[Blemberg] Global refresh requested", { health: health.status });
-      window.dispatchEvent(new CustomEvent("blemberg:refresh-completed"));
+      setMessage(health.status === "UP" ? `${summary.message} ${missingAfterRefresh.length} snapshots missing.` : "Refresh sent, health not UP");
+      console.info("[Blemberg] Header refresh completed", {
+        health: health.status,
+        missingBeforeRefresh,
+        missingAfterRefresh,
+      });
+      window.dispatchEvent(new CustomEvent("blemberg:refresh-completed", {
+        detail: {
+          prioritySymbols: loggedPrioritySymbols,
+          missingBeforeRefresh,
+          missingAfterRefresh,
+        },
+      }));
     } catch {
       setStatus("offline");
       setMessage("Refresh unavailable");
-      console.error("[Blemberg] Global refresh failed");
+      console.error("[Blemberg] Header refresh failed");
     }
   }
 
@@ -66,4 +104,29 @@ export function MarketDataStatus() {
       {status === "refreshing" || status === "checking" ? <Loader2 size={15} /> : status === "online" ? <CheckCircle2 size={15} /> : <RefreshCw size={15} />}
     </button>
   );
+}
+
+async function loadMissingSymbols() {
+  try {
+    const snapshots = await blembergApi.snapshots(WATCHLIST_SYMBOLS);
+    return normalizeSymbols(snapshots.missingSymbols);
+  } catch (caught) {
+    if (caught instanceof NexusApiError && caught.status === 404) {
+      return WATCHLIST_SYMBOLS;
+    }
+    throw caught;
+  }
+}
+
+function normalizeSymbols(symbols: string[] | null | undefined) {
+  return Array.from(new Set((symbols ?? []).map((symbol) => symbol.trim().toUpperCase()).filter(Boolean)));
+}
+
+function shortSymbolList(symbols: string[]) {
+  const visible = symbols.slice(0, 4).join(", ");
+  return symbols.length > 4 ? `${visible}, +${symbols.length - 4}` : visible;
+}
+
+function delay(milliseconds: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }

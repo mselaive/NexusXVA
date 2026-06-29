@@ -20,7 +20,7 @@ public interface PortfolioStore {
 
     Portfolio updatePortfolio(UUID portfolioId, UpdatePortfolioCommand command);
 
-    void deletePortfolio(UUID portfolioId);
+    void archivePortfolio(UUID portfolioId, UUID archivedByUserId, String reason);
 
     EuropeanOptionPosition addEuropeanOptionPosition(
             UUID portfolioId,

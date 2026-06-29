@@ -288,6 +288,7 @@ public class AdminAccessService {
                   JOIN portfolios p ON p.id = access.portfolio_id
                   LEFT JOIN portfolio_european_option_positions pos ON pos.portfolio_id = p.id
                   WHERE access.user_id = ?
+                    AND p.archived_at IS NULL
                   GROUP BY p.id, p.name, p.base_currency, p.created_at
                   ORDER BY p.created_at ASC
                   """;
@@ -300,6 +301,7 @@ public class AdminAccessService {
                 SELECT p.id, p.name, p.base_currency, count(pos.id) AS position_count
                 FROM portfolios p
                 LEFT JOIN portfolio_european_option_positions pos ON pos.portfolio_id = p.id
+                WHERE p.archived_at IS NULL
                 GROUP BY p.id, p.name, p.base_currency, p.created_at
                 ORDER BY p.created_at ASC
                 """,
@@ -387,7 +389,7 @@ public class AdminAccessService {
 
     private void ensurePortfolioExists(UUID portfolioId) {
         Boolean exists = jdbcTemplate.queryForObject(
-                "SELECT EXISTS (SELECT 1 FROM portfolios WHERE id = ?)",
+                "SELECT EXISTS (SELECT 1 FROM portfolios WHERE id = ? AND archived_at IS NULL)",
                 Boolean.class,
                 portfolioId
         );

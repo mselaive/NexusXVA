@@ -17,6 +17,11 @@ public record PortfolioEodSnapshotResponse(
         int positionsWithoutExecutionPrice,
         Instant capturedAt,
         String source,
+        String status,
+        Instant voidedAt,
+        UUID voidedByUserId,
+        String voidReason,
+        UUID correctionOfRunId,
         List<PositionEodSnapshotResponse> positions
 ) {
     static PortfolioEodSnapshotResponse from(PortfolioEodSnapshot snapshot) {
@@ -31,6 +36,11 @@ public record PortfolioEodSnapshotResponse(
                 snapshot.positionsWithoutExecutionPrice(),
                 snapshot.capturedAt(),
                 snapshot.source(),
+                snapshot.status().name(),
+                snapshot.voidedAt(),
+                snapshot.voidedByUserId(),
+                snapshot.voidReason(),
+                snapshot.correctionOfRunId(),
                 snapshot.positions().stream().map(PositionEodSnapshotResponse::from).toList()
         );
     }

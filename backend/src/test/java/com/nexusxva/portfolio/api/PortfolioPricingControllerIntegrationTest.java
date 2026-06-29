@@ -1,5 +1,6 @@
 package com.nexusxva.portfolio.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.startsWith;
@@ -69,6 +70,21 @@ class PortfolioPricingControllerIntegrationTest extends AbstractPostgresIntegrat
                 .andExpect(jsonPath("$.positions[0].marketData.asOf", notNullValue()))
                 .andExpect(jsonPath("$.positions[0].marketData.stale").value(false))
                 .andExpect(jsonPath("$.unpriceablePositions", hasSize(0)));
+
+        Integer runCount = jdbcTemplate.queryForObject(
+                """
+                SELECT count(*)
+                FROM valuation_runs
+                WHERE portfolio_id = ?
+                  AND run_type = 'PRICING'
+                  AND status = 'SUCCESS'
+                  AND input_json->>'valuationDate' = '2026-06-01'
+                  AND summary_json->>'pricedPositions' = '1'
+                """,
+                Integer.class,
+                java.util.UUID.fromString(portfolioId)
+        );
+        assertThat(runCount).isEqualTo(1);
     }
 
     @Test

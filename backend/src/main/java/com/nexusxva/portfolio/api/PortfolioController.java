@@ -2,6 +2,8 @@ package com.nexusxva.portfolio.api;
 
 import com.nexusxva.auth.application.FeaturePermissionCode;
 import com.nexusxva.auth.application.UserAccessService;
+import com.nexusxva.auth.domain.AuthSession;
+import com.nexusxva.auth.infrastructure.AuthSessionFilter;
 import com.nexusxva.portfolio.application.PortfolioService;
 import com.nexusxva.portfolio.domain.Portfolio;
 
@@ -75,7 +77,12 @@ public class PortfolioController {
     @DeleteMapping("/{portfolioId}")
     public ResponseEntity<Void> deletePortfolio(@PathVariable UUID portfolioId, HttpServletRequest servletRequest) {
         userAccessService.requirePortfolioAccess(servletRequest, portfolioId);
-        portfolioService.deletePortfolio(portfolioId);
+        AuthSession session = currentSession(servletRequest);
+        portfolioService.archivePortfolio(
+                portfolioId,
+                session == null ? null : session.user().id(),
+                "Archived through portfolio endpoint"
+        );
         return ResponseEntity.noContent().build();
     }
 
@@ -101,6 +108,11 @@ public class PortfolioController {
                 .stream()
                 .map(EuropeanOptionPositionResponse::from)
                 .toList();
+    }
+
+    private AuthSession currentSession(HttpServletRequest request) {
+        Object value = request.getAttribute(AuthSessionFilter.SESSION_ATTRIBUTE);
+        return value instanceof AuthSession session ? session : null;
     }
 
 }

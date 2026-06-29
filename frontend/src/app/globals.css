@@ -2538,6 +2538,155 @@ a {
   overflow-wrap: anywhere;
 }
 
+.metric-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 8px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 12px;
+  box-shadow: var(--shadow);
+}
+
+.metric-card > span {
+  grid-row: span 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: #e7f5f2;
+  color: var(--accent-strong);
+}
+
+.metric-card small,
+.detail-item span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.metric-card strong,
+.detail-item strong {
+  overflow-wrap: anywhere;
+}
+
+.valuation-filter-head,
+.valuation-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.valuation-filter-head h2,
+.valuation-detail-head h2 {
+  margin: 2px 0 0;
+  font-size: 18px;
+}
+
+.valuation-filters {
+  align-items: end;
+}
+
+.valuation-portfolio-filter {
+  min-width: min(360px, 100%);
+}
+
+.valuation-runs-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+  gap: 14px;
+}
+
+.valuation-runs-layout tr {
+  cursor: pointer;
+}
+
+.valuation-runs-layout tr:hover td,
+.selected-row td {
+  background: #eefaf7;
+}
+
+.valuation-detail {
+  align-self: start;
+  display: grid;
+  gap: 12px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.detail-item {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbfb;
+  padding: 9px;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.success-chip {
+  background: #e6f7ee;
+  color: #047857;
+}
+
+.danger-chip {
+  background: #fff0ed;
+  color: var(--danger);
+}
+
+.json-block {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfc;
+  overflow: hidden;
+}
+
+.json-block summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-weight: 700;
+}
+
+.json-block pre {
+  max-height: 320px;
+  overflow: auto;
+  margin: 0;
+  border-top: 1px solid var(--line);
+  background: #102026;
+  color: #e5f2ef;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.empty-state {
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--muted);
+  padding: 18px;
+  text-align: center;
+}
+
 .table-wrap {
   overflow-x: auto;
   border: 1px solid var(--line);
@@ -3523,6 +3672,27 @@ tr:last-child td {
 .booking-status.failed {
   background: #fff0ee;
   color: var(--danger);
+}
+
+.booking-status.active {
+  background: #e7f5f2;
+  color: var(--accent-strong);
+}
+
+.booking-status.voided {
+  background: #fff0ee;
+  color: var(--danger);
+}
+
+.booking-status.superseded {
+  background: #edf1f5;
+  color: var(--muted);
+}
+
+.table-actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
 }
 
 .eod-summary-strip {

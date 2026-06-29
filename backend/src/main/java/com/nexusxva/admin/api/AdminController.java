@@ -49,8 +49,13 @@ public class AdminController {
     }
 
     @DeleteMapping("/portfolios/{portfolioId}")
-    public ResponseEntity<Void> deletePortfolio(@PathVariable UUID portfolioId) {
-        portfolioService.deletePortfolio(portfolioId);
+    public ResponseEntity<Void> deletePortfolio(@PathVariable UUID portfolioId, HttpServletRequest servletRequest) {
+        AuthSession session = currentSession(servletRequest);
+        portfolioService.archivePortfolio(
+                portfolioId,
+                session == null ? null : session.user().id(),
+                "Archived by ADMIN"
+        );
         return ResponseEntity.noContent().build();
     }
 

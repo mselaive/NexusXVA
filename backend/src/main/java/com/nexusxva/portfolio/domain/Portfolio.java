@@ -12,10 +12,25 @@ public record Portfolio(
         String baseCurrency,
         Instant createdAt,
         Instant updatedAt,
+        Instant archivedAt,
+        UUID archivedByUserId,
+        String archiveReason,
         List<EuropeanOptionPosition> positions
 ) {
 
     private static final String DEFAULT_BASE_CURRENCY = "USD";
+
+    public Portfolio(
+            UUID id,
+            String name,
+            String description,
+            String baseCurrency,
+            Instant createdAt,
+            Instant updatedAt,
+            List<EuropeanOptionPosition> positions
+    ) {
+        this(id, name, description, baseCurrency, createdAt, updatedAt, null, null, null, positions);
+    }
 
     public Portfolio {
         if (id == null) {
@@ -39,6 +54,7 @@ public record Portfolio(
 
         name = name.trim();
         description = normalizeDescription(description);
+        archiveReason = normalizeDescription(archiveReason);
         baseCurrency = normalizeBaseCurrency(baseCurrency);
         positions = List.copyOf(positions);
     }

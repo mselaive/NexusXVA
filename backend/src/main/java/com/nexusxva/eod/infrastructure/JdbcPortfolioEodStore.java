@@ -1,6 +1,7 @@
 package com.nexusxva.eod.infrastructure;
 
 import com.nexusxva.eod.application.PortfolioEodStore;
+import com.nexusxva.eod.domain.EodRunStatus;
 import com.nexusxva.eod.domain.PortfolioEodSnapshot;
 import com.nexusxva.eod.domain.PositionEodSnapshot;
 import java.sql.ResultSet;
@@ -29,9 +30,10 @@ class JdbcPortfolioEodStore implements PortfolioEodStore {
                 INSERT INTO portfolio_eod_runs (
                     id, portfolio_id, business_date, base_currency,
                     total_market_value, total_trade_value, total_unrealized_pnl,
-                    positions_without_execution_price, captured_at, source
+                    positions_without_execution_price, captured_at, source,
+                    status, voided_at, voided_by_user_id, void_reason, correction_of_run_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 snapshot.id(),
                 snapshot.portfolioId(),
@@ -42,7 +44,12 @@ class JdbcPortfolioEodStore implements PortfolioEodStore {
                 snapshot.totalUnrealizedPnl(),
                 snapshot.positionsWithoutExecutionPrice(),
                 Timestamp.from(snapshot.capturedAt()),
-                snapshot.source()
+                snapshot.source(),
+                snapshot.status().name(),
+                snapshot.voidedAt() == null ? null : Timestamp.from(snapshot.voidedAt()),
+                snapshot.voidedByUserId(),
+                snapshot.voidReason(),
+                snapshot.correctionOfRunId()
         );
         snapshot.positions().forEach(position -> jdbcTemplate.update(
                 """
@@ -72,12 +79,34 @@ class JdbcPortfolioEodStore implements PortfolioEodStore {
     @Override
     public boolean exists(UUID portfolioId, LocalDate businessDate) {
         Boolean exists = jdbcTemplate.queryForObject(
-                "SELECT EXISTS (SELECT 1 FROM portfolio_eod_runs WHERE portfolio_id = ? AND business_date = ?)",
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM portfolio_eod_runs
+                    WHERE portfolio_id = ?
+                      AND business_date = ?
+                      AND status = 'ACTIVE'
+                )
+                """,
                 Boolean.class,
                 portfolioId,
                 businessDate
         );
         return Boolean.TRUE.equals(exists);
+    }
+
+    @Override
+    public Optional<PortfolioEodSnapshot> find(UUID runId) {
+        List<PortfolioEodSnapshot> runs = jdbcTemplate.query(
+                """
+                SELECT *
+                FROM portfolio_eod_runs
+                WHERE id = ?
+                """,
+                this::mapRun,
+                runId
+        );
+        return runs.stream().findFirst().map(this::withPositions);
     }
 
     @Override
@@ -87,7 +116,8 @@ class JdbcPortfolioEodStore implements PortfolioEodStore {
                 SELECT *
                 FROM portfolio_eod_runs
                 WHERE portfolio_id = ?
-                ORDER BY business_date DESC
+                  AND status = 'ACTIVE'
+                ORDER BY business_date DESC, captured_at DESC
                 LIMIT 1
                 """,
                 this::mapRun,
@@ -112,6 +142,42 @@ class JdbcPortfolioEodStore implements PortfolioEodStore {
         ).stream().map(this::withPositions).toList();
     }
 
+    @Override
+    public void voidRun(UUID runId, UUID voidedByUserId, String reason) {
+        jdbcTemplate.update(
+                """
+                UPDATE portfolio_eod_runs
+                SET status = 'VOIDED',
+                    voided_at = ?,
+                    voided_by_user_id = ?,
+                    void_reason = ?
+                WHERE id = ?
+                """,
+                Timestamp.from(java.time.Instant.now()),
+                voidedByUserId,
+                reason,
+                runId
+        );
+    }
+
+    @Override
+    public void supersedeRun(UUID runId, UUID voidedByUserId, String reason) {
+        jdbcTemplate.update(
+                """
+                UPDATE portfolio_eod_runs
+                SET status = 'SUPERSEDED',
+                    voided_at = ?,
+                    voided_by_user_id = ?,
+                    void_reason = ?
+                WHERE id = ?
+                """,
+                Timestamp.from(java.time.Instant.now()),
+                voidedByUserId,
+                reason,
+                runId
+        );
+    }
+
     private PortfolioEodSnapshot withPositions(PortfolioEodSnapshot run) {
         List<PositionEodSnapshot> positions = jdbcTemplate.query(
                 """
@@ -134,6 +200,11 @@ class JdbcPortfolioEodStore implements PortfolioEodStore {
                 run.positionsWithoutExecutionPrice(),
                 run.capturedAt(),
                 run.source(),
+                run.status(),
+                run.voidedAt(),
+                run.voidedByUserId(),
+                run.voidReason(),
+                run.correctionOfRunId(),
                 positions
         );
     }
@@ -150,6 +221,11 @@ class JdbcPortfolioEodStore implements PortfolioEodStore {
                 rs.getInt("positions_without_execution_price"),
                 rs.getTimestamp("captured_at").toInstant(),
                 rs.getString("source"),
+                EodRunStatus.valueOf(rs.getString("status")),
+                nullableInstant(rs, "voided_at"),
+                rs.getObject("voided_by_user_id", UUID.class),
+                rs.getString("void_reason"),
+                rs.getObject("correction_of_run_id", UUID.class),
                 List.of()
         );
     }
@@ -173,5 +249,10 @@ class JdbcPortfolioEodStore implements PortfolioEodStore {
     private Double nullableDouble(ResultSet rs, String column) throws SQLException {
         double value = rs.getDouble(column);
         return rs.wasNull() ? null : value;
+    }
+
+    private java.time.Instant nullableInstant(ResultSet rs, String column) throws SQLException {
+        Timestamp value = rs.getTimestamp(column);
+        return value == null ? null : value.toInstant();
     }
 }

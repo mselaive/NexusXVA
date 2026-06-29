@@ -55,7 +55,7 @@ class AdminAccessIntegrationTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
-    void adminDeletesPortfolioFromAdminEndpoint() throws Exception {
+    void adminArchivesPortfolioFromAdminEndpoint() throws Exception {
         AuthClient client = selectGroup(login(), "ADMIN");
         UUID portfolioId = insertPortfolio("Admin Delete Book");
         insertConfirmedEuropeanOptionPosition(portfolioId, "AAPL", "CALL", "190.0", "2027-12-31", "10.0");
@@ -65,12 +65,12 @@ class AdminAccessIntegrationTest extends AbstractPostgresIntegrationTest {
                         .header("X-CSRF-Token", client.csrfToken()))
                 .andExpect(status().isNoContent());
 
-        Boolean exists = jdbcTemplate.queryForObject(
-                "SELECT EXISTS (SELECT 1 FROM portfolios WHERE id = ?)",
+        Boolean archived = jdbcTemplate.queryForObject(
+                "SELECT archived_at IS NOT NULL FROM portfolios WHERE id = ?",
                 Boolean.class,
                 portfolioId
         );
-        org.assertj.core.api.Assertions.assertThat(exists).isFalse();
+        org.assertj.core.api.Assertions.assertThat(archived).isTrue();
     }
 
     @Test

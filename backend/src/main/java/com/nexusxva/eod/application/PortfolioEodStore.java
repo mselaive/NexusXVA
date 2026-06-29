@@ -12,7 +12,13 @@ public interface PortfolioEodStore {
 
     boolean exists(UUID portfolioId, LocalDate businessDate);
 
+    Optional<PortfolioEodSnapshot> find(UUID runId);
+
     Optional<PortfolioEodSnapshot> latest(UUID portfolioId);
 
     List<PortfolioEodSnapshot> history(UUID portfolioId, int limit);
+
+    void voidRun(UUID runId, UUID voidedByUserId, String reason);
+
+    void supersedeRun(UUID runId, UUID voidedByUserId, String reason);
 }

@@ -1,10 +1,14 @@
 package com.nexusxva.eod.api;
 
+import com.nexusxva.auth.domain.AuthSession;
+import com.nexusxva.auth.infrastructure.AuthSessionFilter;
 import com.nexusxva.eod.application.PortfolioEodService;
 import com.nexusxva.eod.application.PortfolioEodBatchService;
 import com.nexusxva.portfolio.api.PortfolioSummaryResponse;
 import com.nexusxva.portfolio.application.PortfolioStore;
 import com.nexusxva.shared.error.ResourceNotFoundException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -74,5 +78,39 @@ public class BackOfficeEodController {
         return service.history(portfolioId, limit).stream()
                 .map(PortfolioEodSnapshotResponse::from)
                 .toList();
+    }
+
+    @PostMapping("/runs/{runId}/void")
+    public PortfolioEodSnapshotResponse voidRun(
+            @PathVariable UUID runId,
+            @Valid @RequestBody EodCorrectionRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        AuthSession session = currentSession(servletRequest);
+        return PortfolioEodSnapshotResponse.from(service.voidRun(
+                runId,
+                session == null ? null : session.user().id(),
+                request.reason()
+        ));
+    }
+
+    @PostMapping("/runs/{runId}/recapture")
+    @ResponseStatus(HttpStatus.CREATED)
+    public PortfolioEodSnapshotResponse recapture(
+            @PathVariable UUID runId,
+            @Valid @RequestBody EodCorrectionRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        AuthSession session = currentSession(servletRequest);
+        return PortfolioEodSnapshotResponse.from(service.recapture(
+                runId,
+                session == null ? null : session.user().id(),
+                request.reason()
+        ));
+    }
+
+    private AuthSession currentSession(HttpServletRequest request) {
+        Object value = request.getAttribute(AuthSessionFilter.SESSION_ATTRIBUTE);
+        return value instanceof AuthSession session ? session : null;
     }
 }

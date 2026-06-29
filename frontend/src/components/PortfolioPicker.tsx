@@ -11,9 +11,10 @@ type PortfolioPickerProps = {
   onError?: (message: string) => void;
   onRefresh?: () => void;
   reloadKey?: number;
+  autoSelectFirst?: boolean;
 };
 
-export function PortfolioPicker({ value, onChange, onError, onRefresh, reloadKey = 0 }: PortfolioPickerProps) {
+export function PortfolioPicker({ value, onChange, onError, onRefresh, reloadKey = 0, autoSelectFirst = true }: PortfolioPickerProps) {
   const [portfolios, setPortfolios] = useState<PortfolioSummary[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -22,7 +23,7 @@ export function PortfolioPicker({ value, onChange, onError, onRefresh, reloadKey
     try {
       const result = await nexusApi.listPortfolios();
       setPortfolios(result);
-      if (!value && result.length > 0) {
+      if (autoSelectFirst && !value && result.length > 0) {
         onChange(result[0].id);
       }
       onRefresh?.();

@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-EOD significa **End of Day**. Su objetivo es guardar una referencia oficial e inmutable del valor de cada portfolio al cierre.
+EOD significa **End of Day**. Su objetivo es guardar una referencia oficial y auditada del valor de cada portfolio al cierre.
 
 EOD no modifica:
 
@@ -41,7 +41,7 @@ Blemberg actualiza market data
 6. Revisar el resultado de cada portfolio.
 7. Usar `Portfolio close history` para inspeccionar un libro concreto.
 
-Solo puede existir un cierre por portfolio y business date.
+Solo puede existir un cierre `ACTIVE` por portfolio y business date. Si BO se equivoca, el sistema corrige con auditoria en vez de borrar fisicamente el cierre.
 
 ## Que Debemos Esperar
 
@@ -54,6 +54,17 @@ Si funciona correctamente:
 - Se muestran market value, trade value y unrealized P&L.
 - La pantalla Pricing de FO usa ese cierre para Daily P&L.
 - El campo `source` indica `MANUAL_BO_BATCH`, `SCHEDULED` o `DEMO_SEED`.
+
+## Correcciones
+
+Rollback en NexusXVA significa correccion auditada, no borrado fisico:
+
+- `Void` marca un cierre `ACTIVE` como `VOIDED` y exige motivo.
+- `Recapture` marca el cierre original como `SUPERSEDED`, recalcula el mismo portfolio/date y guarda un nuevo cierre `ACTIVE` vinculado al original.
+- Daily P&L y latest close usan solo cierres `ACTIVE`.
+- History muestra cierres `ACTIVE`, `VOIDED` y `SUPERSEDED` para conservar el audit trail.
+
+Los portfolios se archivan en vez de borrarse fisicamente. Un portfolio archivado desaparece de flujos operativos, pero su historial EOD permanece en la base de datos.
 
 ## Daily P&L
 

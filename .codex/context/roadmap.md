@@ -91,7 +91,7 @@ Current notes:
 - Optional Blemberg validation for `underlyingSymbol` is implemented behind `nexusxva.market-data.validation.enabled`.
 - Temporary local watchlist validation is available with `nexusxva.market-data.provider=local`; it does not replace Blemberg.
 - Stateless portfolio-level Black-Scholes pricing is implemented at `POST /api/portfolios/{portfolioId}/pricing/black-scholes`.
-- Portfolio pricing requests pricing inputs through `marketdata`, scales price and Greeks by quantity, excludes expired positions as `UNPRICEABLE_EXPIRED`, and does not persist valuation results.
+- Portfolio pricing requests pricing inputs through `marketdata`, scales price and Greeks by quantity, excludes expired positions as `UNPRICEABLE_EXPIRED`, and records valuation run audit snapshots.
 - Portfolio pricing V1 is USD-only because FX conversion is not implemented yet.
 - The local market-data provider supplies temporary demo pricing inputs, including dividend yield, for development; real pricing inputs should come from Blemberg when that service is running.
 - Blemberg HTTP adapter tests should protect instrument validation and European-option pricing input contracts, including stale data, dividend yield, provider failures, and malformed responses.
@@ -126,7 +126,7 @@ Current notes:
 - The GBM path generator lives in `simulation.domain` and is deterministic with fixed seeds.
 - Exposure orchestration lives in `exposure.application`.
 - V1 uses Blemberg/local `marketdata` pricing inputs and Black-Scholes repricing.
-- Simulation and exposure results are not persisted yet.
+- Exposure API responses are copied into valuation run history for audit; simulated paths are not persisted as reusable state.
 
 ## Milestone 5: Exposure Analytics
 
@@ -176,7 +176,7 @@ Current notes:
 - The formula is `LGD * sum(discountFactor * expectedExposure * defaultProbabilityIncrement)`.
 - V1.1 supports either flat `counterpartyHazardRate`/`discountRate` or request-provided credit/discount curves.
 - Request-provided curves are interpolated linearly and are not persisted.
-- No counterparty persistence, collateral, netting, wrong-way risk, or persisted CVA runs are implemented yet.
+- CVA API requests/responses are copied into valuation run history for audit. No counterparty persistence, collateral, netting, or wrong-way risk is implemented yet.
 
 ## Milestone 7: Dashboard
 
@@ -199,7 +199,7 @@ Completion criteria:
 Current notes:
 
 - Dashboard V1 lives in `frontend/`.
-- Dashboard V1 is split into workflow pages: FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure and CVA.
+- Dashboard V1 is split into workflow pages: FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA and Run History.
 - FO Desk V1 is the operational FO landing page: it aggregates visible portfolios, personal booking counts, and booking history without new persistence.
 - Pre-Trade Analysis V1 lets FO price one hypothetical European option against confirmed positions before preparing the ticket in `u-Pad`; it is stateless and pricing/Greeks-only.
 - Stress Testing V1 lets FO run scenario matrices over confirmed positions, optionally including one hypothetical trade; it is stateless and pricing/Greeks-only.
@@ -213,8 +213,9 @@ Current notes:
 - Administration V1 manages user group memberships, FO permission checks, portfolio access mode, and a read-only booking workflow map.
 - The frontend consumes NexusXVA backend APIs for calculations. FO market-watch widgets may call `/blemberg-api/*` for cached snapshot display, but pricing, exposure, CVA, and stress calculations stay in NexusXVA backend services.
 - The frontend must not reimplement Black-Scholes, Monte Carlo, exposure aggregation, or CVA.
+- Run History V1 is implemented for pricing, exposure and CVA. It stores input/result/summary JSON plus user/group metadata for audit, not for downstream pricing.
 - The first CVA UI uses flat CVA inputs; curve-mode UI can be added after the basic workflow is stable.
-- The next FO product slice is multi-leg option strategies, followed by cash equities/delta hedging and a richer FO risk blotter.
+- Multi-leg option strategies and Run History V1 are implemented. The next natural FO product slice is cash equities/delta hedging, followed by a richer FO risk blotter.
 
 ## Milestone 8: Hardening
 

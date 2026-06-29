@@ -251,6 +251,11 @@ export type PortfolioEodSnapshot = {
   positionsWithoutExecutionPrice: number;
   capturedAt: string;
   source: string;
+  status: "ACTIVE" | "VOIDED" | "SUPERSEDED";
+  voidedAt: string | null;
+  voidedByUserId: string | null;
+  voidReason: string | null;
+  correctionOfRunId: string | null;
   positions: PositionEodSnapshot[];
 };
 
@@ -422,6 +427,28 @@ export type CvaPoint = {
   defaultProbabilityIncrement: number;
   discountedExpectedExposure: number;
   cvaContribution: number;
+};
+
+export type ValuationRunType = "PRICING" | "EXPOSURE" | "CVA";
+export type ValuationRunStatus = "SUCCESS" | "FAILED";
+
+export type ValuationRun = {
+  id: string;
+  portfolioId: string;
+  portfolioName: string;
+  runType: ValuationRunType;
+  model: string;
+  valuationDate: string | null;
+  status: ValuationRunStatus;
+  requestedByUserId: string | null;
+  requestedByUsername: string | null;
+  requestedByDisplayName: string | null;
+  activeGroupCode: string | null;
+  input: unknown;
+  result: unknown | null;
+  summary: unknown | null;
+  errorMessage: string | null;
+  createdAt: string;
 };
 
 export type ApiError = {

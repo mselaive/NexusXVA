@@ -23,7 +23,7 @@ const howTo = [
   { title: "Groups", body: "ADMIN controls which high-level group contexts a user can select after login." },
   { title: "FO checks", body: "Feature checks are user-level overrides. If no override exists, the FO group keeps its default capability." },
   { title: "Portfolio visibility", body: "Use ALL for normal users or SELECTED to restrict which portfolios they can see and run analytics on." },
-  { title: "Portfolio removal", body: "ADMIN can delete portfolios globally when they are no longer needed. Pending BO bookings protect a portfolio from deletion." },
+  { title: "Portfolio archive", body: "ADMIN archives portfolios globally when they are no longer needed. Historical bookings and EOD snapshots are retained." },
   { title: "Self protection", body: "An ADMIN cannot remove their own ADMIN group; this keeps the current session from locking itself out." },
 ];
 
@@ -76,7 +76,7 @@ export function AdminPage() {
   }
 
   async function deletePortfolio(portfolio: AdminPortfolioSummary) {
-    const confirmed = window.confirm(`Delete portfolio "${portfolio.name}"? Confirmed positions will be deleted. Portfolios with pending BO bookings are protected.`);
+    const confirmed = window.confirm(`Archive portfolio "${portfolio.name}"? It will disappear from operational screens, but historical bookings and EOD snapshots are retained.`);
     if (!confirmed) {
       return;
     }
@@ -85,7 +85,7 @@ export function AdminPage() {
     setSuccess(null);
     try {
       await nexusApi.deleteAdminPortfolio(portfolio.id);
-      setSuccess(`Portfolio "${portfolio.name}" deleted.`);
+      setSuccess(`Portfolio "${portfolio.name}" archived.`);
       await loadAccess(selected?.id);
     } catch (caught) {
       setError(errorMessage(caught));
@@ -201,7 +201,7 @@ export function AdminPage() {
                     <div className="admin-card-head">
                       <div>
                         <h3>Portfolio visibility</h3>
-                        <p>Restricts portfolio access by user. Delete removes a portfolio globally when there are no pending BO bookings.</p>
+                        <p>Restricts portfolio access by user. Archive removes a portfolio from operational screens while keeping historical records.</p>
                       </div>
                       <LockKeyhole size={18} />
                     </div>
@@ -230,11 +230,11 @@ export function AdminPage() {
                               type="button"
                               onClick={() => deletePortfolio(portfolio)}
                               disabled={saving === `delete-${portfolio.id}`}
-                              title="Delete portfolio"
-                              aria-label={`Delete ${portfolio.name}`}
+                              title="Archive portfolio"
+                              aria-label={`Archive ${portfolio.name}`}
                             >
                               {saving === `delete-${portfolio.id}` ? <Loader2 className="spin" size={14} /> : <Trash2 size={14} />}
-                              Delete
+                              Archive
                             </button>
                           </div>
                         );

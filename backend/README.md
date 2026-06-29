@@ -2,7 +2,7 @@
 
 Spring Boot backend for NexusXVA.
 
-The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option positions, stateless portfolio-level Black-Scholes pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, and simplified CVA V1.1.
+The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option positions, portfolio-level Black-Scholes pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, simplified CVA V1.1, and persisted valuation run history for audit.
 
 ## Requirements
 
@@ -149,9 +149,9 @@ Security model:
 
 Current group intent:
 
-- `FO`: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad booking submission, portfolios, pricing, exposure and CVA.
-- `BO`: Trade Validation, preventive Trading Limits, and manual EOD Control.
-- `ADMIN`: user/group administration, FO feature permissions, portfolio visibility, and workflow monitoring.
+- `FO`: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad booking submission, portfolios, pricing, exposure, CVA and valuation run history.
+- `BO`: Trade Validation, preventive Trading Limits, manual EOD Control, and valuation run history.
+- `ADMIN`: user/group administration, FO feature permissions, portfolio visibility, workflow monitoring, and valuation run history.
 
 The backend enforces the active group. Frontend navigation is not the security boundary.
 
@@ -255,12 +255,36 @@ The current test setup covers:
 
 The current suite has more than 150 tests, including one real Blemberg smoke test that is skipped unless explicitly enabled.
 
+## Valuation Run History V1
+
+Run History records portfolio valuation executions without changing the pricing model:
+
+- `GET /api/valuation-runs`
+- `GET /api/valuation-runs/{runId}`
+
+Filters:
+
+- `runType=PRICING|EXPOSURE|CVA`
+- `status=SUCCESS|FAILED`
+- `portfolioId=<uuid>`
+- `limit=50`
+
+Stored fields include portfolio, model, valuation date, status, requesting user/group, `input_json`, `result_json`, `summary_json`, error message and timestamp.
+
+Important boundaries:
+
+- Run History is audit/replay context, not official EOD close.
+- Run History does not persist market data as a source of truth.
+- Pricing, Exposure and CVA still recompute from current portfolio state and `marketdata` inputs.
+- Failed runs are stored only when the request reaches the valuation controller and fails during calculation.
+
 ## Developer Financial Docs
 
 Conceptual financial guides for developers live in:
 
 - Spanish: [`../docs/docs-ES/ConceptosFinancieros.md`](../docs/docs-ES/ConceptosFinancieros.md)
 - System logic ES: [`../docs/docs-ES/LogicaDelSistema.md`](../docs/docs-ES/LogicaDelSistema.md)
+- Data model ES: [`../docs/docs-ES/DataModel.md`](../docs/docs-ES/DataModel.md)
 - Auth and groups ES: [`../docs/docs-ES/AuthYGrupos.md`](../docs/docs-ES/AuthYGrupos.md)
 - Demo portfolios ES: [`../docs/docs-ES/PortafoliosDemo.md`](../docs/docs-ES/PortafoliosDemo.md)
 - System logic EN: [`../docs/docs-EN/SystemLogic.md`](../docs/docs-EN/SystemLogic.md)
@@ -395,7 +419,7 @@ If execution price is missing, position P&L is returned as `null` and `positions
 
 ### EOD Snapshots And Daily P&L
 
-EOD closes are immutable snapshots; they never overwrite trade economics or live positions.
+EOD closes are audited snapshots; they never overwrite trade economics or live positions.
 
 - `GET /api/portfolios/{portfolioId}/eod/latest`
 - `GET /api/portfolios/{portfolioId}/eod?limit=10`
@@ -403,6 +427,8 @@ EOD closes are immutable snapshots; they never overwrite trade economics or live
 - `POST /api/back-office/eod/run` for a global manual BO close
 - `POST /api/back-office/eod/portfolios/{portfolioId}` for targeted operational recovery
 - `GET /api/back-office/eod/portfolios/{portfolioId}` for BO history
+- `POST /api/back-office/eod/runs/{runId}/void` to void an active close with a reason
+- `POST /api/back-office/eod/runs/{runId}/recapture` to supersede and recapture the same portfolio/date
 
 Existing positions use prior EOD market value as the Daily P&L reference. Positions created after the close use execution trade value. Missing references remain unavailable.
 
@@ -417,11 +443,11 @@ NEXUSXVA_EOD_ZONE=America/New_York
 NEXUSXVA_EOD_ALLOW_STALE=false
 ```
 
-The close rejects stale market data and active unpriceable positions. One portfolio/date can be captured only once.
+The close rejects stale market data and active unpriceable positions. One `ACTIVE` portfolio/date close can exist at a time. Corrections never delete old runs: `VOIDED` and `SUPERSEDED` snapshots remain visible in history, while latest close and Daily P&L use only `ACTIVE` runs.
 
 Approval of `CANCEL` marks the original position `CANCELLED`. Approval of `AMEND` marks the original position `AMENDED` and creates a replacement `ACTIVE` position. Pricing, exposure, CVA, pre-trade analysis and stress testing use only `ACTIVE` positions.
 
-Portfolio deletion returns `409 Conflict` while pending bookings exist. Reviewed booking history keeps portfolio and actor snapshots even if the portfolio is later deleted.
+Portfolio removal is logical archive, not hard delete. Archived portfolios disappear from operational workflows, but reviewed booking history and EOD snapshots remain available for audit. Archive returns `409 Conflict` while pending bookings exist.
 
 Portfolio metadata fields:
 
@@ -434,7 +460,7 @@ Portfolio positions store trade terms only. Market data inputs such as `spot`, `
 
 ### Portfolio Black-Scholes Pricing
 
-Portfolio pricing is stateless: it reads persisted positions, requests pricing inputs through the `marketdata` boundary, reuses the Black-Scholes calculator, and returns per-position plus portfolio-level totals. Pricing results are not persisted.
+Portfolio pricing is synchronous and calculation-owned: it reads persisted positions, requests pricing inputs through the `marketdata` boundary, reuses the Black-Scholes calculator, and returns per-position plus portfolio-level totals. NexusXVA also stores an audit copy in `valuation_runs`; future calculations do not read prior pricing runs as source data.
 
 Endpoint:
 
@@ -562,7 +588,7 @@ The real smoke test is skipped in normal `mvn test` runs unless `RUN_REAL_BLEMBE
 
 ### Exposure Simulation V1
 
-Exposure V1 is stateless: it loads a persisted portfolio, requests market-data pricing inputs through the `marketdata` boundary, simulates future spot paths with a simple GBM model, reprices live European option positions with Black-Scholes across the time grid, and aggregates exposure measures. Results are not persisted.
+Exposure V1 is synchronous: it loads a persisted portfolio, requests market-data pricing inputs through the `marketdata` boundary, simulates future spot paths with a simple GBM model, reprices live European option positions with Black-Scholes across the time grid, and aggregates exposure measures. NexusXVA stores an audit copy in `valuation_runs`; it does not persist paths as reusable market/risk state.
 
 Endpoint:
 
@@ -613,11 +639,11 @@ V1 simulation rules:
 - Uses deterministic seeds so tests and dev runs are repeatable.
 - Excludes positions once `maturityDate <= futureDate`.
 - Empty portfolios or all-expired portfolios return zero exposure points.
-- Does not persist market data, simulated paths, or exposure results.
+- Does not persist market data or simulated paths as reusable state; the API request/response is copied to valuation run history for audit.
 
 ### Simplified CVA V1.1
 
-CVA V1.1 is stateless: it reuses Exposure V1, then applies a simple credit valuation adjustment formula over expected exposure by date. Results are not persisted.
+CVA V1.1 is synchronous: it reuses Exposure V1, then applies a simple credit valuation adjustment formula over expected exposure by date. NexusXVA stores an audit copy in `valuation_runs`; counterparty curves and CVA state are not promoted into persisted master data yet.
 
 Endpoint:
 

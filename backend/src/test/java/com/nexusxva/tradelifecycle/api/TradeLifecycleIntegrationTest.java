@@ -41,6 +41,8 @@ class TradeLifecycleIntegrationTest extends AbstractPostgresIntegrationTest {
     void clean() {
         jdbcTemplate.update("DELETE FROM user_notifications");
         jdbcTemplate.update("DELETE FROM trade_lifecycle_requests");
+        jdbcTemplate.update("DELETE FROM portfolio_position_eod_snapshots");
+        jdbcTemplate.update("DELETE FROM portfolio_eod_runs");
         jdbcTemplate.update("DELETE FROM trade_booking_requests");
         jdbcTemplate.update("DELETE FROM portfolio_european_option_positions");
         jdbcTemplate.update("DELETE FROM portfolios");

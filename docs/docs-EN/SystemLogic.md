@@ -42,7 +42,7 @@ The backend currently has:
 - Temporary local market-data pricing inputs as a development fallback.
 - Exposure V1 using simple GBM Monte Carlo and Black-Scholes repricing.
 - Simplified CVA V1.1 over the exposure profile.
-- Dashboard V1 frontend for portfolio, pricing, exposure and CVA workflows.
+- Dashboard V1 frontend for portfolio, pricing, exposure, CVA and Run History workflows.
 - Database migrations with Flyway.
 - Financial, API, and persistence tests.
 
@@ -65,6 +65,8 @@ POST /api/back-office/trade-bookings/{bookingId}/reject
 POST /api/portfolios/{portfolioId}/pricing/black-scholes
 POST /api/simulations/exposure
 POST /api/risk/cva
+GET /api/valuation-runs
+GET /api/valuation-runs/{runId}
 ```
 
 The pricing endpoint receives European option data and returns:
@@ -82,7 +84,7 @@ The portfolio endpoints allow us to:
 - List portfolio summaries with position counts.
 - Retrieve a portfolio by id.
 - Update portfolio metadata.
-- Delete portfolios.
+- Archive portfolios without deleting historical records.
 - Add European option positions.
 - List instruments in a portfolio.
 - Get, update, and delete individual positions.
@@ -167,8 +169,8 @@ In more detail:
 6. Price and Greeks are scaled by `quantity`.
 7. Expired positions are returned as `UNPRICEABLE_EXPIRED` and excluded from totals.
 
-This is still stateless pricing.
-The portfolio stores trade terms, the market-data module provides valuation inputs, and pricing results are not persisted.
+This is still recalculated on request.
+The portfolio stores trade terms, the market-data module provides valuation inputs, and `valuation_runs` stores only an audit copy of the request/response.
 
 ## How an Exposure Simulation Request Flows
 
@@ -220,14 +222,27 @@ In more detail:
 4. Each bucket contributes `LGD * discountFactor * expectedExposure * defaultProbabilityIncrement`.
 5. The API returns total CVA plus per-date contribution details.
 
-CVA V1 is synchronous and stateless.
-It does not persist exposure, default probabilities, or CVA results.
+CVA V1 is synchronous. Counterparty, curve and market-data master data are not persisted by CVA.
+
+## How Valuation Run History Flows
+
+Run History records successful and failed valuation executions:
+
+```text
+pricing / exposure / CVA request
+  -> valuation service
+  -> API response
+  -> valuationruns.application
+  -> valuation_runs
+```
+
+The stored run contains input JSON, result JSON, a compact summary, model, valuation date, portfolio, user, active group and status. This is audit history only. Pricing, Exposure and CVA do not read old runs to produce new values, and Run History is not an EOD close or official market-data store.
 
 ## How the Dashboard Flows
 
 Dashboard V1 is a Next.js frontend in `frontend/`.
 It does not implement financial formulas.
-The UI is split by active group. FO uses FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure and CVA. BO uses Trade Validation, Lifecycle Validation, Trading Limits and EOD Control. ADMIN uses Administration for memberships, FO feature permissions and portfolio visibility, plus Workflows for read-only workflow monitoring.
+The UI is split by active group. FO uses FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA and Run History. BO uses Trade Validation, Lifecycle Validation, Trading Limits, EOD Control and Run History. ADMIN uses Administration for memberships, FO feature permissions and portfolio visibility, plus Workflows and Run History for read-only monitoring.
 The header includes a persisted notification inbox. Notifications belong to the user, not to the active group, so multi-group users keep one inbox while switching between FO, BO and ADMIN.
 
 The frontend flow is:
@@ -262,7 +277,7 @@ For local development, the frontend calls `/nexus-api/*`, which Next.js proxies 
 
 `u-Pad` may also capture the option `executionPrice`, meaning premium per unit. On BO approval it is copied into the confirmed position. Portfolio pricing compares this execution premium with the current Black-Scholes unit value to produce unrealized P&L. Missing legacy economics remain unavailable rather than being treated as zero.
 
-EOD is a separate immutable control owned by BO or the system scheduler. FO consumes the close but cannot create it. The normal process closes all portfolios and reports an independent `CAPTURED`, `SKIPPED`, or `FAILED` result for each book. It snapshots portfolio and position market values without changing execution economics. Daily P&L uses prior EOD value for existing positions and execution value for positions created after the close. Scheduled EOD is configurable and disabled by default.
+EOD is a separate audited control owned by BO or the system scheduler. FO consumes the close but cannot create it. The normal process closes active portfolios and reports an independent `CAPTURED`, `SKIPPED`, or `FAILED` result for each book. It snapshots portfolio and position market values without changing execution economics. BO corrections use `VOIDED` and `SUPERSEDED` runs rather than physical deletion; latest close and Daily P&L use only `ACTIVE` runs. Scheduled EOD is configurable and disabled by default.
 
 Optional large demo portfolios live in `backend/src/main/resources/db/demo/demo_portfolios.sql`. They are not Flyway migrations; developers load them explicitly when they want realistic local books for dashboard demos, pricing, exposure, CVA, pre-trade analysis and stress testing. See `docs/docs-EN/DemoPortfolios.md`.
 
@@ -415,7 +430,7 @@ Owns the portfolio HTTP contract:
 - List portfolios.
 - Get portfolio by id.
 - Update portfolio.
-- Delete portfolio.
+- Archive portfolio.
 - Add European option to portfolio.
 - List portfolio instruments.
 - Get, update, and delete individual positions.
@@ -431,11 +446,11 @@ For now it coordinates:
 - Creating portfolios.
 - Listing portfolios.
 - Updating metadata.
-- Deleting portfolios and their positions.
+- Archiving portfolios without deleting EOD or workflow history.
 - Checking that a portfolio exists before adding/listing positions.
 - Adding European option positions.
 - Operating individual positions.
-- Pricing a portfolio with Black-Scholes without persisting valuation results.
+- Pricing a portfolio with Black-Scholes while leaving only an audit copy in valuation run history.
 
 ### `portfolio.domain`
 
@@ -555,7 +570,7 @@ For the first portfolio slice we decided to:
 - Price portfolios only in `USD` for V1; FX conversion is not implemented yet.
 - Use Blemberg as the target real source of pricing inputs.
 - Use the local provider only as a temporary source of demo pricing inputs.
-- Keep portfolio pricing stateless; do not persist valuation results.
+- Recalculate portfolio pricing on request and store only valuation run audit snapshots.
 
 The trade/market-data separation is intentional.
 A portfolio describes which instruments we hold; market data describes the market state used to value those instruments.
@@ -574,7 +589,7 @@ For Exposure V1 we decided to:
 - Keep simulation deterministic when a fixed `seed` is provided.
 - Return expected exposure, expected negative exposure, and PFE by date.
 - Exclude positions once they are expired for a simulated future date.
-- Keep exposure stateless and synchronous.
+- Keep exposure synchronous; persist only valuation run audit snapshots, not reusable simulation paths.
 - Keep USD-only until FX conversion is implemented.
 
 This is the bridge between portfolio pricing and CVA.
@@ -590,7 +605,7 @@ For CVA V1 we decided to:
 - Support either a flat continuously compounded discount rate or request-provided discount curves.
 - Linearly interpolate curve values for exposure dates inside the curve range.
 - Use `lossGivenDefault` directly, with values between `0.0` and `1.0`.
-- Keep CVA stateless and synchronous.
+- Keep CVA synchronous; persist only valuation run audit snapshots, not counterparty or curve master data.
 - Keep USD-only and European-options-only through the reused exposure flow.
 
 This is intentionally simplified.
@@ -628,7 +643,7 @@ The portfolio slice is protected with:
 
 - Domain tests for names, symbols, strikes, and quantities.
 - Integration tests with PostgreSQL/Testcontainers.
-- API tests for creating/listing/updating/deleting portfolios.
+- API tests for creating/listing/updating/archiving portfolios.
 - API tests for submitting, approving, and rejecting bookings.
 - Tests confirming pending bookings do not affect pricing, exposure, or CVA.
 - Tests for Blemberg validation enabled and disabled.
@@ -698,7 +713,7 @@ Suggested next version:
 - Treat Blemberg snapshots as diagnostic/cache data only; pricing and exposure must keep using pricing inputs.
 - Accept Blemberg V1 `501` for `/v3/api-docs` as expected because runtime integration does not depend on OpenAPI.
 - Keep the optional real Blemberg smoke test disabled by default and enable it with `RUN_REAL_BLEMBERG_SMOKE=true`.
-- Keep simplified CVA stateless until we explicitly introduce persisted valuation runs.
+- Persisted valuation run history now exists for pricing, exposure and CVA audit snapshots.
 - Add FX only when we want to support multi-currency totals.
 - Add CVA curve-mode UI, real counterparties, netting, and collateral only after Dashboard V1 is usable.
 

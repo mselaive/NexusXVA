@@ -1,5 +1,6 @@
 package com.nexusxva.eod.application;
 
+import com.nexusxva.eod.domain.EodRunStatus;
 import com.nexusxva.eod.domain.PortfolioEodSnapshot;
 import com.nexusxva.eod.domain.PositionEodSnapshot;
 import com.nexusxva.portfolio.application.PortfolioBlackScholesPricingResult;
@@ -34,6 +35,31 @@ public class PortfolioEodService {
 
     @Transactional
     public PortfolioEodSnapshot capture(UUID portfolioId, LocalDate businessDate, String source) {
+        return captureInternal(portfolioId, businessDate, source, null);
+    }
+
+    @Transactional
+    public PortfolioEodSnapshot voidRun(UUID runId, UUID voidedByUserId, String reason) {
+        PortfolioEodSnapshot run = activeRun(runId);
+        String normalizedReason = normalizeReason(reason);
+        store.voidRun(runId, voidedByUserId, normalizedReason);
+        return store.find(runId).orElse(run);
+    }
+
+    @Transactional
+    public PortfolioEodSnapshot recapture(UUID runId, UUID voidedByUserId, String reason) {
+        PortfolioEodSnapshot run = activeRun(runId);
+        String normalizedReason = normalizeReason(reason);
+        store.supersedeRun(runId, voidedByUserId, normalizedReason);
+        return captureInternal(run.portfolioId(), run.businessDate(), "MANUAL_BO_CORRECTION", run.id());
+    }
+
+    private PortfolioEodSnapshot captureInternal(
+            UUID portfolioId,
+            LocalDate businessDate,
+            String source,
+            UUID correctionOfRunId
+    ) {
         LocalDate resolvedDate = businessDate == null ? LocalDate.now(ZoneOffset.UTC) : businessDate;
         if (resolvedDate.isAfter(LocalDate.now(ZoneOffset.UTC))) {
             throw new IllegalArgumentException("EOD businessDate must not be in the future");
@@ -76,6 +102,11 @@ public class PortfolioEodService {
                 pricing.positionsWithoutExecutionPrice(),
                 Instant.now(),
                 source,
+                EodRunStatus.ACTIVE,
+                null,
+                null,
+                null,
+                correctionOfRunId,
                 positions
         ));
     }
@@ -88,5 +119,25 @@ public class PortfolioEodService {
     @Transactional(readOnly = true)
     public List<PortfolioEodSnapshot> history(UUID portfolioId, int limit) {
         return store.history(portfolioId, Math.min(Math.max(limit, 1), 60));
+    }
+
+    private PortfolioEodSnapshot activeRun(UUID runId) {
+        PortfolioEodSnapshot run = store.find(runId)
+                .orElseThrow(() -> new com.nexusxva.shared.error.ResourceNotFoundException("EOD snapshot not found"));
+        if (run.status() != EodRunStatus.ACTIVE) {
+            throw new ConflictException("Only ACTIVE EOD snapshots can be corrected");
+        }
+        return run;
+    }
+
+    private String normalizeReason(String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("Correction reason is required");
+        }
+        String normalized = reason.trim();
+        if (normalized.length() > 500) {
+            throw new IllegalArgumentException("Correction reason must be at most 500 characters");
+        }
+        return normalized;
     }
 }

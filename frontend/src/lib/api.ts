@@ -39,6 +39,9 @@ import type {
   TradingLimitUserPage,
   UpdateTradingLimitRequest,
   UserNotification,
+  ValuationRun,
+  ValuationRunStatus,
+  ValuationRunType,
 } from "./types";
 
 export const API_BASE_URL = (process.env.NEXT_PUBLIC_NEXUSXVA_API_BASE_URL ?? "/nexus-api").replace(/\/$/, "");
@@ -250,6 +253,18 @@ export const nexusApi = {
   getBackOfficePortfolioEodHistory: (portfolioId: string, limit = 10) =>
     request<PortfolioEodSnapshot[]>(`/back-office/eod/portfolios/${portfolioId}?limit=${limit}`),
 
+  voidBackOfficeEodRun: (runId: string, reason: string) =>
+    request<PortfolioEodSnapshot>(`/back-office/eod/runs/${runId}/void`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  recaptureBackOfficeEodRun: (runId: string, reason: string) =>
+    request<PortfolioEodSnapshot>(`/back-office/eod/runs/${runId}/recapture`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
   getLatestPortfolioEod: (portfolioId: string) =>
     request<PortfolioEodSnapshot>(`/portfolios/${portfolioId}/eod/latest`),
 
@@ -270,6 +285,31 @@ export const nexusApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  listValuationRuns: (filters: {
+    runType?: ValuationRunType | "";
+    status?: ValuationRunStatus | "";
+    portfolioId?: string;
+    limit?: number;
+  } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.runType) {
+      params.set("runType", filters.runType);
+    }
+    if (filters.status) {
+      params.set("status", filters.status);
+    }
+    if (filters.portfolioId) {
+      params.set("portfolioId", filters.portfolioId);
+    }
+    if (filters.limit) {
+      params.set("limit", String(filters.limit));
+    }
+    const query = params.toString();
+    return request<ValuationRun[]>(`/valuation-runs${query ? `?${query}` : ""}`);
+  },
+
+  getValuationRun: (runId: string) => request<ValuationRun>(`/valuation-runs/${runId}`),
 
   listAdminUsers: (query = "", page = 0, size = 50) => {
     const params = new URLSearchParams({ page: String(page), size: String(size) });

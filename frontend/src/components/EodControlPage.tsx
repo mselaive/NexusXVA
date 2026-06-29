@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { CalendarCheck, CheckCircle2, Clock3, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { CalendarCheck, CheckCircle2, Clock3, Loader2, RefreshCw, RotateCcw, ShieldCheck, XCircle } from "lucide-react";
 import { nexusApi, NexusApiError } from "@/lib/api";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type { EodBatchResult, PortfolioEodSnapshot, PortfolioSummary } from "@/lib/types";
@@ -9,7 +9,7 @@ import { AppShell } from "./AppShell";
 
 const howTo = [
   { title: "Who closes", body: "Only Back Office or the configured system scheduler can create an EOD close. Front Office consumes the result." },
-  { title: "Immutable close", body: "A portfolio and business date can be closed only once. EOD never overwrites execution premium, trades, or positions." },
+  { title: "Audited close", body: "EOD runs are not deleted. BO can void or recapture a close with a reason, preserving the audit trail." },
   { title: "Quality gates", body: "The close fails when active positions are unpriceable or market data is stale, unless stale data is explicitly allowed by configuration." },
   { title: "Daily P&L", body: "Existing positions compare against prior EOD. Trades created after that close compare against their execution value." },
 ];
@@ -78,6 +78,52 @@ export function EodControlPage() {
       if (selectedId) {
         await loadEod(selectedId);
       }
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setCapturing(false);
+    }
+  }
+
+  async function voidRun(snapshot: PortfolioEodSnapshot) {
+    const reason = window.prompt(`Why should EOD ${snapshot.businessDate} be voided?`);
+    if (reason == null) {
+      return;
+    }
+    if (!reason.trim()) {
+      setError("Void reason is required.");
+      return;
+    }
+    setCapturing(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await nexusApi.voidBackOfficeEodRun(snapshot.id, reason.trim());
+      setSuccess(`EOD ${snapshot.businessDate} voided.`);
+      await loadEod(snapshot.portfolioId);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setCapturing(false);
+    }
+  }
+
+  async function recaptureRun(snapshot: PortfolioEodSnapshot) {
+    const reason = window.prompt(`Why should EOD ${snapshot.businessDate} be recaptured?`);
+    if (reason == null) {
+      return;
+    }
+    if (!reason.trim()) {
+      setError("Recapture reason is required.");
+      return;
+    }
+    setCapturing(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await nexusApi.recaptureBackOfficeEodRun(snapshot.id, reason.trim());
+      setSuccess(`EOD ${snapshot.businessDate} recaptured with a new active snapshot.`);
+      await loadEod(snapshot.portfolioId);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -187,6 +233,7 @@ export function EodControlPage() {
               <thead>
                 <tr>
                   <th>Date</th>
+                  <th>Status</th>
                   <th>Market value</th>
                   <th>Trade value</th>
                   <th>Unrealized P&L</th>
@@ -194,12 +241,15 @@ export function EodControlPage() {
                   <th>Positions</th>
                   <th>Source</th>
                   <th>Captured</th>
+                  <th>Correction</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {history.map((snapshot) => (
                   <tr key={snapshot.id}>
                     <td><span className="status-inline"><CheckCircle2 size={14} /> {snapshot.businessDate}</span></td>
+                    <td><span className={`booking-status ${snapshot.status.toLowerCase()}`}>{snapshot.status}</span></td>
                     <td>{formatCurrency(snapshot.totalMarketValue, snapshot.baseCurrency)}</td>
                     <td>{formatCurrency(snapshot.totalTradeValue, snapshot.baseCurrency)}</td>
                     <td>{formatCurrency(snapshot.totalUnrealizedPnl, snapshot.baseCurrency)}</td>
@@ -207,6 +257,29 @@ export function EodControlPage() {
                     <td>{formatNumber(snapshot.positions.length, 0)}</td>
                     <td>{snapshot.source}</td>
                     <td>{new Date(snapshot.capturedAt).toLocaleString()}</td>
+                    <td>
+                      {snapshot.voidReason ? (
+                        <span title={snapshot.voidReason}>{snapshot.voidedAt ? new Date(snapshot.voidedAt).toLocaleString() : "Corrected"}</span>
+                      ) : snapshot.correctionOfRunId ? (
+                        "Correction"
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td>
+                      {snapshot.status === "ACTIVE" ? (
+                        <div className="table-actions">
+                          <button className="icon-btn" type="button" onClick={() => voidRun(snapshot)} disabled={capturing} title="Void EOD">
+                            <XCircle size={15} />
+                          </button>
+                          <button className="icon-btn" type="button" onClick={() => recaptureRun(snapshot)} disabled={capturing} title="Recapture EOD">
+                            <RotateCcw size={15} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="muted">Locked</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

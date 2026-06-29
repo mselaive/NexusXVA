@@ -29,6 +29,7 @@ FO analiza y bookea
 - Notificaciones persistidas por usuario.
 - Trade economics V1 con premium de ejecucion y unrealized P&L.
 - Snapshots EOD inmutables y Daily P&L contra el cierre anterior.
+- Run History persistido para auditoria de pricing, exposure y CVA.
 - Black-Scholes pricing individual y portfolio-level.
 - Monte Carlo Exposure V1.
 - CVA V1.1 con modo flat y curvas simples.
@@ -71,9 +72,9 @@ flowchart TD
 
 ## Grupos
 
-- **FO**: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, Portfolios, Pricing, Exposure y CVA.
-- **BO**: Trade Validation, Lifecycle Validation, Trading Limits y EOD Control.
-- **ADMIN**: usuarios, grupos, permisos FO, visibilidad de portfolios y workflow map.
+- **FO**: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, Portfolios, Pricing, Exposure, CVA y Run History.
+- **BO**: Trade Validation, Lifecycle Validation, Trading Limits, EOD Control y Run History.
+- **ADMIN**: usuarios, grupos, permisos FO, visibilidad de portfolios, workflow map y Run History.
 
 Un usuario puede tener varios grupos. Al hacer login elige el grupo activo de la sesion.
 
@@ -109,7 +110,7 @@ Las posiciones historicas sin premium siguen siendo validas, pero muestran P&L c
 
 ## EOD Y Daily P&L
 
-EOD no modifica el premium original ni las posiciones. Guarda una fotografia inmutable del cierre:
+EOD no modifica el premium original ni las posiciones. Guarda una fotografia auditada del cierre:
 
 ```text
 Durante el dia:
@@ -126,6 +127,8 @@ Una posicion creada despues del cierre usa su execution premium como referencia 
 
 Desde `EOD Control`, BO ejecuta un cierre global para todos los portfolios. Cada portfolio se procesa de forma independiente y el batch informa `CAPTURED`, `SKIPPED` o `FAILED`, de modo que un libro con problemas no oculta el resultado de los demas. El selector de portfolio se usa despues para inspeccionar su historial.
 
+Si el cierre fue incorrecto, BO no borra el EOD. Usa `Void` para anularlo con motivo o `Recapture` para marcar el cierre anterior como `SUPERSEDED` y crear un nuevo cierre `ACTIVE` para el mismo portfolio/date. Daily P&L usa solo cierres `ACTIVE`.
+
 El scheduler esta apagado por defecto. Se puede habilitar con:
 
 ```bash
@@ -133,6 +136,17 @@ NEXUSXVA_EOD_ENABLED=true docker compose up --build
 ```
 
 El default corre a las `17:15` de lunes a viernes en `America/New_York`. EOD rechaza market data stale y portfolios con posiciones activas no valorables.
+
+## Run History
+
+Cada ejecucion de portfolio pricing, Exposure y CVA guarda una copia auditada en `valuation_runs`:
+
+- input JSON enviado al calculo.
+- response JSON devuelto por el backend.
+- summary compacto para inspeccion rapida.
+- usuario, grupo activo, portfolio, modelo, fecha y estado `SUCCESS` o `FAILED`.
+
+Esto no reemplaza EOD ni guarda market data como fuente oficial. Es historial de ejecuciones para revisar que se corrio, con que parametros y que devolvio.
 
 ## Usuarios Y Portfolios P&L Demo
 
@@ -169,6 +183,7 @@ URLs habituales:
 - Backend: [backend/README.md](backend/README.md)
 - Logica del sistema EN: [docs/docs-EN/SystemLogic.md](docs/docs-EN/SystemLogic.md)
 - Logica del sistema ES: [docs/docs-ES/LogicaDelSistema.md](docs/docs-ES/LogicaDelSistema.md)
+- Data model ES: [docs/docs-ES/DataModel.md](docs/docs-ES/DataModel.md)
 - Conceptos financieros EN: [docs/docs-EN/FinancialConcepts.md](docs/docs-EN/FinancialConcepts.md)
 - Conceptos financieros ES: [docs/docs-ES/ConceptosFinancieros.md](docs/docs-ES/ConceptosFinancieros.md)
 - Proceso EOD ES: [docs/docs-ES/ProcesoEOD.md](docs/docs-ES/ProcesoEOD.md)
@@ -178,9 +193,7 @@ URLs habituales:
 
 Los siguientes candidatos naturales son:
 
-- Multi-leg option strategies.
 - Cash equities y delta hedging.
-- Persisted valuation run history.
 - Mejor reporting FO/BO sobre lifecycle.
 - UI para CVA curve mode.
 - Counterparties, netting y collateral.

@@ -49,12 +49,12 @@ public class PortfolioService {
     }
 
     @Transactional
-    public void deletePortfolio(UUID portfolioId) {
+    public void archivePortfolio(UUID portfolioId, UUID archivedByUserId, String reason) {
         ensurePortfolioExists(portfolioId);
         if (pendingTradeBookingChecker.hasPendingBookings(portfolioId)) {
             throw new ConflictException("Portfolio has pending trade bookings");
         }
-        portfolioStore.deletePortfolio(portfolioId);
+        portfolioStore.archivePortfolio(portfolioId, archivedByUserId, reason);
     }
 
     @Transactional(readOnly = true)

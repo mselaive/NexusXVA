@@ -42,13 +42,13 @@ class JpaPortfolioStore implements PortfolioStore {
 
     @Override
     public Optional<Portfolio> findPortfolio(UUID portfolioId) {
-        return portfolioJpaRepository.findById(portfolioId)
+        return portfolioJpaRepository.findActiveById(portfolioId)
                 .map(PortfolioEntity::toDomain);
     }
 
     @Override
     public boolean existsPortfolio(UUID portfolioId) {
-        return portfolioJpaRepository.existsById(portfolioId);
+        return portfolioJpaRepository.existsByIdAndArchivedAtIsNull(portfolioId);
     }
 
     @Override
@@ -59,8 +59,10 @@ class JpaPortfolioStore implements PortfolioStore {
     }
 
     @Override
-    public void deletePortfolio(UUID portfolioId) {
-        portfolioJpaRepository.delete(findPortfolioEntity(portfolioId));
+    public void archivePortfolio(UUID portfolioId, UUID archivedByUserId, String reason) {
+        PortfolioEntity portfolio = findPortfolioEntity(portfolioId);
+        portfolio.archive(archivedByUserId, reason);
+        portfolioJpaRepository.save(portfolio);
     }
 
     @Override
@@ -130,7 +132,7 @@ class JpaPortfolioStore implements PortfolioStore {
     }
 
     private PortfolioEntity findPortfolioEntity(UUID portfolioId) {
-        return portfolioJpaRepository.findById(portfolioId)
+        return portfolioJpaRepository.findActiveById(portfolioId)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
     }
 

@@ -38,6 +38,15 @@ class PortfolioEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
+    @Column(name = "archived_by_user_id")
+    private UUID archivedByUserId;
+
+    @Column(name = "archive_reason", length = 500)
+    private String archiveReason;
+
     @OneToMany(mappedBy = "portfolio", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("createdAt ASC")
     private List<EuropeanOptionPositionEntity> positions = new ArrayList<>();
@@ -56,7 +65,7 @@ class PortfolioEntity {
 
     static PortfolioEntity create(String name, String description, String baseCurrency) {
         Instant now = Instant.now();
-        Portfolio portfolio = new Portfolio(UUID.randomUUID(), name, description, baseCurrency, now, now, List.of());
+        Portfolio portfolio = new Portfolio(UUID.randomUUID(), name, description, baseCurrency, now, now, null, null, null, List.of());
         return new PortfolioEntity(
                 portfolio.id(),
                 portfolio.name(),
@@ -84,6 +93,13 @@ class PortfolioEntity {
         this.updatedAt = Instant.now();
     }
 
+    void archive(UUID archivedByUserId, String reason) {
+        this.archivedAt = Instant.now();
+        this.archivedByUserId = archivedByUserId;
+        this.archiveReason = reason == null || reason.isBlank() ? null : reason.trim();
+        this.updatedAt = this.archivedAt;
+    }
+
     Portfolio toDomain() {
         return new Portfolio(
                 id,
@@ -92,6 +108,9 @@ class PortfolioEntity {
                 baseCurrency,
                 createdAt,
                 updatedAt,
+                archivedAt,
+                archivedByUserId,
+                archiveReason,
                 positions.stream()
                         .map(EuropeanOptionPositionEntity::toDomain)
                         .toList()

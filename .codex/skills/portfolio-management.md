@@ -10,7 +10,7 @@ Current endpoints:
 - `GET /api/portfolios`
 - `GET /api/portfolios/{portfolioId}`
 - `PATCH /api/portfolios/{portfolioId}`
-- `DELETE /api/portfolios/{portfolioId}`
+- `DELETE /api/portfolios/{portfolioId}` archives the portfolio; it must not hard-delete history.
 - `GET /api/portfolios/{portfolioId}/instruments`
 - `GET /api/portfolios/{portfolioId}/instruments/{positionId}`
 - `POST /api/portfolios/{portfolioId}/trade-bookings/european-options`
@@ -28,6 +28,9 @@ Portfolio:
 - `name`
 - `description`
 - `baseCurrency`
+- `archivedAt`
+- `archivedByUserId`
+- `archiveReason`
 - `createdAt`
 - `updatedAt`
 
@@ -47,6 +50,7 @@ European option position:
 
 - Portfolio positions store trade terms only.
 - Pending and rejected booking requests are not portfolio positions and must not enter analytics.
+- Archived portfolios are not operational books. They should be filtered out of FO/BO risk workflows and EOD batch, but their historical bookings, lifecycle records, and EOD snapshots must remain available for audit.
 - BO approval is the only public workflow that creates confirmed positions.
 - Confirmed positions are immutable until amendment/cancellation workflows exist.
 - Do not persist `spot`, `riskFreeRate`, `volatility`, or `dividendYield` inside positions.

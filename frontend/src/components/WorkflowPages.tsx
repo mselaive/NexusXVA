@@ -6,6 +6,7 @@ import {
   Building2,
   CircleDollarSign,
   Cpu,
+  GitCompareArrows,
   FlaskConical,
   Gem,
   Landmark,
@@ -34,6 +35,7 @@ import type {
   PortfolioPricingResponse,
   PortfolioSummary,
   BlembergMarketSnapshot,
+  DeltaHedgeAnalysisResponse,
   EuropeanOptionPosition,
   TradeBooking,
   TradeLifecycleRequest,
@@ -169,6 +171,11 @@ const howTo = {
     { title: "4. Discount rate", body: "Flat annual discount rate used to discount future exposure contributions back to valuation date." },
     { title: "Run CVA", body: "The output shows total CVA and bucket contributions with exposure, discount factor, survival probability, default increment, and contribution." },
     { title: "Curve mode later", body: "The backend supports credit and discount curves, but Dashboard V1 currently exposes the simpler flat mode." },
+  ],
+  deltaHedge: [
+    { title: "Purpose", body: "Delta Hedge converts option delta into an equivalent share quantity so FO can decide whether to book a cash equity hedge." },
+    { title: "Target delta", body: "Targets are optional. Leave blank to hedge each symbol toward zero, or enter values like AAPL=0,MSFT=100." },
+    { title: "No auto-booking", body: "This analysis is stateless. To execute a hedge, book the cash equity trade in u-Pad and send it through BO validation." },
   ],
 };
 
@@ -470,7 +477,7 @@ export function UPadPage() {
   const [tradeBookings, setTradeBookings] = useState<TradeBooking[]>([]);
   const [lifecycleRequests, setLifecycleRequests] = useState<TradeLifecycleRequest[]>([]);
   const [myLimits, setMyLimits] = useState<TradingLimitSnapshot | null>(null);
-  const [ticketMode, setTicketMode] = useState<"single" | "strategy">("single");
+  const [ticketMode, setTicketMode] = useState<"single" | "strategy" | "cash">("single");
 
   const [tradeForm, setTradeForm] = useState(initialTradeFormFromUrl);
   const [strategyForm, setStrategyForm] = useState(initialStrategyForm);
@@ -585,6 +592,31 @@ export function UPadPage() {
     }
   }
 
+  async function bookCashEquity() {
+    if (!selectedId) {
+      setError("Select a portfolio first. Create portfolios from the Portfolios page.");
+      return;
+    }
+    const request = {
+      underlyingSymbol: tradeForm.underlyingSymbol.trim().toUpperCase(),
+      quantity: Number(tradeForm.quantity),
+      executionPrice: tradeForm.executionPrice === "" ? null : Number(tradeForm.executionPrice),
+    };
+
+    setLoading("cash");
+    setError(null);
+    setSuccess(null);
+    try {
+      await nexusApi.submitCashEquityBooking(selectedId, request);
+      await Promise.all([loadSelectedPortfolio(selectedId), loadMyLimits()]);
+      setSuccess(`Cash equity ${request.underlyingSymbol} sent for BO validation.`);
+    } catch (caught) {
+      setError(tradingLimitError(caught));
+    } finally {
+      setLoading(null);
+    }
+  }
+
   return (
     <AppShell title="u-Pad" eyebrow="Trade capture" howTo={howTo.upad}>
       <Alert message={error} />
@@ -600,6 +632,9 @@ export function UPadPage() {
             </button>
             <button className={ticketMode === "strategy" ? "active" : ""} type="button" onClick={() => setTicketMode("strategy")}>
               Strategy
+            </button>
+            <button className={ticketMode === "cash" ? "active" : ""} type="button" onClick={() => setTicketMode("cash")}>
+              Cash Equity
             </button>
           </div>
           <div className="notebook-grid" aria-label="u-Pad notebooks">
@@ -644,6 +679,25 @@ export function UPadPage() {
               onSubmit={bookStrategy}
               loading={loading === "strategy"}
             />
+          ) : ticketMode === "cash" ? (
+            <div className="form-grid">
+              <Field label="Underlying">
+                <input className="input ticker-input" value={tradeForm.underlyingSymbol} onChange={(event) => setTradeForm({ ...tradeForm, underlyingSymbol: event.target.value })} />
+              </Field>
+              <Field label="Quantity">
+                <input className="input" type="number" step="1" value={tradeForm.quantity} onChange={(event) => setTradeForm({ ...tradeForm, quantity: event.target.value })} />
+              </Field>
+              <Field label="Execution price">
+                <input className="input" type="number" min="0" step="0.01" placeholder="Optional" value={tradeForm.executionPrice} onChange={(event) => setTradeForm({ ...tradeForm, executionPrice: event.target.value })} />
+              </Field>
+              <div className="field">
+                <span>&nbsp;</span>
+                <button className="btn trade-submit" type="button" onClick={bookCashEquity} disabled={loading === "cash"}>
+                  {loading === "cash" ? <Loader2 size={16} /> : <Send size={16} />}
+                  Send to BO
+                </button>
+              </div>
+            </div>
           ) : (
           <div className="form-grid">
             <Field label="Underlying">
@@ -717,7 +771,6 @@ function TradeBookingTable({ bookings }: { bookings: TradeBooking[] }) {
           <tr>
             <th>Status</th>
             <th>Symbol</th>
-            <th>Strategy</th>
             <th>Type</th>
             <th>Strike</th>
             <th>Maturity</th>
@@ -732,9 +785,9 @@ function TradeBookingTable({ bookings }: { bookings: TradeBooking[] }) {
             <tr key={booking.id}>
               <td><span className={`booking-status ${booking.status.toLowerCase()}`}>{booking.status.replaceAll("_", " ")}</span></td>
               <td>{booking.bookingType === "OPTION_STRATEGY" ? booking.strategyName ?? booking.underlyingSymbol : booking.underlyingSymbol}</td>
-              <td>{booking.bookingType === "OPTION_STRATEGY" ? `${booking.strategyType?.replaceAll("_", " ")} (${booking.legs.length} legs)` : booking.optionType}</td>
-              <td>{formatNumber(booking.strike, 2)}</td>
-              <td>{booking.maturityDate}</td>
+              <td>{booking.bookingType === "OPTION_STRATEGY" ? `${booking.strategyType?.replaceAll("_", " ")} (${booking.legs.length} legs)` : booking.bookingType === "CASH_EQUITY" ? "Cash equity" : booking.optionType}</td>
+              <td>{booking.strike == null ? "—" : formatNumber(booking.strike, 2)}</td>
+              <td>{booking.maturityDate ?? "—"}</td>
               <td>{formatNumber(booking.quantity, 2)}</td>
               <td>{booking.executionPrice == null ? "Unavailable" : formatNumber(booking.executionPrice, 4)}</td>
               <td>{new Date(booking.submittedAt).toLocaleString()}</td>
@@ -1429,56 +1482,90 @@ function PositionTable({
   onAmend?: (position: EuropeanOptionPosition) => void;
   onCancel?: (position: EuropeanOptionPosition) => void;
 }) {
-  if (portfolio.positions.length === 0) {
+  if (portfolio.positions.length === 0 && portfolio.cashEquityPositions.length === 0) {
     return <EmptyState text="No positions in this portfolio." />;
   }
 
   return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Symbol</th>
-            <th>Type</th>
-            <th>Strike</th>
-            <th>Maturity</th>
-            <th>Quantity</th>
-            <th>Execution premium</th>
-            <th>Status</th>
-            <th>Updated</th>
-            {onAmend || onCancel ? <th>Actions</th> : null}
-          </tr>
-        </thead>
-        <tbody>
-          {portfolio.positions.map((position) => (
-            <tr className={(position.lifecycleStatus ?? "ACTIVE") !== "ACTIVE" ? "inactive-position-row" : ""} key={position.id}>
-              <td>{position.underlyingSymbol}</td>
-              <td>{position.strategyName ?? position.strategyType?.replaceAll("_", " ") ?? "-"}</td>
-              <td>{position.optionType}</td>
-              <td>{formatNumber(position.strike, 2)}</td>
-              <td>{position.maturityDate}</td>
-              <td>{formatNumber(position.quantity, 2)}</td>
-              <td>{position.executionPrice == null ? "Unavailable" : formatNumber(position.executionPrice, 4)}</td>
-              <td><span className={`lifecycle-status ${(position.lifecycleStatus ?? "ACTIVE").toLowerCase()}`}>{position.lifecycleStatus ?? "ACTIVE"}</span></td>
-              <td>{new Date(position.updatedAt).toLocaleString()}</td>
-              {onAmend || onCancel ? (
-                <td>
-                  {(position.lifecycleStatus ?? "ACTIVE") === "ACTIVE" ? (
-                    <div className="row-actions">
-                      {onAmend ? <button className="text-action" type="button" onClick={() => onAmend(position)}>Request Amend</button> : null}
-                      {onCancel ? <button className="text-action danger" type="button" onClick={() => onCancel(position)}>Request Cancel</button> : null}
-                    </div>
-                  ) : (
-                    <span className="muted-cell">
-                      {(position.lifecycleStatus ?? "ACTIVE") === "AMENDED" ? "Use replacement ACTIVE position" : "Closed history"}
-                    </span>
-                  )}
-                </td>
-              ) : null}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="position-inventory-stack">
+      {portfolio.positions.length > 0 ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Strategy</th>
+                <th>Type</th>
+                <th>Strike</th>
+                <th>Maturity</th>
+                <th>Quantity</th>
+                <th>Execution premium</th>
+                <th>Status</th>
+                <th>Updated</th>
+                {onAmend || onCancel ? <th>Actions</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {portfolio.positions.map((position) => (
+                <tr className={(position.lifecycleStatus ?? "ACTIVE") !== "ACTIVE" ? "inactive-position-row" : ""} key={position.id}>
+                  <td>{position.underlyingSymbol}</td>
+                  <td>{position.strategyName ?? position.strategyType?.replaceAll("_", " ") ?? "-"}</td>
+                  <td>{position.optionType}</td>
+                  <td>{formatNumber(position.strike, 2)}</td>
+                  <td>{position.maturityDate}</td>
+                  <td>{formatNumber(position.quantity, 2)}</td>
+                  <td>{position.executionPrice == null ? "Unavailable" : formatNumber(position.executionPrice, 4)}</td>
+                  <td><span className={`lifecycle-status ${(position.lifecycleStatus ?? "ACTIVE").toLowerCase()}`}>{position.lifecycleStatus ?? "ACTIVE"}</span></td>
+                  <td>{new Date(position.updatedAt).toLocaleString()}</td>
+                  {onAmend || onCancel ? (
+                    <td>
+                      {(position.lifecycleStatus ?? "ACTIVE") === "ACTIVE" ? (
+                        <div className="row-actions">
+                          {onAmend ? <button className="text-action" type="button" onClick={() => onAmend(position)}>Request Amend</button> : null}
+                          {onCancel ? <button className="text-action danger" type="button" onClick={() => onCancel(position)}>Request Cancel</button> : null}
+                        </div>
+                      ) : (
+                        <span className="muted-cell">
+                          {(position.lifecycleStatus ?? "ACTIVE") === "AMENDED" ? "Use replacement ACTIVE position" : "Closed history"}
+                        </span>
+                      )}
+                    </td>
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {portfolio.cashEquityPositions.length > 0 ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Product</th>
+                <th>Quantity</th>
+                <th>Execution price</th>
+                <th>Status</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {portfolio.cashEquityPositions.map((position) => (
+                <tr className={(position.lifecycleStatus ?? "ACTIVE") !== "ACTIVE" ? "inactive-position-row" : ""} key={position.id}>
+                  <td>{position.underlyingSymbol}</td>
+                  <td>Cash equity</td>
+                  <td>{formatNumber(position.quantity, 2)}</td>
+                  <td>{position.executionPrice == null ? "Unavailable" : formatNumber(position.executionPrice, 4)}</td>
+                  <td><span className={`lifecycle-status ${(position.lifecycleStatus ?? "ACTIVE").toLowerCase()}`}>{position.lifecycleStatus ?? "ACTIVE"}</span></td>
+                  <td>{new Date(position.updatedAt).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1631,6 +1718,22 @@ function PricingResult({ pricing }: { pricing: PortfolioPricingResponse }) {
                 <td>{position.marketData.source}{position.marketData.stale ? " · stale" : ""}</td>
               </tr>
             ))}
+            {pricing.cashEquityPositions.map((position) => (
+              <tr key={position.positionId}>
+                <td>{position.underlyingSymbol}</td>
+                <td>Cash equity</td>
+                <td>{formatNumber(position.quantity, 2)}</td>
+                <td>{position.executionPrice == null ? "Unavailable" : formatCurrency(position.executionPrice, pricing.baseCurrency)}</td>
+                <td>{formatCurrency(position.spot, pricing.baseCurrency)}</td>
+                <td>{formatCurrency(position.marketValue, pricing.baseCurrency)}</td>
+                <td>{position.unrealizedPnl == null ? "Unavailable" : formatCurrency(position.unrealizedPnl, pricing.baseCurrency)}</td>
+                <td>{formatNumber(position.marketData.spot, 2)}</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td>{position.marketData.source}{position.marketData.stale ? " · stale" : ""}</td>
+              </tr>
+            ))}
             {pricing.unpriceablePositions.map((position) => (
               <tr key={position.positionId}>
                 <td>{position.positionId.slice(0, 8)}</td>
@@ -1643,6 +1746,131 @@ function PricingResult({ pricing }: { pricing: PortfolioPricingResponse }) {
       </div>
     </div>
   );
+}
+
+export function DeltaHedgePage() {
+  const [selectedId, setSelectedId] = useState(initialPortfolioIdFromUrl);
+  const [valuationDate, setValuationDate] = useState(todayIsoDate());
+  const [targetDeltaText, setTargetDeltaText] = useState("");
+  const [result, setResult] = useState<DeltaHedgeAnalysisResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function runDeltaHedge() {
+    if (!selectedId) {
+      setError("Select a portfolio first.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      setResult(await nexusApi.runDeltaHedgeAnalysis({
+        portfolioId: selectedId,
+        valuationDate,
+        targetDeltaBySymbol: parseTargetDeltaMap(targetDeltaText),
+      }));
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <AppShell title="Delta Hedge" eyebrow="Cash equity hedge analysis" howTo={howTo.deltaHedge}>
+      <Alert message={error} />
+      <div className="panel section">
+        <SectionTitle title="Hedge setup" info="The backend prices confirmed option positions, adds existing cash equity positions and suggests the stock quantity needed to reach the target delta." />
+        <div className="toolbar">
+          <PortfolioPicker value={selectedId} onChange={setSelectedId} onError={setError} />
+          <label className="field compact-field">
+            <span>Valuation date</span>
+            <input className="input" type="date" value={valuationDate} onChange={(event) => setValuationDate(event.target.value)} />
+          </label>
+          <label className="field target-delta-field">
+            <span>Optional targets</span>
+            <input className="input" placeholder="AAPL=0,MSFT=100" value={targetDeltaText} onChange={(event) => setTargetDeltaText(event.target.value)} />
+          </label>
+          <button className="btn" type="button" onClick={runDeltaHedge} disabled={loading || !selectedId}>
+            {loading ? <Loader2 size={16} /> : <GitCompareArrows size={16} />}
+            Run hedge
+          </button>
+        </div>
+        <p className="mini-note">
+          V1 suggests cash-equity quantities only. It does not auto-book hedges; FO should book the chosen equity trade through u-Pad and BO validation.
+        </p>
+      </div>
+      <div className="panel">
+        <SectionTitle title="Suggested cash hedge" info="A positive suggested quantity means buy shares; a negative quantity means sell shares. Target delta defaults to zero per symbol." />
+        {result ? <DeltaHedgeResult result={result} /> : <EmptyState text="Run delta hedge analysis to see stock hedge suggestions." />}
+      </div>
+    </AppShell>
+  );
+}
+
+function DeltaHedgeResult({ result }: { result: DeltaHedgeAnalysisResponse }) {
+  const totalNetDelta = result.rows.reduce((sum, row) => sum + row.netDeltaShares, 0);
+  const totalTradeNotional = result.rows.reduce((sum, row) => sum + Math.abs(row.estimatedTradeNotional), 0);
+
+  return (
+    <div className="table-spacing">
+      <div className="summary-strip">
+        <Metric label="Model" value={result.model} />
+        <Metric label="Net delta" value={formatNumber(totalNetDelta, 2)} />
+        <Metric label="Gross hedge notional" value={formatCurrency(totalTradeNotional, result.baseCurrency)} />
+        <Metric label="Symbols" value={formatNumber(result.rows.length, 0)} />
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Option delta</th>
+              <th>Cash delta</th>
+              <th>Net delta</th>
+              <th>Target</th>
+              <th>Suggested stock qty</th>
+              <th>Spot</th>
+              <th>Trade notional</th>
+            </tr>
+          </thead>
+          <tbody>
+            {result.rows.map((row) => (
+              <tr key={row.symbol}>
+                <td>{row.symbol}</td>
+                <td>{formatNumber(row.optionDeltaShares, 2)}</td>
+                <td>{formatNumber(row.cashEquityDeltaShares, 2)}</td>
+                <td>{formatNumber(row.netDeltaShares, 2)}</td>
+                <td>{formatNumber(row.targetDeltaShares, 2)}</td>
+                <td className={row.suggestedCashEquityQuantity < 0 ? "negative" : "positive"}>{formatNumber(row.suggestedCashEquityQuantity, 2)}</td>
+                <td>{formatCurrency(row.spot, result.baseCurrency)}</td>
+                <td>{formatCurrency(row.estimatedTradeNotional, result.baseCurrency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function parseTargetDeltaMap(value: string) {
+  const entries = value.split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (entries.length === 0) {
+    return undefined;
+  }
+
+  return entries.reduce<Record<string, number>>((targets, entry) => {
+    const [symbol, target] = entry.split("=");
+    const normalizedSymbol = symbol?.trim().toUpperCase();
+    const parsedTarget = Number(target);
+    if (normalizedSymbol && Number.isFinite(parsedTarget)) {
+      targets[normalizedSymbol] = parsedTarget;
+    }
+    return targets;
+  }, {});
 }
 
 function ExposureResult({ exposure }: { exposure: ExposureSimulationResponse }) {

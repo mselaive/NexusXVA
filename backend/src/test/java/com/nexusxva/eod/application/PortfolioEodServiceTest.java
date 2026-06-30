@@ -141,6 +141,7 @@ class PortfolioEodServiceTest {
                 0,
                 PortfolioGreeks.zero(),
                 List.of(),
+                List.of(),
                 List.of()
         );
     }

@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "./Dashboard";
+import { DeltaHedgePage } from "./WorkflowPages";
 import { FrontOfficeDeskPage } from "./FrontOfficeDeskPage";
 import { FrontOfficeWhatIfPage } from "./FrontOfficeWhatIfPage";
 import { StressTestingPage } from "./StressTestingPage";
@@ -80,6 +81,19 @@ describe("Dashboard", () => {
     expect(screen.getAllByText("Spot -10%, Vol +500bp").length).toBeGreaterThan(0);
     expect(screen.getByText("Largest delta move")).toBeInTheDocument();
   });
+
+  it("runs delta hedge analysis and displays cash equity suggestions", async () => {
+    mockFetch();
+
+    render(<DeltaHedgePage />);
+
+    await screen.findByText("Hedge setup");
+    await userEvent.click(screen.getByRole("button", { name: /Run hedge/i }));
+
+    expect(await screen.findByText("Suggested cash hedge")).toBeInTheDocument();
+    expect(screen.getAllByText("Net delta").length).toBeGreaterThan(0);
+    expect(screen.getByText("-12")).toBeInTheDocument();
+  });
 });
 
 function mockFetch() {
@@ -134,6 +148,7 @@ function mockFetch() {
             updatedAt: "2026-06-01T00:00:00Z",
           },
         ],
+        cashEquityPositions: [],
       });
     }
 
@@ -168,6 +183,10 @@ function mockFetch() {
             portfolioName: "Demo Book",
             portfolioVisible: true,
             instrumentType: "EUROPEAN_OPTION",
+            bookingType: "SINGLE_OPTION",
+            strategyId: null,
+            strategyType: null,
+            strategyName: null,
             underlyingSymbol: "AAPL",
             optionType: "CALL",
             strike: 190,
@@ -180,6 +199,9 @@ function mockFetch() {
             reviewedAt: null,
             rejectionReason: null,
             confirmedPositionId: null,
+            confirmedPositionIds: [],
+            bookingNotional: 1900,
+            legs: [],
           },
           {
             id: "booking-2",
@@ -187,6 +209,10 @@ function mockFetch() {
             portfolioName: "Demo Book",
             portfolioVisible: true,
             instrumentType: "EUROPEAN_OPTION",
+            bookingType: "SINGLE_OPTION",
+            strategyId: null,
+            strategyType: null,
+            strategyName: null,
             underlyingSymbol: "MSFT",
             optionType: "PUT",
             strike: 300,
@@ -199,8 +225,32 @@ function mockFetch() {
             reviewedAt: "2026-06-01T01:00:00Z",
             rejectionReason: "Needs strike review",
             confirmedPositionId: null,
+            confirmedPositionIds: [],
+            bookingNotional: 1200,
+            legs: [],
           },
         ],
+      });
+    }
+
+    if (url === "/nexus-api/front-office/lifecycle/report" && !init?.method) {
+      return json({
+        total: 2,
+        pendingValidation: 1,
+        approved: 1,
+        rejected: 0,
+        amendments: 1,
+        cancellations: 1,
+        averageReviewMinutes: 45,
+        oldestPendingSubmittedAt: "2026-06-01T00:00:00Z",
+        pendingAgingBuckets: [
+          { label: "0-2h", count: 1 },
+          { label: "2-8h", count: 0 },
+          { label: "8-24h", count: 0 },
+          { label: ">24h", count: 0 },
+        ],
+        byPortfolio: [],
+        bySymbol: [],
       });
     }
 
@@ -288,6 +338,27 @@ function mockFetch() {
       });
     }
 
+    if (url === "/nexus-api/front-office/delta-hedge/european-options" && init?.method === "POST") {
+      return json({
+        portfolioId: "portfolio-1",
+        valuationDate: "2026-06-20",
+        model: "DELTA_HEDGE_CASH_EQUITY_V1",
+        baseCurrency: "USD",
+        rows: [
+          {
+            symbol: "AAPL",
+            optionDeltaShares: 12,
+            cashEquityDeltaShares: 0,
+            netDeltaShares: 12,
+            targetDeltaShares: 0,
+            suggestedCashEquityQuantity: -12,
+            spot: 190,
+            estimatedTradeNotional: -2280,
+          },
+        ],
+      });
+    }
+
     if (url === "/nexus-api/trading-limits/me" && !init?.method) {
       return json(tradingLimitFixture());
     }
@@ -315,6 +386,10 @@ function mockFetch() {
         portfolioId: "portfolio-1",
         portfolioName: "Demo Book",
         instrumentType: "EUROPEAN_OPTION",
+        bookingType: "SINGLE_OPTION",
+        strategyId: null,
+        strategyType: null,
+        strategyName: null,
         underlyingSymbol: "AAPL",
         optionType: "CALL",
         strike: 190,
@@ -327,6 +402,9 @@ function mockFetch() {
         reviewedAt: null,
         rejectionReason: null,
         confirmedPositionId: null,
+        confirmedPositionIds: [],
+        bookingNotional: 1900,
+        legs: [],
       });
     }
 
@@ -337,6 +415,9 @@ function mockFetch() {
         model: "BLACK_SCHOLES",
         baseCurrency: "USD",
         totalPrice: 123.45,
+        totalTradeValue: 100,
+        totalUnrealizedPnl: 23.45,
+        positionsWithoutExecutionPrice: 0,
         totalGreeks: { delta: 1.2, gamma: 0.03, vega: 4.5, theta: -0.7, rho: 2.1 },
         positions: [
           {
@@ -346,6 +427,9 @@ function mockFetch() {
             quantity: 10,
             unitPrice: 12.345,
             positionPrice: 123.45,
+            executionPrice: 10,
+            tradeValue: 100,
+            unrealizedPnl: 23.45,
             unitGreeks: { delta: 0.12, gamma: 0.003, vega: 0.45, theta: -0.07, rho: 0.21 },
             positionGreeks: { delta: 1.2, gamma: 0.03, vega: 4.5, theta: -0.7, rho: 2.1 },
             marketData: {
@@ -360,6 +444,7 @@ function mockFetch() {
             },
           },
         ],
+        cashEquityPositions: [],
         unpriceablePositions: [],
       });
     }

@@ -26,6 +26,13 @@ public interface TradeBookingStore {
             BookingActor submittedBy
     );
 
+    TradeBookingRequest createCashEquity(
+            UUID portfolioId,
+            String portfolioName,
+            CreateCashEquityBookingCommand command,
+            BookingActor submittedBy
+    );
+
     Optional<TradeBookingRequest> findById(UUID bookingId);
 
     TradeBookingRequest findByIdForUpdate(UUID bookingId);

@@ -69,6 +69,7 @@ class PortfolioDailyPnlServiceTest {
                         priced(NEW_POSITION, "MSFT", 18.0, 15.0, 3.0),
                         priced(UNKNOWN_POSITION, "NVDA", 5.0, null, null)
                 ),
+                List.of(),
                 List.of()
         );
     }

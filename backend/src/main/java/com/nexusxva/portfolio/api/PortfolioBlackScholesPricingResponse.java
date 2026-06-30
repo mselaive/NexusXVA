@@ -17,6 +17,7 @@ public record PortfolioBlackScholesPricingResponse(
         int positionsWithoutExecutionPrice,
         PortfolioGreeksResponse totalGreeks,
         List<PortfolioPositionPricingResponse> positions,
+        List<CashEquityPositionPricingResponse> cashEquityPositions,
         List<UnpriceablePortfolioPositionResponse> unpriceablePositions
 ) {
 
@@ -33,6 +34,9 @@ public record PortfolioBlackScholesPricingResponse(
                 PortfolioGreeksResponse.from(result.totalGreeks()),
                 result.positions().stream()
                         .map(PortfolioPositionPricingResponse::from)
+                        .toList(),
+                result.cashEquityPositions().stream()
+                        .map(CashEquityPositionPricingResponse::from)
                         .toList(),
                 result.unpriceablePositions().stream()
                         .map(UnpriceablePortfolioPositionResponse::from)

@@ -238,13 +238,13 @@ export function TradeValidationPage() {
               </div>
 
               <div className="trade-terms-grid">
-                <Detail label="Booking type" value={selected.bookingType === "OPTION_STRATEGY" ? "Option strategy" : "Single option"} />
+                <Detail label="Booking type" value={bookingTypeLabel(selected)} />
                 {selected.strategyType ? <Detail label="Strategy" value={selected.strategyName || selected.strategyType.replaceAll("_", " ")} /> : null}
-                <Detail label="Strike" value={formatNumber(selected.strike, 2)} />
+                <Detail label="Strike" value={selected.strike == null ? "—" : formatNumber(selected.strike, 2)} />
                 <Detail label="Quantity" value={formatNumber(selected.quantity, 2)} />
                 <Detail label="Execution premium" value={selected.executionPrice == null ? "Unavailable" : formatNumber(selected.executionPrice, 4)} />
-                <Detail label="Maturity" value={selected.maturityDate} />
-                <Detail label="Instrument" value="European option" />
+                <Detail label="Maturity" value={selected.maturityDate ?? "—"} />
+                <Detail label="Instrument" value={selected.instrumentType === "CASH_EQUITY" ? "Cash equity" : "European option"} />
                 <Detail label="Limit notional" value={selected.bookingNotional == null ? "Unavailable" : formatNumber(selected.bookingNotional, 2)} />
               </div>
 
@@ -497,6 +497,9 @@ function bookingTitle(booking: TradeBooking) {
   if (booking.bookingType === "OPTION_STRATEGY") {
     return `${booking.strategyName || booking.strategyType?.replaceAll("_", " ") || "Strategy"} ${booking.underlyingSymbol}`;
   }
+  if (booking.bookingType === "CASH_EQUITY") {
+    return `Cash equity ${booking.underlyingSymbol}`;
+  }
   return `${booking.optionType} ${booking.underlyingSymbol}`;
 }
 
@@ -504,7 +507,20 @@ function bookingSummary(booking: TradeBooking) {
   if (booking.bookingType === "OPTION_STRATEGY") {
     return `${booking.legs.length} legs · notional ${formatNumber(booking.bookingNotional ?? 0, 2)}`;
   }
-  return `${formatNumber(booking.quantity, 2)} @ ${formatNumber(booking.strike, 2)}`;
+  if (booking.bookingType === "CASH_EQUITY") {
+    return `${formatNumber(booking.quantity, 2)} shares${booking.executionPrice == null ? "" : ` @ ${formatNumber(booking.executionPrice, 2)}`}`;
+  }
+  return `${formatNumber(booking.quantity, 2)} @ ${booking.strike == null ? "—" : formatNumber(booking.strike, 2)}`;
+}
+
+function bookingTypeLabel(booking: TradeBooking) {
+  if (booking.bookingType === "OPTION_STRATEGY") {
+    return "Option strategy";
+  }
+  if (booking.bookingType === "CASH_EQUITY") {
+    return "Cash equity";
+  }
+  return "Single option";
 }
 
 function RejectLifecycleModal({

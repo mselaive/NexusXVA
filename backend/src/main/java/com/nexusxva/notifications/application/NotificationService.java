@@ -50,13 +50,7 @@ public class NotificationService {
 
     @Transactional
     public void notifyTradeBookingSubmitted(TradeBookingRequest booking) {
-        String bookingDescription = booking.bookingType() == TradeBookingType.OPTION_STRATEGY
-                ? "%s %s (%d legs)".formatted(booking.strategyType(), booking.underlyingSymbol(), booking.legs().size())
-                : "%s %s %s".formatted(
-                        booking.optionType(),
-                        booking.underlyingSymbol(),
-                        booking.quantity().stripTrailingZeros().toPlainString()
-                );
+        String bookingDescription = bookingDescription(booking, true);
         notificationStore.createForGroup(
                 BO_GROUP,
                 "TRADE_BOOKING_SUBMITTED",
@@ -77,9 +71,7 @@ public class NotificationService {
             return;
         }
         String outcome = booking.status() == TradeBookingStatus.CONFIRMED ? "approved" : "rejected";
-        String bookingDescription = booking.bookingType() == TradeBookingType.OPTION_STRATEGY
-                ? "%s %s".formatted(booking.strategyType(), booking.underlyingSymbol())
-                : "%s %s".formatted(booking.optionType(), booking.underlyingSymbol());
+        String bookingDescription = bookingDescription(booking, false);
         notificationStore.createForUser(
                 booking.submittedBy().userId(),
                 "TRADE_BOOKING_" + booking.status().name(),
@@ -93,6 +85,26 @@ public class NotificationService {
                 booking.portfolioId() == null ? "/fo-desk" : "/upad?portfolioId=" + booking.portfolioId(),
                 Instant.now()
         );
+    }
+
+    private String bookingDescription(TradeBookingRequest booking, boolean includeQuantity) {
+        if (booking.bookingType() == TradeBookingType.OPTION_STRATEGY) {
+            return includeQuantity
+                    ? "%s %s (%d legs)".formatted(booking.strategyType(), booking.underlyingSymbol(), booking.legs().size())
+                    : "%s %s".formatted(booking.strategyType(), booking.underlyingSymbol());
+        }
+        if (booking.bookingType() == TradeBookingType.CASH_EQUITY) {
+            return includeQuantity
+                    ? "Cash equity %s %s".formatted(booking.underlyingSymbol(), booking.quantity().stripTrailingZeros().toPlainString())
+                    : "Cash equity %s".formatted(booking.underlyingSymbol());
+        }
+        return includeQuantity
+                ? "%s %s %s".formatted(
+                booking.optionType(),
+                booking.underlyingSymbol(),
+                booking.quantity().stripTrailingZeros().toPlainString()
+        )
+                : "%s %s".formatted(booking.optionType(), booking.underlyingSymbol());
     }
 
     @Transactional

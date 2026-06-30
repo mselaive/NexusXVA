@@ -4,38 +4,38 @@
 
 # NexusXVA
 
-NexusXVA es una workstation de riesgo para aprender y construir flujos tipo Front Office, Back Office y XVA sobre portfolios de opciones europeas.
+NexusXVA is a risk workstation for learning and building Front Office, Back Office, and XVA-style workflows on portfolios of European options.
 
-El proyecto no intenta ser Murex ni Bloomberg. La idea es construir, paso a paso, una plataforma clara donde se vea el ciclo completo:
+The project is not trying to be Murex or Bloomberg. The idea is to build, step by step, a clear platform where the full cycle can be seen:
 
 ```text
-FO analiza y bookea
-  -> BO valida
-  -> portfolio confirmado
+FO analyzes and books
+  -> BO validates
+  -> portfolio confirmed
   -> pricing
   -> exposure
   -> CVA
-  -> dashboard operativo
+  -> operational dashboard
 ```
 
-## Estado Actual
+## Current Status
 
-- Backend Java Spring Boot con PostgreSQL, Flyway, JPA y Testcontainers.
-- Frontend Next.js con pantallas por grupo activo.
-- Auth con usuarios multi-grupo: `FO`, `BO`, `ADMIN`.
-- Portfolio management persistido.
-- u-Pad para enviar bookings a BO.
-- Amendments y cancellations con maker-checker.
-- Notificaciones persistidas por usuario.
-- Trade economics V1 con premium de ejecucion y unrealized P&L.
-- Snapshots EOD inmutables y Daily P&L contra el cierre anterior.
-- Run History persistido para auditoria de pricing, exposure y CVA.
-- Black-Scholes pricing individual y portfolio-level.
-- Monte Carlo Exposure V1.
-- CVA V1.1 con modo flat y curvas simples.
-- Integracion market data via frontera `marketdata`, con Blemberg o provider local.
+* Java Spring Boot backend with PostgreSQL, Flyway, JPA, and Testcontainers.
+* Next.js frontend with screens based on the active group.
+* Auth with multi-group users: `FO`, `BO`, `ADMIN`.
+* Persisted portfolio management.
+* u-Pad for sending bookings to BO.
+* Amendments and cancellations with maker-checker workflow.
+* Persisted user notifications.
+* Trade Economics V1 with execution premium and unrealized P&L.
+* Immutable EOD snapshots and Daily P&L against the previous close.
+* Persisted Run History for pricing, exposure, and CVA auditability.
+* Individual and portfolio-level Black-Scholes pricing.
+* Monte Carlo Exposure V1.
+* CVA V1.1 with flat mode and simple curves.
+* Market data integration through the `marketdata` boundary, using either Blemberg or a local provider.
 
-## Arquitectura
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -53,7 +53,7 @@ flowchart LR
     Notifications --> DB
 ```
 
-## Workflow Operativo
+## Operational Workflow
 
 ```mermaid
 flowchart TD
@@ -70,35 +70,37 @@ flowchart TD
     I -->|Reject| E
 ```
 
-## Grupos
+## Groups
 
-- **FO**: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, Portfolios, Pricing, Exposure, CVA y Run History.
-- **BO**: Trade Validation, Lifecycle Validation, Trading Limits, EOD Control y Run History.
-- **ADMIN**: usuarios, grupos, permisos FO, visibilidad de portfolios, workflow map y Run History.
+* **FO**: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, Portfolios, Pricing, Exposure, CVA, and Run History.
+* **BO**: Trade Validation, Lifecycle Reporting, Trading Limits, EOD Control, and Run History.
+* **ADMIN**: users, groups, FO permissions, portfolio visibility, workflow map, and Run History.
 
-Un usuario puede tener varios grupos. Al hacer login elige el grupo activo de la sesion.
+A user can belong to multiple groups. After login, the user chooses the active group for the session.
 
-## Posiciones Y Lifecycle
+## Positions and Lifecycle
 
-Las posiciones confirmadas tienen `lifecycleStatus`:
+Confirmed positions have a `lifecycleStatus`:
 
-- `ACTIVE`: entra en pricing, exposure, stress y CVA.
-- `CANCELLED`: historica, no entra en analytics.
-- `AMENDED`: historica, no entra en analytics.
+* `ACTIVE`: included in pricing, exposure, stress, and CVA.
+* `CANCELLED`: historical position, excluded from analytics.
+* `AMENDED`: historical position, excluded from analytics.
 
-Cuando BO aprueba un amendment, la posicion original queda `AMENDED` y se crea una nueva posicion `ACTIVE`. Por eso no se vuelve a modificar la posicion `AMENDED`; el siguiente cambio debe hacerse sobre la nueva posicion activa.
+When BO approves an amendment, the original position is marked as `AMENDED` and a new `ACTIVE` position is created. Because of this, an `AMENDED` position is not modified again; the next change must be made on the newly created active position.
 
-## Notificaciones
+BO also has **Lifecycle Reporting**, which summarizes amendments/cancellations, pending request aging, average review time, and concentration by portfolio/symbol. FO can query its own lifecycle report through the API, while BO can see the full operational book.
 
-NexusXVA guarda notificaciones persistidas por usuario:
+## Notifications
 
-- BO recibe aviso cuando FO envia un booking, amendment o cancellation.
-- FO recibe aviso cuando BO aprueba o rechaza sus solicitudes.
-- La campana del header muestra unread count y permite marcar notificaciones como leidas.
+NexusXVA stores persisted notifications per user:
 
-## Trade Economics Y P&L
+* BO is notified when FO submits a booking, amendment, or cancellation.
+* FO is notified when BO approves or rejects its requests.
+* The header bell shows the unread count and allows users to mark notifications as read.
 
-Los bookings de opciones pueden guardar un `executionPrice` opcional: el premium negociado por unidad. No debe confundirse con el strike ni con el spot.
+## Trade Economics and P&L
+
+Option bookings can store an optional `executionPrice`: the negotiated premium per unit. This should not be confused with the strike or the spot.
 
 ```text
 tradeValue = executionPrice * quantity
@@ -106,95 +108,95 @@ marketValue = theoreticalUnitPrice * quantity
 unrealizedPnl = marketValue - tradeValue
 ```
 
-Las posiciones historicas sin premium siguen siendo validas, pero muestran P&L como no disponible en vez de asumir un costo cero.
+Historical positions without an execution premium remain valid, but their P&L is shown as unavailable instead of assuming a zero cost.
 
-## EOD Y Daily P&L
+## EOD and Daily P&L
 
-EOD no modifica el premium original ni las posiciones. Guarda una fotografia auditada del cierre:
+EOD does not modify the original premium or the positions. It stores an audited snapshot of the close:
 
 ```text
-Durante el dia:
-  unrealized P&L = market value actual - trade value original
+During the day:
+  unrealized P&L = current market value - original trade value
 
-Al cierre:
-  guardar snapshot EOD por portfolio y posicion
+At close:
+  save EOD snapshot by portfolio and position
 
-Dia siguiente:
-  daily P&L = market value actual - market value del EOD anterior
+Next day:
+  daily P&L = current market value - previous EOD market value
 ```
 
-Una posicion creada despues del cierre usa su execution premium como referencia diaria. Si no existe EOD ni execution premium, Daily P&L queda no disponible.
+A position created after the close uses its execution premium as the daily reference. If there is no EOD and no execution premium, Daily P&L remains unavailable.
 
-Desde `EOD Control`, BO ejecuta un cierre global para todos los portfolios. Cada portfolio se procesa de forma independiente y el batch informa `CAPTURED`, `SKIPPED` o `FAILED`, de modo que un libro con problemas no oculta el resultado de los demas. El selector de portfolio se usa despues para inspeccionar su historial.
+From `EOD Control`, BO runs a global close across all portfolios. Each portfolio is processed independently and the batch reports `CAPTURED`, `SKIPPED`, or `FAILED`, so a problematic book does not hide the result of the others. The portfolio selector is then used to inspect each portfolio’s history.
 
-Si el cierre fue incorrecto, BO no borra el EOD. Usa `Void` para anularlo con motivo o `Recapture` para marcar el cierre anterior como `SUPERSEDED` y crear un nuevo cierre `ACTIVE` para el mismo portfolio/date. Daily P&L usa solo cierres `ACTIVE`.
+If the close was incorrect, BO does not delete the EOD. Instead, BO uses `Void` to cancel it with a reason, or `Recapture` to mark the previous close as `SUPERSEDED` and create a new `ACTIVE` close for the same portfolio/date. Daily P&L only uses `ACTIVE` closes.
 
-El scheduler esta apagado por defecto. Se puede habilitar con:
+The scheduler is disabled by default. It can be enabled with:
 
 ```bash
 NEXUSXVA_EOD_ENABLED=true docker compose up --build
 ```
 
-El default corre a las `17:15` de lunes a viernes en `America/New_York`. EOD rechaza market data stale y portfolios con posiciones activas no valorables.
+By default, it runs at `17:15` from Monday to Friday in `America/New_York`. EOD rejects stale market data and portfolios with active positions that cannot be valued.
 
 ## Run History
 
-Cada ejecucion de portfolio pricing, Exposure y CVA guarda una copia auditada en `valuation_runs`:
+Each portfolio pricing, Exposure, and CVA execution stores an audited copy in `valuation_runs`:
 
-- input JSON enviado al calculo.
-- response JSON devuelto por el backend.
-- summary compacto para inspeccion rapida.
-- usuario, grupo activo, portfolio, modelo, fecha y estado `SUCCESS` o `FAILED`.
+* input JSON sent to the calculation.
+* response JSON returned by the backend.
+* compact summary for quick inspection.
+* user, active group, portfolio, model, date, and status: `SUCCESS` or `FAILED`.
 
-Esto no reemplaza EOD ni guarda market data como fuente oficial. Es historial de ejecuciones para revisar que se corrio, con que parametros y que devolvio.
+This does not replace EOD and does not store market data as the official source. It is an execution history used to review what was run, with which parameters, and what the system returned.
 
-## Usuarios Y Portfolios P&L Demo
+## Users and P&L Demo Portfolios
 
-Flyway crea tres usuarios adicionales:
+Flyway creates three additional users:
 
-| Usuario | Password | Grupo | Portfolios |
-|---|---|---|---|
-| `fo.tech` | `fo12345` | FO | Tech Options, US Banks |
-| `fo.macro` | `fo12345` | FO | US Banks, Macro Hedges |
-| `bo.pnl` | `bo12345` | BO | Validacion y control |
+| User       | Password  | Group | Portfolios             |
+| ---------- | --------- | ----- | ---------------------- |
+| `fo.tech`  | `fo12345` | FO    | Tech Options, US Banks |
+| `fo.macro` | `fo12345` | FO    | US Banks, Macro Hedges |
+| `bo.pnl`   | `bo12345` | BO    | Validation and control |
 
-Portfolios creados:
+Created portfolios:
 
-- `P&L Demo - Tech Options`
-- `P&L Demo - US Banks`
-- `P&L Demo - Macro Hedges`
+* `P&L Demo - Tech Options`
+* `P&L Demo - US Banks`
+* `P&L Demo - Macro Hedges`
 
-Cada libro incluye execution premiums y un EOD anterior de prueba.
+Each book includes execution premiums and a test previous EOD.
 
-## Correr Todo
+## Run Everything
 
 ```bash
 docker compose up --build
 ```
 
-URLs habituales:
+Common URLs:
 
-- Frontend: `http://localhost:3000`
-- Backend: `http://localhost:8080`
-- Blemberg externo, si esta levantado: `http://localhost:8081`
+* Frontend: `http://localhost:3000`
+* Backend: `http://localhost:8080`
+* External Blemberg, if running: `http://localhost:8081`
 
-## Documentacion
+## Documentation
 
-- Backend: [backend/README.md](backend/README.md)
-- Logica del sistema EN: [docs/docs-EN/SystemLogic.md](docs/docs-EN/SystemLogic.md)
-- Logica del sistema ES: [docs/docs-ES/LogicaDelSistema.md](docs/docs-ES/LogicaDelSistema.md)
-- Data model ES: [docs/docs-ES/DataModel.md](docs/docs-ES/DataModel.md)
-- Conceptos financieros EN: [docs/docs-EN/FinancialConcepts.md](docs/docs-EN/FinancialConcepts.md)
-- Conceptos financieros ES: [docs/docs-ES/ConceptosFinancieros.md](docs/docs-ES/ConceptosFinancieros.md)
-- Proceso EOD ES: [docs/docs-ES/ProcesoEOD.md](docs/docs-ES/ProcesoEOD.md)
-- EOD process EN: [docs/docs-EN/EodProcess.md](docs/docs-EN/EodProcess.md)
+* Backend: [backend/README.md](backend/README.md)
+* System logic EN: [docs/docs-EN/SystemLogic.md](docs/docs-EN/SystemLogic.md)
+* System logic ES: [docs/docs-ES/LogicaDelSistema.md](docs/docs-ES/LogicaDelSistema.md)
+* Data model ES: [docs/docs-ES/DataModel.md](docs/docs-ES/DataModel.md)
+* Cash equities and delta hedging ES: [docs/docs-ES/CashEquitiesYDeltaHedgingPlan.md](docs/docs-ES/CashEquitiesYDeltaHedgingPlan.md)
+* Financial concepts EN: [docs/docs-EN/FinancialConcepts.md](docs/docs-EN/FinancialConcepts.md)
+* Financial concepts ES: [docs/docs-ES/ConceptosFinancieros.md](docs/docs-ES/ConceptosFinancieros.md)
+* EOD process ES: [docs/docs-ES/ProcesoEOD.md](docs/docs-ES/ProcesoEOD.md)
+* EOD process EN: [docs/docs-EN/EodProcess.md](docs/docs-EN/EodProcess.md)
 
-## Siguiente Camino
+## Next Steps
 
-Los siguientes candidatos naturales son:
+Natural next candidates are:
 
-- Cash equities y delta hedging.
-- Mejor reporting FO/BO sobre lifecycle.
-- UI para CVA curve mode.
-- Counterparties, netting y collateral.
-- FX y multi-currency.
+* UI for CVA curve mode.
+* Counterparties, netting, and collateral.
+* FX and multi-currency.
+* Full cash equity lifecycle/EOD for more detailed P&L.

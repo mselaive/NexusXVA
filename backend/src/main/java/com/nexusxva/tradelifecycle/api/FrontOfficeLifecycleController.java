@@ -5,6 +5,7 @@ import com.nexusxva.auth.application.UserAccessService;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.tradebooking.api.TradeBookingActorResolver;
 import com.nexusxva.tradelifecycle.application.TradeLifecycleService;
+import com.nexusxva.tradelifecycle.application.TradeLifecycleReport;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -58,5 +59,10 @@ public class FrontOfficeLifecycleController {
                 .stream()
                 .map(TradeLifecycleResponse::from)
                 .toList();
+    }
+
+    @GetMapping("/report")
+    public TradeLifecycleReport report(HttpServletRequest request) {
+        return service.reportForFrontOffice(TradeBookingActorResolver.resolve(request));
     }
 }

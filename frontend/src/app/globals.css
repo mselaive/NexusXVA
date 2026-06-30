@@ -761,6 +761,11 @@ a {
   animation: fadeUp 460ms ease-out both;
 }
 
+.position-inventory-stack {
+  display: grid;
+  gap: 14px;
+}
+
 .market-coverage-card {
   align-self: start;
 }
@@ -2268,6 +2273,10 @@ a {
   margin-bottom: 0;
 }
 
+.target-delta-field {
+  min-width: 240px;
+}
+
 .preset-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2602,6 +2611,90 @@ a {
   gap: 14px;
 }
 
+.lifecycle-report-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.lifecycle-report-card {
+  min-height: 260px;
+}
+
+.aging-bars {
+  display: grid;
+  gap: 12px;
+}
+
+.aging-row {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 10px;
+}
+
+.aging-row span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.aging-row strong {
+  text-align: right;
+}
+
+.aging-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf2f4;
+}
+
+.aging-track div {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), #f59e0b);
+  transition: width 220ms ease;
+}
+
+.lifecycle-detail-grid {
+  margin-top: 18px;
+}
+
+.lifecycle-mix {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mix-card {
+  display: grid;
+  gap: 6px;
+  min-height: 150px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbfb;
+  padding: 14px;
+}
+
+.mix-card span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.mix-card strong {
+  align-self: end;
+  font-size: 36px;
+}
+
+.mix-card em {
+  color: var(--accent-strong);
+  font-style: normal;
+  font-weight: 750;
+}
+
 .valuation-runs-layout tr {
   cursor: pointer;
 }
@@ -2873,6 +2966,37 @@ tr:last-child td {
 
 .fo-metric strong {
   font-size: 24px;
+}
+
+.fo-lifecycle-summary {
+  margin-bottom: 14px;
+}
+
+.fo-lifecycle-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.fo-lifecycle-note {
+  display: grid;
+  gap: 5px;
+  min-height: 82px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbfb;
+  padding: 12px;
+  box-shadow: var(--shadow);
+}
+
+.fo-lifecycle-note span,
+.fo-lifecycle-note small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.fo-lifecycle-note strong {
+  overflow-wrap: anywhere;
 }
 
 .fo-desk-layout {
@@ -3993,12 +4117,17 @@ tr:last-child td {
   .fo-desk-layout,
   .stress-layout,
   .whatif-layout,
+  .lifecycle-report-grid,
   .portfolio-grid,
   .login-shell {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .fo-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fo-lifecycle-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -4067,6 +4196,7 @@ tr:last-child td {
   .dealpad-layout,
   .fo-desk-layout,
   .whatif-layout,
+  .lifecycle-report-grid,
   .notebook-grid,
   .portfolio-grid,
   .watch-notebooks,
@@ -4147,6 +4277,7 @@ tr:last-child td {
   }
 
   .fo-kpis,
+  .fo-lifecycle-grid,
   .fo-action-grid,
   .stress-kpis,
   .stress-layout,

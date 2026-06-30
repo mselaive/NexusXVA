@@ -3,6 +3,7 @@ package com.nexusxva.portfolio.application;
 import com.nexusxva.marketdata.application.MarketDataPricingInputService;
 import com.nexusxva.marketdata.domain.MarketDataPricingInput;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
+import com.nexusxva.portfolio.domain.CashEquityPosition;
 import com.nexusxva.portfolio.domain.Portfolio;
 import com.nexusxva.portfolio.domain.PositionLifecycleStatus;
 import com.nexusxva.pricing.application.EuropeanOptionPricingService;
@@ -49,6 +50,7 @@ public class PortfolioBlackScholesPricingService {
         Portfolio portfolio = portfolio(portfolioId);
 
         List<PortfolioPositionPricingResult> pricedPositions = new ArrayList<>();
+        List<CashEquityPositionPricingResult> pricedCashEquities = new ArrayList<>();
         List<UnpriceablePortfolioPosition> unpriceablePositions = new ArrayList<>();
         double totalPrice = 0.0;
         double totalTradeValue = 0.0;
@@ -74,6 +76,19 @@ public class PortfolioBlackScholesPricingService {
             totalGreeks = totalGreeks.plus(pricedPosition.positionGreeks());
         }
 
+        for (CashEquityPosition position : portfolioStore.findActiveCashEquityPositions(portfolioId)) {
+            CashEquityPositionPricingResult pricedPosition = priceCashEquityPosition(position, resolvedValuationDate);
+            pricedCashEquities.add(pricedPosition);
+            totalPrice += pricedPosition.marketValue();
+            if (pricedPosition.tradeValue() == null) {
+                positionsWithoutExecutionPrice++;
+            } else {
+                totalTradeValue += pricedPosition.tradeValue();
+                totalUnrealizedPnl += pricedPosition.unrealizedPnl();
+            }
+            totalGreeks = totalGreeks.plus(pricedPosition.positionGreeks());
+        }
+
         return new PortfolioBlackScholesPricingResult(
                 portfolioId,
                 resolvedValuationDate,
@@ -85,6 +100,7 @@ public class PortfolioBlackScholesPricingService {
                 positionsWithoutExecutionPrice,
                 totalGreeks,
                 pricedPositions,
+                pricedCashEquities,
                 unpriceablePositions
         );
     }
@@ -168,6 +184,49 @@ public class PortfolioBlackScholesPricingService {
                 tradeValue,
                 unrealizedPnl,
                 unitGreeks,
+                positionGreeks,
+                new PortfolioPositionMarketData(
+                        marketData.spot(),
+                        marketData.volatility(),
+                        marketData.riskFreeRate(),
+                        marketData.dividendYield(),
+                        marketData.currency(),
+                        marketData.asOf(),
+                        marketData.source(),
+                        marketData.stale()
+                )
+        );
+    }
+
+    private CashEquityPositionPricingResult priceCashEquityPosition(
+            CashEquityPosition position,
+            LocalDate valuationDate
+    ) {
+        MarketDataPricingInput marketData = marketDataPricingInputService.europeanOptionPricingInput(
+                position.underlyingSymbol(),
+                valuationDate.plusYears(1)
+        );
+        if (!SUPPORTED_BASE_CURRENCY.equals(marketData.currency())) {
+            throw new IllegalArgumentException("Portfolio pricing V1 supports USD market data only");
+        }
+
+        double quantity = position.quantity().doubleValue();
+        double marketValue = marketData.spot() * quantity;
+        Double executionPrice = position.executionPrice() == null ? null : position.executionPrice().doubleValue();
+        Double tradeValue = executionPrice == null ? null : executionPrice * quantity;
+        Double unrealizedPnl = tradeValue == null ? null : marketValue - tradeValue;
+        PortfolioGreeks positionGreeks = new PortfolioGreeks(quantity, 0.0, 0.0, 0.0, 0.0);
+
+        return new CashEquityPositionPricingResult(
+                position.id(),
+                PortfolioPricingStatus.PRICED,
+                position.underlyingSymbol(),
+                quantity,
+                marketData.spot(),
+                marketValue,
+                executionPrice,
+                tradeValue,
+                unrealizedPnl,
                 positionGreeks,
                 new PortfolioPositionMarketData(
                         marketData.spot(),

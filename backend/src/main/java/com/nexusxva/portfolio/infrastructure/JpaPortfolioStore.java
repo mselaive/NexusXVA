@@ -1,12 +1,15 @@
 package com.nexusxva.portfolio.infrastructure;
 
 import com.nexusxva.portfolio.application.AddEuropeanOptionPositionCommand;
+import com.nexusxva.portfolio.application.AddCashEquityPositionCommand;
 import com.nexusxva.portfolio.application.PortfolioStore;
 import com.nexusxva.portfolio.application.CreatePortfolioCommand;
 import com.nexusxva.portfolio.application.UpdatePortfolioCommand;
+import com.nexusxva.portfolio.domain.CashEquityPosition;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.portfolio.domain.Portfolio;
 import com.nexusxva.portfolio.domain.PortfolioSummary;
+import com.nexusxva.portfolio.domain.PositionLifecycleStatus;
 import com.nexusxva.shared.error.ResourceNotFoundException;
 
 import org.springframework.stereotype.Repository;
@@ -20,13 +23,16 @@ class JpaPortfolioStore implements PortfolioStore {
 
     private final PortfolioJpaRepository portfolioJpaRepository;
     private final EuropeanOptionPositionJpaRepository positionJpaRepository;
+    private final CashEquityPositionJpaRepository cashEquityPositionJpaRepository;
 
     JpaPortfolioStore(
             PortfolioJpaRepository portfolioJpaRepository,
-            EuropeanOptionPositionJpaRepository positionJpaRepository
+            EuropeanOptionPositionJpaRepository positionJpaRepository,
+            CashEquityPositionJpaRepository cashEquityPositionJpaRepository
     ) {
         this.portfolioJpaRepository = portfolioJpaRepository;
         this.positionJpaRepository = positionJpaRepository;
+        this.cashEquityPositionJpaRepository = cashEquityPositionJpaRepository;
     }
 
     @Override
@@ -90,6 +96,21 @@ class JpaPortfolioStore implements PortfolioStore {
     }
 
     @Override
+    public CashEquityPosition addCashEquityPosition(
+            UUID portfolioId,
+            AddCashEquityPositionCommand command
+    ) {
+        PortfolioEntity portfolio = findPortfolioEntity(portfolioId);
+        CashEquityPositionEntity position = CashEquityPositionEntity.create(
+                portfolio,
+                command.underlyingSymbol(),
+                command.quantity(),
+                command.executionPrice()
+        );
+        return cashEquityPositionJpaRepository.save(position).toDomain();
+    }
+
+    @Override
     public List<EuropeanOptionPosition> findEuropeanOptionPositions(UUID portfolioId) {
         return positionJpaRepository.findByPortfolioId(portfolioId)
                 .stream()
@@ -102,6 +123,22 @@ class JpaPortfolioStore implements PortfolioStore {
         return positionJpaRepository.findActiveByPortfolioId(portfolioId)
                 .stream()
                 .map(EuropeanOptionPositionEntity::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<CashEquityPosition> findCashEquityPositions(UUID portfolioId) {
+        return cashEquityPositionJpaRepository.findByPortfolioId(portfolioId)
+                .stream()
+                .map(CashEquityPositionEntity::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<CashEquityPosition> findActiveCashEquityPositions(UUID portfolioId) {
+        return cashEquityPositionJpaRepository.findByPortfolioIdAndLifecycleStatus(portfolioId, PositionLifecycleStatus.ACTIVE)
+                .stream()
+                .map(CashEquityPositionEntity::toDomain)
                 .toList();
     }
 

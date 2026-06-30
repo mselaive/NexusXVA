@@ -12,6 +12,7 @@ public record AdminWorkflowBookingResponse(
         String node,
         String status,
         String underlyingSymbol,
+        String bookingType,
         String optionType,
         BigDecimal strike,
         LocalDate maturityDate,

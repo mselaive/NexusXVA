@@ -193,6 +193,40 @@ class TradeLifecycleIntegrationTest extends AbstractPostgresIntegrationTest {
                 .andExpect(jsonPath("$.message").value("User is not allowed to use permission FO_REQUEST_LIFECYCLE"));
     }
 
+    @Test
+    void boAndFoCanReadLifecycleReports() throws Exception {
+        AuthClient fo = selectGroup(login("fo.trader", "fo12345"), "FO");
+        AuthClient bo = selectGroup(login("bo.ops", "bo12345"), "BO");
+        UUID portfolioId = insertPortfolio("Lifecycle Report Book");
+        UUID cancelPositionId = insertConfirmedEuropeanOptionPosition(portfolioId, "AAPL", "CALL", "190.0", "2027-12-31", "10.0");
+        UUID amendPositionId = insertConfirmedEuropeanOptionPosition(portfolioId, "MSFT", "PUT", "425.0", "2027-12-31", "-5.0");
+
+        submitCancel(fo, cancelPositionId).andExpect(status().isOk());
+        UUID amendRequestId = submitAmend(fo, amendPositionId, "MSFT", "PUT", "430.0", "2028-01-21", "-5.0")
+                .andExpect(status().isOk())
+                .andReturnId();
+
+        mockMvc.perform(post("/api/back-office/lifecycle-requests/{requestId}/approve", amendRequestId)
+                        .cookie(bo.cookie())
+                        .header("X-CSRF-Token", bo.csrfToken()))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/back-office/lifecycle-report").cookie(bo.cookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(2))
+                .andExpect(jsonPath("$.pendingValidation").value(1))
+                .andExpect(jsonPath("$.approved").value(1))
+                .andExpect(jsonPath("$.amendments").value(1))
+                .andExpect(jsonPath("$.cancellations").value(1))
+                .andExpect(jsonPath("$.pendingAgingBuckets.length()").value(4))
+                .andExpect(jsonPath("$.byPortfolio[0].label").value("Lifecycle Report Book"));
+
+        mockMvc.perform(get("/api/front-office/lifecycle/report").cookie(fo.cookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(2))
+                .andExpect(jsonPath("$.bySymbol.length()").value(2));
+    }
+
     private ResultActionsWithId submitCancel(AuthClient client, UUID positionId) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/front-office/lifecycle/positions/{positionId}/cancel", positionId)
                         .cookie(client.cookie())

@@ -23,6 +23,7 @@ import type {
   FrontOfficeDeskResponse,
   PortfolioSummary,
   TradeBookingStatus,
+  TradeLifecycleReport,
 } from "@/lib/types";
 import { AppShell } from "./AppShell";
 
@@ -42,6 +43,7 @@ const tabs: Array<{ id: "ALL" | TradeBookingStatus; label: string }> = [
 
 export function FrontOfficeDeskPage() {
   const [desk, setDesk] = React.useState<FrontOfficeDeskResponse | null>(null);
+  const [lifecycleReport, setLifecycleReport] = React.useState<TradeLifecycleReport | null>(null);
   const [activeTab, setActiveTab] = React.useState<"ALL" | TradeBookingStatus>("PENDING_VALIDATION");
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -54,7 +56,12 @@ export function FrontOfficeDeskPage() {
     setLoading(true);
     setError(null);
     try {
-      setDesk(await nexusApi.getFrontOfficeDesk());
+      const [nextDesk, nextLifecycleReport] = await Promise.all([
+        nexusApi.getFrontOfficeDesk(),
+        nexusApi.getMyLifecycleReport(),
+      ]);
+      setDesk(nextDesk);
+      setLifecycleReport(nextLifecycleReport);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load FO Desk");
     } finally {
@@ -88,6 +95,23 @@ export function FrontOfficeDeskPage() {
         <DeskMetric icon={<CheckCircle2 size={18} />} label="Confirmed" value={desk?.bookingCounts.confirmed ?? 0} tone="confirmed" />
         <DeskMetric icon={<Wallet size={18} />} label="Visible portfolios" value={desk?.portfolios.length ?? 0} tone="portfolio" />
       </div>
+
+      <section className="panel section fo-lifecycle-summary">
+        <SectionHeader
+          title="My lifecycle activity"
+          text="Amendment and cancellation requests submitted by you. Pending lifecycle requests do not change confirmed positions until BO approves them."
+        />
+        <div className="fo-lifecycle-grid">
+          <DeskMetric icon={<Clock3 size={18} />} label="Lifecycle pending" value={lifecycleReport?.pendingValidation ?? 0} tone="pending" />
+          <DeskMetric icon={<CheckCircle2 size={18} />} label="Lifecycle approved" value={lifecycleReport?.approved ?? 0} tone="confirmed" />
+          <DeskMetric icon={<XCircle size={18} />} label="Lifecycle rejected" value={lifecycleReport?.rejected ?? 0} tone="rejected" />
+          <div className="fo-lifecycle-note">
+            <span>Oldest pending</span>
+            <strong>{lifecycleReport?.oldestPendingSubmittedAt ? new Date(lifecycleReport.oldestPendingSubmittedAt).toLocaleString() : "No pending lifecycle"}</strong>
+            <small>{formatNumber(lifecycleReport?.amendments ?? 0, 0)} amendments · {formatNumber(lifecycleReport?.cancellations ?? 0, 0)} cancellations</small>
+          </div>
+        </div>
+      </section>
 
       <div className="fo-desk-layout">
         <section className="panel fo-portfolio-panel">
@@ -218,9 +242,9 @@ function BookingBlotter({ bookings }: { bookings: FrontOfficeDeskBooking[] }) {
                 </div>
               </td>
               <td>{booking.underlyingSymbol}</td>
-              <td>{booking.optionType}</td>
-              <td>{formatNumber(booking.strike, 2)}</td>
-              <td>{booking.maturityDate}</td>
+              <td>{booking.bookingType === "CASH_EQUITY" ? "Cash equity" : booking.bookingType === "OPTION_STRATEGY" ? booking.strategyName ?? booking.strategyType?.replaceAll("_", " ") : booking.optionType}</td>
+              <td>{booking.strike == null ? "—" : formatNumber(booking.strike, 2)}</td>
+              <td>{booking.maturityDate ?? "—"}</td>
               <td>{formatNumber(booking.quantity, 2)}</td>
               <td>{booking.executionPrice == null ? "Unavailable" : formatNumber(booking.executionPrice, 4)}</td>
               <td>{new Date(booking.submittedAt).toLocaleString()}</td>

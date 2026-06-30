@@ -113,6 +113,7 @@ public class AuthSessionFilter extends OncePerRequestFilter {
                     || path.startsWith("/api/risk");
             case "BO" -> path.startsWith("/api/back-office/trade-bookings")
                     || path.startsWith("/api/back-office/lifecycle-requests")
+                    || path.startsWith("/api/back-office/lifecycle-report")
                     || path.startsWith("/api/back-office/trading-limits")
                     || path.startsWith("/api/back-office/eod")
                     || path.startsWith("/api/valuation-runs")

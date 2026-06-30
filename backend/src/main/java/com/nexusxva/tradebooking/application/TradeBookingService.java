@@ -2,7 +2,9 @@ package com.nexusxva.tradebooking.application;
 
 import com.nexusxva.marketdata.application.MarketDataValidationService;
 import com.nexusxva.notifications.application.NotificationService;
+import com.nexusxva.portfolio.application.AddCashEquityPositionCommand;
 import com.nexusxva.portfolio.application.PortfolioStore;
+import com.nexusxva.portfolio.domain.CashEquityPosition;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.portfolio.domain.Portfolio;
 import com.nexusxva.shared.error.ConflictException;
@@ -80,6 +82,21 @@ public class TradeBookingService {
         return booking;
     }
 
+    @Transactional
+    public TradeBookingRequest submitCashEquity(
+            UUID portfolioId,
+            CreateCashEquityBookingCommand command,
+            BookingActor submittedBy
+    ) {
+        Portfolio portfolio = portfolioStore.findPortfolio(portfolioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
+        marketDataValidationService.validateUnderlyingSymbol(command.underlyingSymbol());
+        tradingLimitService.validateCashEquityBooking(submittedBy, portfolio.baseCurrency(), command);
+        TradeBookingRequest booking = tradeBookingStore.createCashEquity(portfolioId, portfolio.name(), command, submittedBy);
+        notificationService.notifyTradeBookingSubmitted(booking);
+        return booking;
+    }
+
     @Transactional(readOnly = true)
     public List<TradeBookingRequest> mine(BookingActor actor) {
         if (actor.userId() == null) {
@@ -122,12 +139,28 @@ public class TradeBookingService {
             throw new ConflictException("Portfolio no longer exists");
         }
 
-        List<UUID> confirmedPositionIds = booking.bookingType() == TradeBookingType.OPTION_STRATEGY
-                ? approveStrategyBooking(booking)
-                : List.of(approveSingleOptionBooking(booking).id());
+        List<UUID> confirmedPositionIds;
+        if (booking.bookingType() == TradeBookingType.OPTION_STRATEGY) {
+            confirmedPositionIds = approveStrategyBooking(booking);
+        } else if (booking.bookingType() == TradeBookingType.CASH_EQUITY) {
+            confirmedPositionIds = List.of(approveCashEquityBooking(booking).id());
+        } else {
+            confirmedPositionIds = List.of(approveSingleOptionBooking(booking).id());
+        }
         TradeBookingRequest reviewed = tradeBookingStore.confirm(bookingId, reviewer, confirmedPositionIds);
         notificationService.notifyTradeBookingReviewed(reviewed);
         return reviewed;
+    }
+
+    private CashEquityPosition approveCashEquityBooking(TradeBookingRequest booking) {
+        return portfolioStore.addCashEquityPosition(
+                booking.portfolioId(),
+                new AddCashEquityPositionCommand(
+                        booking.underlyingSymbol(),
+                        booking.quantity(),
+                        booking.executionPrice()
+                )
+        );
     }
 
     private EuropeanOptionPosition approveSingleOptionBooking(TradeBookingRequest booking) {

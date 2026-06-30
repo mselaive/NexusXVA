@@ -13,7 +13,12 @@ import com.nexusxva.tradebooking.domain.BookingActor;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequest;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequestStatus;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequestType;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -82,6 +87,16 @@ public class TradeLifecycleService {
             return lifecycleStore.findAllSubmitted();
         }
         return lifecycleStore.findSubmittedBy(actor.userId());
+    }
+
+    @Transactional(readOnly = true)
+    public TradeLifecycleReport reportForBackOffice() {
+        return buildReport(lifecycleStore.findAllSubmitted());
+    }
+
+    @Transactional(readOnly = true)
+    public TradeLifecycleReport reportForFrontOffice(BookingActor actor) {
+        return buildReport(mine(actor));
     }
 
     @Transactional(readOnly = true)
@@ -180,5 +195,139 @@ public class TradeLifecycleService {
             return null;
         }
         return symbol.trim().toUpperCase();
+    }
+
+    private TradeLifecycleReport buildReport(List<TradeLifecycleRequest> requests) {
+        Instant now = Instant.now();
+        int pending = 0;
+        int approved = 0;
+        int rejected = 0;
+        int amendments = 0;
+        int cancellations = 0;
+        long reviewedMinutes = 0;
+        int reviewedCount = 0;
+        Instant oldestPending = null;
+        int pendingUnderTwoHours = 0;
+        int pendingTwoToEightHours = 0;
+        int pendingEightToTwentyFourHours = 0;
+        int pendingOverTwentyFourHours = 0;
+        Map<String, BreakdownAccumulator> byPortfolio = new HashMap<>();
+        Map<String, BreakdownAccumulator> bySymbol = new HashMap<>();
+
+        for (TradeLifecycleRequest request : requests) {
+            if (request.requestType() == TradeLifecycleRequestType.AMEND) {
+                amendments++;
+            } else {
+                cancellations++;
+            }
+
+            if (request.status() == TradeLifecycleRequestStatus.PENDING_VALIDATION) {
+                pending++;
+                oldestPending = oldestPending == null || request.submittedAt().isBefore(oldestPending)
+                        ? request.submittedAt()
+                        : oldestPending;
+                long ageHours = Duration.between(request.submittedAt(), now).toHours();
+                if (ageHours < 2) {
+                    pendingUnderTwoHours++;
+                } else if (ageHours < 8) {
+                    pendingTwoToEightHours++;
+                } else if (ageHours < 24) {
+                    pendingEightToTwentyFourHours++;
+                } else {
+                    pendingOverTwentyFourHours++;
+                }
+            } else if (request.status() == TradeLifecycleRequestStatus.APPROVED) {
+                approved++;
+            } else if (request.status() == TradeLifecycleRequestStatus.REJECTED) {
+                rejected++;
+            }
+
+            if (request.reviewedAt() != null) {
+                reviewedMinutes += Math.max(0, Duration.between(request.submittedAt(), request.reviewedAt()).toMinutes());
+                reviewedCount++;
+            }
+
+            accumulate(byPortfolio, request.portfolioId() == null ? "UNKNOWN" : request.portfolioId().toString(), request.portfolioName(), request);
+            accumulate(bySymbol, request.originalUnderlyingSymbol(), request.originalUnderlyingSymbol(), request);
+        }
+
+        return new TradeLifecycleReport(
+                requests.size(),
+                pending,
+                approved,
+                rejected,
+                amendments,
+                cancellations,
+                reviewedCount == 0 ? null : Math.round((double) reviewedMinutes / reviewedCount),
+                oldestPending,
+                List.of(
+                        new LifecycleAgingBucket("0-2h", pendingUnderTwoHours),
+                        new LifecycleAgingBucket("2-8h", pendingTwoToEightHours),
+                        new LifecycleAgingBucket("8-24h", pendingEightToTwentyFourHours),
+                        new LifecycleAgingBucket(">24h", pendingOverTwentyFourHours)
+                ),
+                topBreakdowns(byPortfolio),
+                topBreakdowns(bySymbol)
+        );
+    }
+
+    private void accumulate(
+            Map<String, BreakdownAccumulator> accumulator,
+            String key,
+            String label,
+            TradeLifecycleRequest request
+    ) {
+        accumulator.computeIfAbsent(key, ignored -> new BreakdownAccumulator(key, label)).add(request.status());
+    }
+
+    private List<LifecycleBreakdown> topBreakdowns(Map<String, BreakdownAccumulator> accumulator) {
+        return accumulator.values()
+                .stream()
+                .sorted(Comparator
+                        .comparingInt(BreakdownAccumulator::pendingValidation).reversed()
+                        .thenComparing(Comparator.comparingInt(BreakdownAccumulator::total).reversed())
+                        .thenComparing(BreakdownAccumulator::label))
+                .limit(10)
+                .map(BreakdownAccumulator::toReport)
+                .toList();
+    }
+
+    private static class BreakdownAccumulator {
+        private final String key;
+        private final String label;
+        private int pendingValidation;
+        private int approved;
+        private int rejected;
+
+        private BreakdownAccumulator(String key, String label) {
+            this.key = key;
+            this.label = label == null || label.isBlank() ? key : label;
+        }
+
+        private void add(TradeLifecycleRequestStatus status) {
+            if (status == TradeLifecycleRequestStatus.PENDING_VALIDATION) {
+                pendingValidation++;
+            } else if (status == TradeLifecycleRequestStatus.APPROVED) {
+                approved++;
+            } else if (status == TradeLifecycleRequestStatus.REJECTED) {
+                rejected++;
+            }
+        }
+
+        private int total() {
+            return pendingValidation + approved + rejected;
+        }
+
+        private int pendingValidation() {
+            return pendingValidation;
+        }
+
+        private String label() {
+            return label;
+        }
+
+        private LifecycleBreakdown toReport() {
+            return new LifecycleBreakdown(key, label, total(), pendingValidation, approved, rejected);
+        }
     }
 }

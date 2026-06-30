@@ -12,8 +12,11 @@ import type {
   BlembergRefreshResponse,
   CreatePortfolioRequest,
   CreateOptionStrategyBookingRequest,
+  CreateCashEquityBookingRequest,
   CvaCalculationRequest,
   CvaCalculationResponse,
+  DeltaHedgeAnalysisRequest,
+  DeltaHedgeAnalysisResponse,
   ExposureSimulationRequest,
   ExposureSimulationResponse,
   EodBatchResult,
@@ -33,6 +36,7 @@ import type {
   TradeBookingPage,
   TradeBookingStatus,
   TradeLifecyclePage,
+  TradeLifecycleReport,
   TradeLifecycleRequest,
   TradeLifecycleRequestStatus,
   TradingLimitSnapshot,
@@ -137,6 +141,12 @@ export const nexusApi = {
       body: JSON.stringify(body),
     }),
 
+  submitCashEquityBooking: (portfolioId: string, body: CreateCashEquityBookingRequest) =>
+    request<TradeBooking>(`/portfolios/${portfolioId}/trade-bookings/cash-equities`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   listMyTradeBookings: () => request<TradeBooking[]>("/trade-bookings/mine"),
 
   getFrontOfficeDesk: () => request<FrontOfficeDeskResponse>("/front-office/desk"),
@@ -153,6 +163,12 @@ export const nexusApi = {
       body: JSON.stringify(body),
     }),
 
+  runDeltaHedgeAnalysis: (body: DeltaHedgeAnalysisRequest) =>
+    request<DeltaHedgeAnalysisResponse>("/front-office/delta-hedge/european-options", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   requestPositionAmend: (positionId: string, body: AddEuropeanOptionPositionRequest) =>
     request<TradeLifecycleRequest>(`/front-office/lifecycle/positions/${positionId}/amend`, {
       method: "POST",
@@ -165,6 +181,8 @@ export const nexusApi = {
     }),
 
   listMyLifecycleRequests: () => request<TradeLifecycleRequest[]>("/front-office/lifecycle/mine"),
+
+  getMyLifecycleReport: () => request<TradeLifecycleReport>("/front-office/lifecycle/report"),
 
   listBackOfficeTradeBookings: (status?: TradeBookingStatus, page = 0, size = 50) => {
     const query = new URLSearchParams({ page: String(page), size: String(size) });
@@ -195,6 +213,8 @@ export const nexusApi = {
     }
     return request<TradeLifecyclePage>(`/back-office/lifecycle-requests?${query.toString()}`);
   },
+
+  getBackOfficeLifecycleReport: () => request<TradeLifecycleReport>("/back-office/lifecycle-report"),
 
   approveLifecycleRequest: (requestId: string) =>
     request<TradeLifecycleRequest>(`/back-office/lifecycle-requests/${requestId}/approve`, {

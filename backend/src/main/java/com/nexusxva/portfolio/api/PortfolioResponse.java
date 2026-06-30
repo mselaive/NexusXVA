@@ -13,7 +13,8 @@ public record PortfolioResponse(
         String baseCurrency,
         Instant createdAt,
         Instant updatedAt,
-        List<EuropeanOptionPositionResponse> positions
+        List<EuropeanOptionPositionResponse> positions,
+        List<CashEquityPositionResponse> cashEquityPositions
 ) {
 
     static PortfolioResponse from(Portfolio portfolio) {
@@ -27,6 +28,10 @@ public record PortfolioResponse(
                 portfolio.positions()
                         .stream()
                         .map(EuropeanOptionPositionResponse::from)
+                        .toList(),
+                portfolio.cashEquityPositions()
+                        .stream()
+                        .map(CashEquityPositionResponse::from)
                         .toList()
         );
     }

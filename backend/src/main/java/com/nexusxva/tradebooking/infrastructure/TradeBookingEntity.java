@@ -1,6 +1,7 @@
 package com.nexusxva.tradebooking.infrastructure;
 
 import com.nexusxva.instruments.domain.OptionType;
+import com.nexusxva.tradebooking.application.CreateCashEquityBookingCommand;
 import com.nexusxva.tradebooking.application.CreateEuropeanOptionBookingCommand;
 import com.nexusxva.tradebooking.application.CreateOptionStrategyBookingCommand;
 import com.nexusxva.tradebooking.domain.BookingActor;
@@ -65,13 +66,13 @@ class TradeBookingEntity {
     private String underlyingSymbol;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "option_type", nullable = false, length = 16)
+    @Column(name = "option_type", length = 16)
     private OptionType optionType;
 
-    @Column(nullable = false, precision = 19, scale = 8)
+    @Column(precision = 19, scale = 8)
     private BigDecimal strike;
 
-    @Column(name = "maturity_date", nullable = false)
+    @Column(name = "maturity_date")
     private LocalDate maturityDate;
 
     @Column(nullable = false, precision = 19, scale = 8)
@@ -148,6 +149,33 @@ class TradeBookingEntity {
         entity.quantity = command.quantity();
         entity.executionPrice = command.executionPrice();
         entity.bookingNotional = command.quantity().abs().multiply(command.strike());
+        entity.status = TradeBookingStatus.PENDING_VALIDATION;
+        entity.submittedByUserId = submittedBy.userId();
+        entity.submittedByUsername = submittedBy.username();
+        entity.submittedByDisplayName = submittedBy.displayName();
+        entity.submittedAt = Instant.now();
+        return entity;
+    }
+
+    static TradeBookingEntity createCashEquity(
+            UUID portfolioId,
+            String portfolioName,
+            CreateCashEquityBookingCommand command,
+            BookingActor submittedBy
+    ) {
+        TradeBookingEntity entity = new TradeBookingEntity();
+        entity.id = UUID.randomUUID();
+        entity.portfolioId = portfolioId;
+        entity.portfolioName = portfolioName;
+        entity.instrumentType = "CASH_EQUITY";
+        entity.bookingType = TradeBookingType.CASH_EQUITY;
+        entity.underlyingSymbol = command.underlyingSymbol();
+        entity.optionType = null;
+        entity.strike = null;
+        entity.maturityDate = null;
+        entity.quantity = command.quantity();
+        entity.executionPrice = command.executionPrice();
+        entity.bookingNotional = command.bookingNotional();
         entity.status = TradeBookingStatus.PENDING_VALIDATION;
         entity.submittedByUserId = submittedBy.userId();
         entity.submittedByUsername = submittedBy.username();

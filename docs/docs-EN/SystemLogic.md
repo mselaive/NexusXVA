@@ -313,6 +313,19 @@ FO runs Stress Testing
 
 Stress Testing is stateless. It shocks `spot` by relative percent and shocks `volatility`, `riskFreeRate`, and `dividendYield` by basis points. V1 is pricing/Greeks-only; it does not run Exposure, CVA, or persist stress results. It can include one hypothetical trade, but that trade remains temporary and must still go through `u-Pad` and BO validation if FO wants to book it.
 
+Cash Equities and Delta Hedge V1 are now the first linear FO product slice:
+
+```text
+FO books cash equity in u-Pad
+  -> trade_booking_requests: CASH_EQUITY / PENDING_VALIDATION
+  -> BO approves
+  -> portfolio_cash_equity_positions: ACTIVE
+  -> pricing adds equity market value, P&L and delta
+  -> Delta Hedge suggests share quantity to reach target delta
+```
+
+Cash equities use a separate table and are not modeled as options with null fields. Delta Hedge is stateless analysis: it does not auto-book hedges. If FO wants to execute the suggestion, the cash equity trade must go through `u-Pad` and BO validation.
+
 ## How Position Lifecycle Flows
 
 ```text

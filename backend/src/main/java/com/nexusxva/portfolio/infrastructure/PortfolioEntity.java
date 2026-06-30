@@ -51,6 +51,10 @@ class PortfolioEntity {
     @OrderBy("createdAt ASC")
     private List<EuropeanOptionPositionEntity> positions = new ArrayList<>();
 
+    @OneToMany(mappedBy = "portfolio", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("createdAt ASC")
+    private List<CashEquityPositionEntity> cashEquityPositions = new ArrayList<>();
+
     protected PortfolioEntity() {
     }
 
@@ -65,7 +69,7 @@ class PortfolioEntity {
 
     static PortfolioEntity create(String name, String description, String baseCurrency) {
         Instant now = Instant.now();
-        Portfolio portfolio = new Portfolio(UUID.randomUUID(), name, description, baseCurrency, now, now, null, null, null, List.of());
+        Portfolio portfolio = new Portfolio(UUID.randomUUID(), name, description, baseCurrency, now, now, null, null, null, List.of(), List.of());
         return new PortfolioEntity(
                 portfolio.id(),
                 portfolio.name(),
@@ -113,6 +117,9 @@ class PortfolioEntity {
                 archiveReason,
                 positions.stream()
                         .map(EuropeanOptionPositionEntity::toDomain)
+                        .toList(),
+                cashEquityPositions.stream()
+                        .map(CashEquityPositionEntity::toDomain)
                         .toList()
         );
     }

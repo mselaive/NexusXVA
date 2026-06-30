@@ -2,7 +2,7 @@
 
 Spring Boot backend for NexusXVA.
 
-The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option positions, portfolio-level Black-Scholes pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, simplified CVA V1.1, and persisted valuation run history for audit.
+The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option and cash equity positions, portfolio-level pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, simplified CVA V1.1, cash-equity delta hedge analysis, and persisted valuation run history for audit.
 
 ## Requirements
 
@@ -150,7 +150,7 @@ Security model:
 Current group intent:
 
 - `FO`: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad booking submission, portfolios, pricing, exposure, CVA and valuation run history.
-- `BO`: Trade Validation, preventive Trading Limits, manual EOD Control, and valuation run history.
+- `BO`: Trade Validation, Lifecycle Reporting, preventive Trading Limits, manual EOD Control, and valuation run history.
 - `ADMIN`: user/group administration, FO feature permissions, portfolio visibility, workflow monitoring, and valuation run history.
 
 The backend enforces the active group. Frontend navigation is not the security boundary.
@@ -209,6 +209,12 @@ Stress Testing lets FO run scenario matrices over confirmed positions, optionall
 - `POST /api/front-office/stress-tests/european-options`
 
 Stress Testing is stateless and pricing/Greeks-only. V1 shocks `spot` by relative percent and shocks `volatility`, `riskFreeRate`, and `dividendYield` by absolute basis points. The result returns base portfolio totals, optional hypothetical trade valuation, per-scenario stressed totals, scenario impact versus the confirmed base portfolio, per-position stressed values, and expired unpriceable positions. It does not run Exposure or CVA and does not persist stress results.
+
+Delta Hedge lets FO calculate the cash-equity hedge implied by current option delta:
+
+- `POST /api/front-office/delta-hedge/european-options`
+
+Delta Hedge V1 is stateless. It prices confirmed option positions, adds active cash equity positions, groups delta by symbol, and suggests the stock quantity needed to reach target delta, defaulting to zero. It does not auto-book hedges; FO must book the chosen cash equity trade through u-Pad and BO validation.
 
 ## Trading Limits V1
 
@@ -299,7 +305,7 @@ Conceptual financial guides for developers live in:
 
 ## Portfolio Management
 
-Portfolio management persists portfolios and confirmed European option positions in PostgreSQL. FO submissions remain separate until BO reviews them.
+Portfolio management persists portfolios, confirmed European option positions, and confirmed cash equity positions in PostgreSQL. FO submissions remain separate until BO reviews them.
 
 Endpoints:
 
@@ -312,6 +318,7 @@ DELETE /api/portfolios/{portfolioId}
 GET /api/portfolios/{portfolioId}/instruments
 GET /api/portfolios/{portfolioId}/instruments/{positionId}
 POST /api/portfolios/{portfolioId}/trade-bookings/european-options
+POST /api/portfolios/{portfolioId}/trade-bookings/cash-equities
 GET /api/trade-bookings/mine
 GET /api/back-office/trade-bookings
 GET /api/back-office/trade-bookings/{bookingId}
@@ -398,10 +405,14 @@ Confirmed positions cannot be edited directly by FO. Amendments and cancellation
 POST /api/front-office/lifecycle/positions/{positionId}/amend
 POST /api/front-office/lifecycle/positions/{positionId}/cancel
 GET /api/front-office/lifecycle/mine
+GET /api/front-office/lifecycle/report
 GET /api/back-office/lifecycle-requests
+GET /api/back-office/lifecycle-report
 POST /api/back-office/lifecycle-requests/{requestId}/approve
 POST /api/back-office/lifecycle-requests/{requestId}/reject
 ```
+
+Lifecycle Reporting is read-only. It derives queue metrics from `trade_lifecycle_requests`: pending aging, amendments vs cancellations, average review time, and top portfolios/symbols by lifecycle activity. It does not create a second counter table.
 
 ### Trade Economics And P&L V1
 

@@ -18,6 +18,7 @@ export type Portfolio = {
   createdAt: string;
   updatedAt: string;
   positions: EuropeanOptionPosition[];
+  cashEquityPositions: CashEquityPosition[];
 };
 
 export type EuropeanOptionPosition = {
@@ -38,6 +39,17 @@ export type EuropeanOptionPosition = {
   updatedAt: string;
 };
 
+export type CashEquityPosition = {
+  id: string;
+  portfolioId: string;
+  underlyingSymbol: string;
+  quantity: number;
+  executionPrice: number | null;
+  lifecycleStatus: "ACTIVE" | "CANCELLED" | "AMENDED";
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CreatePortfolioRequest = {
   name: string;
   description?: string | null;
@@ -53,8 +65,14 @@ export type AddEuropeanOptionPositionRequest = {
   executionPrice?: number | null;
 };
 
+export type CreateCashEquityBookingRequest = {
+  underlyingSymbol: string;
+  quantity: number;
+  executionPrice?: number | null;
+};
+
 export type TradeBookingStatus = "PENDING_VALIDATION" | "CONFIRMED" | "REJECTED";
-export type TradeBookingType = "SINGLE_OPTION" | "OPTION_STRATEGY";
+export type TradeBookingType = "SINGLE_OPTION" | "OPTION_STRATEGY" | "CASH_EQUITY";
 export type OptionStrategyType = "CALL_SPREAD" | "PUT_SPREAD" | "STRADDLE" | "STRANGLE" | "RISK_REVERSAL" | "BUTTERFLY" | "CUSTOM";
 
 export type OptionStrategyLegRequest = {
@@ -91,15 +109,15 @@ export type TradeBooking = {
   id: string;
   portfolioId: string | null;
   portfolioName: string;
-  instrumentType: "EUROPEAN_OPTION";
+  instrumentType: "EUROPEAN_OPTION" | "CASH_EQUITY";
   bookingType: TradeBookingType;
   strategyId: string | null;
   strategyType: OptionStrategyType | null;
   strategyName: string | null;
   underlyingSymbol: string;
-  optionType: OptionType;
-  strike: number;
-  maturityDate: string;
+  optionType: OptionType | null;
+  strike: number | null;
+  maturityDate: string | null;
   quantity: number;
   executionPrice: number | null;
   bookingNotional: number | null;
@@ -178,6 +196,34 @@ export type TradeLifecyclePage = {
   totalPages: number;
 };
 
+export type LifecycleAgingBucket = {
+  label: string;
+  count: number;
+};
+
+export type LifecycleBreakdown = {
+  key: string;
+  label: string;
+  total: number;
+  pendingValidation: number;
+  approved: number;
+  rejected: number;
+};
+
+export type TradeLifecycleReport = {
+  total: number;
+  pendingValidation: number;
+  approved: number;
+  rejected: number;
+  amendments: number;
+  cancellations: number;
+  averageReviewMinutes: number | null;
+  oldestPendingSubmittedAt: string | null;
+  pendingAgingBuckets: LifecycleAgingBucket[];
+  byPortfolio: LifecycleBreakdown[];
+  bySymbol: LifecycleBreakdown[];
+};
+
 export type Greeks = {
   delta: number;
   gamma: number;
@@ -197,6 +243,7 @@ export type PortfolioPricingResponse = {
   positionsWithoutExecutionPrice: number;
   totalGreeks: Greeks;
   positions: PortfolioPositionPricing[];
+  cashEquityPositions: CashEquityPositionPricing[];
   unpriceablePositions: UnpriceablePortfolioPosition[];
 };
 
@@ -211,6 +258,20 @@ export type PortfolioPositionPricing = {
   tradeValue: number | null;
   unrealizedPnl: number | null;
   unitGreeks: Greeks;
+  positionGreeks: Greeks;
+  marketData: PortfolioPositionMarketData;
+};
+
+export type CashEquityPositionPricing = {
+  positionId: string;
+  status: string;
+  underlyingSymbol: string;
+  quantity: number;
+  spot: number;
+  marketValue: number;
+  executionPrice: number | null;
+  tradeValue: number | null;
+  unrealizedPnl: number | null;
   positionGreeks: Greeks;
   marketData: PortfolioPositionMarketData;
 };
@@ -361,6 +422,31 @@ export type FrontOfficeStressTestResponse = {
   hypotheticalTrade: PortfolioPositionPricing | null;
   scenarios: StressScenarioResult[];
   unpriceablePositions: UnpriceablePortfolioPosition[];
+};
+
+export type DeltaHedgeAnalysisRequest = {
+  portfolioId: string;
+  valuationDate?: string;
+  targetDeltaBySymbol?: Record<string, number>;
+};
+
+export type DeltaHedgeRow = {
+  symbol: string;
+  optionDeltaShares: number;
+  cashEquityDeltaShares: number;
+  netDeltaShares: number;
+  targetDeltaShares: number;
+  suggestedCashEquityQuantity: number;
+  spot: number;
+  estimatedTradeNotional: number;
+};
+
+export type DeltaHedgeAnalysisResponse = {
+  portfolioId: string;
+  valuationDate: string;
+  model: string;
+  baseCurrency: string;
+  rows: DeltaHedgeRow[];
 };
 
 export type UnpriceablePortfolioPosition = {
@@ -570,9 +656,10 @@ export type AdminWorkflowBooking = {
   node: string;
   status: string;
   underlyingSymbol: string;
-  optionType: OptionType;
-  strike: number;
-  maturityDate: string;
+  bookingType?: TradeBookingType;
+  optionType: OptionType | null;
+  strike: number | null;
+  maturityDate: string | null;
   quantity: number;
   submittedBy: string | null;
   submittedAt: string;

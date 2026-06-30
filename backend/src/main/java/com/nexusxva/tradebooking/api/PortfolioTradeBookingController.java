@@ -62,4 +62,22 @@ public class PortfolioTradeBookingController {
                 .created(URI.create("/api/trade-bookings/" + booking.id()))
                 .body(TradeBookingResponse.from(booking));
     }
+
+    @PostMapping("/cash-equities")
+    public ResponseEntity<TradeBookingResponse> submitCashEquity(
+            @PathVariable UUID portfolioId,
+            @Valid @RequestBody CreateCashEquityBookingRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_BOOK_TRADES);
+        userAccessService.requirePortfolioAccess(servletRequest, portfolioId);
+        TradeBookingRequest booking = service.submitCashEquity(
+                portfolioId,
+                request.toCommand(),
+                TradeBookingActorResolver.resolve(servletRequest)
+        );
+        return ResponseEntity
+                .created(URI.create("/api/trade-bookings/" + booking.id()))
+                .body(TradeBookingResponse.from(booking));
+    }
 }

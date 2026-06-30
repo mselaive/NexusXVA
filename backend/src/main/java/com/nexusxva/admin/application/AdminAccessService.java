@@ -420,7 +420,7 @@ public class AdminAccessService {
         }
         return jdbcTemplate.query(
                 """
-                SELECT id, portfolio_id, portfolio_name, status, underlying_symbol, option_type, strike,
+                SELECT id, portfolio_id, portfolio_name, status, underlying_symbol, booking_type, option_type, strike,
                        maturity_date, quantity, submitted_by_display_name, submitted_at,
                        reviewed_by_display_name, reviewed_at, rejection_reason, confirmed_position_id
                 FROM trade_booking_requests
@@ -496,6 +496,7 @@ public class AdminAccessService {
                 status,
                 status,
                 rs.getString("underlying_symbol"),
+                rs.getString("booking_type"),
                 rs.getString("option_type"),
                 rs.getBigDecimal("strike"),
                 maturityDate == null ? null : maturityDate.toLocalDate(),
@@ -527,6 +528,7 @@ public class AdminAccessService {
                 },
                 status,
                 rs.getString("original_underlying_symbol"),
+                "SINGLE_OPTION",
                 requestType + " " + rs.getString("original_option_type"),
                 rs.getBigDecimal("original_strike"),
                 maturityDate == null ? null : maturityDate.toLocalDate(),

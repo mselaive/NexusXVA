@@ -215,7 +215,9 @@ Current notes:
 - The frontend must not reimplement Black-Scholes, Monte Carlo, exposure aggregation, or CVA.
 - Run History V1 is implemented for pricing, exposure and CVA. It stores input/result/summary JSON plus user/group metadata for audit, not for downstream pricing.
 - The first CVA UI uses flat CVA inputs; curve-mode UI can be added after the basic workflow is stable.
-- Multi-leg option strategies and Run History V1 are implemented. The next natural FO product slice is cash equities/delta hedging, followed by a richer FO risk blotter.
+- Multi-leg option strategies and Run History V1 are implemented.
+- Lifecycle Reporting V1 is implemented for BO/FO read-only visibility over amendments and cancellations. It derives metrics from `trade_lifecycle_requests`; do not add duplicated counters for this report.
+- Cash Equities and Delta Hedge V1 are implemented. Cash equities use a separate position model, FO/BO booking, and portfolio pricing support; Delta Hedge is stateless analysis and must not auto-book hedges. See `docs/docs-ES/CashEquitiesYDeltaHedgingPlan.md`.
 
 ## Milestone 8: Hardening
 

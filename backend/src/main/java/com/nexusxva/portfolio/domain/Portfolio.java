@@ -15,7 +15,8 @@ public record Portfolio(
         Instant archivedAt,
         UUID archivedByUserId,
         String archiveReason,
-        List<EuropeanOptionPosition> positions
+        List<EuropeanOptionPosition> positions,
+        List<CashEquityPosition> cashEquityPositions
 ) {
 
     private static final String DEFAULT_BASE_CURRENCY = "USD";
@@ -29,7 +30,7 @@ public record Portfolio(
             Instant updatedAt,
             List<EuropeanOptionPosition> positions
     ) {
-        this(id, name, description, baseCurrency, createdAt, updatedAt, null, null, null, positions);
+        this(id, name, description, baseCurrency, createdAt, updatedAt, null, null, null, positions, List.of());
     }
 
     public Portfolio {
@@ -51,12 +52,16 @@ public record Portfolio(
         if (positions == null) {
             throw new IllegalArgumentException("portfolio positions are required");
         }
+        if (cashEquityPositions == null) {
+            throw new IllegalArgumentException("portfolio cashEquityPositions are required");
+        }
 
         name = name.trim();
         description = normalizeDescription(description);
         archiveReason = normalizeDescription(archiveReason);
         baseCurrency = normalizeBaseCurrency(baseCurrency);
         positions = List.copyOf(positions);
+        cashEquityPositions = List.copyOf(cashEquityPositions);
     }
 
     private static String normalizeDescription(String description) {

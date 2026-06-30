@@ -291,9 +291,9 @@ function WorkflowBookingRow({ booking }: { booking: AdminWorkflowBooking }) {
     <tr>
       <td>{booking.portfolioName}</td>
       <td>
-        {booking.optionType} {booking.underlyingSymbol}
+        {booking.bookingType === "CASH_EQUITY" ? "Cash equity" : booking.optionType} {booking.underlyingSymbol}
         <br />
-        <small>{formatNumber(booking.quantity, 2)} @ {formatNumber(booking.strike, 2)} · {booking.maturityDate}</small>
+        <small>{formatNumber(booking.quantity, 2)} @ {booking.strike == null ? "—" : formatNumber(booking.strike, 2)} · {booking.maturityDate ?? "—"}</small>
       </td>
       <td><span className={`booking-status ${booking.status.toLowerCase()}`}>{booking.status.replaceAll("_", " ")}</span></td>
       <td>{booking.submittedBy ?? "System"}<br /><small>{new Date(booking.submittedAt).toLocaleString()}</small></td>

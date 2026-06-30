@@ -1,6 +1,7 @@
 package com.nexusxva.portfolio.application;
 
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
+import com.nexusxva.portfolio.domain.CashEquityPosition;
 import com.nexusxva.portfolio.domain.Portfolio;
 import com.nexusxva.portfolio.domain.PortfolioSummary;
 import com.nexusxva.shared.error.ResourceNotFoundException;
@@ -61,6 +62,12 @@ public class PortfolioService {
     public List<EuropeanOptionPosition> listEuropeanOptionPositions(UUID portfolioId) {
         ensurePortfolioExists(portfolioId);
         return portfolioStore.findEuropeanOptionPositions(portfolioId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CashEquityPosition> listCashEquityPositions(UUID portfolioId) {
+        ensurePortfolioExists(portfolioId);
+        return portfolioStore.findCashEquityPositions(portfolioId);
     }
 
     @Transactional(readOnly = true)

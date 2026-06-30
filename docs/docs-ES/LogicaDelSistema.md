@@ -244,7 +244,7 @@ El run guardado contiene input JSON, result JSON, summary compacto, modelo, valu
 
 Dashboard V1 es un frontend Next.js en `frontend/`.
 No implementa formulas financieras.
-La UI esta separada por grupos. FO usa FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA y Run History. BO usa Trade Validation, Lifecycle Validation, Trading Limits, EOD Control y Run History. ADMIN usa Administration para membresias, permisos FO y visibilidad de portfolios, mas Workflows y Run History para monitoreo.
+La UI esta separada por grupos. FO usa FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA y Run History. BO usa Trade Validation, Lifecycle Reporting, Trading Limits, EOD Control y Run History. ADMIN usa Administration para membresias, permisos FO y visibilidad de portfolios, mas Workflows y Run History para monitoreo.
 El header incluye una bandeja persistida de notificaciones. Las notificaciones pertenecen al usuario, no al grupo activo, por lo que usuarios multi-grupo mantienen un solo inbox al cambiar entre FO, BO y ADMIN.
 
 El flujo frontend es:
@@ -267,6 +267,7 @@ El dashboard usa el backend como fuente de verdad para:
 - Solicitudes FO de lifecycle para amendments y cancellations sobre posiciones confirmadas.
 - Validacion BO antes de crear posiciones confirmadas.
 - Aprobacion BO de lifecycle antes de modificar o cancelar posiciones confirmadas.
+- Reporting BO/FO de lifecycle derivado de `trade_lifecycle_requests`.
 - Visibilidad de limites FO en `u-Pad` y administracion de politicas desde BO.
 - Notificaciones de usuario para eventos de review de bookings y lifecycle.
 - Administracion de usuarios/grupos, checks FO, visibilidad de portfolios y mapa de workflow desde ADMIN.
@@ -315,6 +316,19 @@ FO corre Stress Testing
 
 Stress Testing es stateless. Estresa `spot` como porcentaje relativo y estresa `volatility`, `riskFreeRate` y `dividendYield` en basis points. V1 es solo pricing/Greeks; no corre Exposure, CVA ni persiste resultados. Puede incluir un trade hipotetico, pero ese trade sigue siendo temporal y debe pasar por `u-Pad` y BO si FO quiere bookearlo.
 
+Cash equities y Delta Hedge V1 ya estan implementados como primer producto lineal FO:
+
+```text
+FO bookea cash equity en u-Pad
+  -> trade_booking_requests: CASH_EQUITY / PENDING_VALIDATION
+  -> BO aprueba
+  -> portfolio_cash_equity_positions: ACTIVE
+  -> pricing suma market value, P&L y delta de acciones
+  -> Delta Hedge sugiere cantidad de acciones para llevar la delta a target
+```
+
+Las acciones usan una tabla separada y no se modelan como opciones con campos nulos. Delta Hedge es analisis stateless: no bookea automaticamente; si FO quiere ejecutar el hedge, debe enviar un cash equity ticket por `u-Pad` y pasar por BO. El detalle tecnico esta en [CashEquitiesYDeltaHedgingPlan.md](CashEquitiesYDeltaHedgingPlan.md).
+
 ## Como fluye el lifecycle de posiciones
 
 ```text
@@ -329,6 +343,8 @@ FO solicita amend/cancel
 ```
 
 Las posiciones confirmadas nacen como `ACTIVE`. Los workflows de riesgo usan solo posiciones `ACTIVE`. Una cancelacion aprobada marca la posicion como `CANCELLED`. Un amendment aprobado marca la posicion original como `AMENDED` y crea una posicion reemplazo `ACTIVE`. Las ediciones/borrados directos de posiciones confirmadas siguen fuera de scope.
+
+Lifecycle Reporting es read-only. Calcula totales, pendientes, aprobadas, rechazadas, aging de pendientes, promedio de review y concentracion por portfolio/simbolo desde `trade_lifecycle_requests`. No crea tablas de contadores ni reemplaza Trade Validation: BO sigue aprobando o rechazando desde el workflow maker-checker.
 
 ## Como fluye Trade Validation
 

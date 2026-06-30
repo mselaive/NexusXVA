@@ -1,6 +1,7 @@
 package com.nexusxva.tradebooking.infrastructure;
 
 import com.nexusxva.shared.error.ResourceNotFoundException;
+import com.nexusxva.tradebooking.application.CreateCashEquityBookingCommand;
 import com.nexusxva.tradebooking.application.CreateEuropeanOptionBookingCommand;
 import com.nexusxva.tradebooking.application.TradeBookingStore;
 import com.nexusxva.tradebooking.domain.BookingActor;
@@ -47,6 +48,18 @@ class JpaTradeBookingStore implements TradeBookingStore {
     ) {
         return repository.save(
                 TradeBookingEntity.createStrategy(portfolioId, portfolioName, command, strategyId, submittedBy)
+        ).toDomain();
+    }
+
+    @Override
+    public TradeBookingRequest createCashEquity(
+            UUID portfolioId,
+            String portfolioName,
+            CreateCashEquityBookingCommand command,
+            BookingActor submittedBy
+    ) {
+        return repository.save(
+                TradeBookingEntity.createCashEquity(portfolioId, portfolioName, command, submittedBy)
         ).toDomain();
     }
 

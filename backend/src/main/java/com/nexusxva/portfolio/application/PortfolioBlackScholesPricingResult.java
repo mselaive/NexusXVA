@@ -15,11 +15,13 @@ public record PortfolioBlackScholesPricingResult(
         int positionsWithoutExecutionPrice,
         PortfolioGreeks totalGreeks,
         List<PortfolioPositionPricingResult> positions,
+        List<CashEquityPositionPricingResult> cashEquityPositions,
         List<UnpriceablePortfolioPosition> unpriceablePositions
 ) {
 
     public PortfolioBlackScholesPricingResult {
         positions = List.copyOf(positions);
+        cashEquityPositions = List.copyOf(cashEquityPositions);
         unpriceablePositions = List.copyOf(unpriceablePositions);
     }
 }

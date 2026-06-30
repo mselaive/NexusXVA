@@ -3,6 +3,7 @@ package com.nexusxva.tradinglimits.application;
 import com.nexusxva.shared.error.ConflictException;
 import com.nexusxva.shared.error.ResourceNotFoundException;
 import com.nexusxva.tradebooking.application.CreateEuropeanOptionBookingCommand;
+import com.nexusxva.tradebooking.application.CreateCashEquityBookingCommand;
 import com.nexusxva.tradebooking.domain.BookingActor;
 import com.nexusxva.tradinglimits.domain.TradingLimitPolicy;
 import com.nexusxva.tradinglimits.domain.TradingLimitSnapshot;
@@ -52,6 +53,15 @@ public class TradingLimitService {
                 .map(leg -> leg.quantity().abs().multiply(leg.strike()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         validateBooking(actor, portfolioCurrency, 1, requestedNotional);
+    }
+
+    @Transactional
+    public void validateCashEquityBooking(
+            BookingActor actor,
+            String portfolioCurrency,
+            CreateCashEquityBookingCommand command
+    ) {
+        validateBooking(actor, portfolioCurrency, 1, command.bookingNotional() == null ? BigDecimal.ZERO : command.bookingNotional());
     }
 
     private void validateBooking(

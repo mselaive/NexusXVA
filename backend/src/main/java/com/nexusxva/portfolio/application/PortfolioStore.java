@@ -1,6 +1,7 @@
 package com.nexusxva.portfolio.application;
 
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
+import com.nexusxva.portfolio.domain.CashEquityPosition;
 import com.nexusxva.portfolio.domain.Portfolio;
 import com.nexusxva.portfolio.domain.PortfolioSummary;
 
@@ -27,9 +28,18 @@ public interface PortfolioStore {
             AddEuropeanOptionPositionCommand command
     );
 
+    CashEquityPosition addCashEquityPosition(
+            UUID portfolioId,
+            AddCashEquityPositionCommand command
+    );
+
     List<EuropeanOptionPosition> findEuropeanOptionPositions(UUID portfolioId);
 
     List<EuropeanOptionPosition> findActiveEuropeanOptionPositions(UUID portfolioId);
+
+    List<CashEquityPosition> findCashEquityPositions(UUID portfolioId);
+
+    List<CashEquityPosition> findActiveCashEquityPositions(UUID portfolioId);
 
     Optional<EuropeanOptionPosition> findEuropeanOptionPosition(UUID portfolioId, UUID positionId);
 

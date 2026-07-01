@@ -66,6 +66,8 @@ class PortfolioPricingControllerIntegrationTest extends AbstractPostgresIntegrat
                 .andExpect(jsonPath("$.positions[0].marketData.riskFreeRate").value(0.045))
                 .andExpect(jsonPath("$.positions[0].marketData.dividendYield").value(0.005))
                 .andExpect(jsonPath("$.positions[0].marketData.currency").value("USD"))
+                .andExpect(jsonPath("$.positions[0].marketData.baseCurrency").value("USD"))
+                .andExpect(jsonPath("$.positions[0].marketData.fxRateToBase").value(1.0))
                 .andExpect(jsonPath("$.positions[0].marketData.source").value("LOCAL"))
                 .andExpect(jsonPath("$.positions[0].marketData.asOf", notNullValue()))
                 .andExpect(jsonPath("$.positions[0].marketData.stale").value(false))
@@ -128,8 +130,9 @@ class PortfolioPricingControllerIntegrationTest extends AbstractPostgresIntegrat
     }
 
     @Test
-    void nonUsdPortfolioReturnsBadRequest() throws Exception {
+    void nonUsdPortfolioConvertsUsdMarketDataToBaseCurrency() throws Exception {
         String portfolioId = createdPortfolioId("EUR Pricing Book", "EUR");
+        createdPositionId(portfolioId, "AAPL", "CALL", "190.0", "2027-06-01", "1.0");
 
         mockMvc.perform(post("/api/portfolios/{portfolioId}/pricing/black-scholes", portfolioId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -138,9 +141,11 @@ class PortfolioPricingControllerIntegrationTest extends AbstractPostgresIntegrat
                                   "valuationDate": "2026-06-01"
                                 }
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.message").value("Portfolio pricing V1 supports USD baseCurrency only"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.baseCurrency").value("EUR"))
+                .andExpect(jsonPath("$.positions[0].marketData.currency").value("USD"))
+                .andExpect(jsonPath("$.positions[0].marketData.baseCurrency").value("EUR"))
+                .andExpect(jsonPath("$.positions[0].marketData.fxRateToBase").isNumber());
     }
 
     @Test

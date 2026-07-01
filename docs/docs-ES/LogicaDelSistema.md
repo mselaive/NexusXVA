@@ -220,11 +220,39 @@ En mas detalle:
 
 1. El controller recibe parametros de portfolio, simulacion y credito simple.
 2. El servicio de CVA pide a Exposure V1 un perfil de expected exposure por fecha futura.
-3. El calculador CVA aplica un modelo de default con hazard rate plano y discount rate plano.
+3. El calculador CVA aplica supuestos planos de hazard/discount o curvas de credito y descuento enviadas en el request.
 4. Cada bucket aporta `LGD * discountFactor * expectedExposure * defaultProbabilityIncrement`.
 5. La API devuelve CVA total y detalle de contribucion por fecha.
 
-CVA V1 es sincrono. CVA no persiste counterparties, curvas ni market data como master data.
+CVA V1.1 es sincrono. Las curvas de credito pueden viajar en el request y quedan solo dentro del JSON auditado de valuation runs.
+
+## Como fluyen Counterparties, Netting Sets y Collateral
+
+El flujo actual de reference data XVA es:
+
+```text
+ADMIN setup request
+  -> xva.api
+  -> xva.application
+  -> xva.infrastructure
+  -> PostgreSQL
+```
+
+NexusXVA persiste counterparties, netting sets, asignaciones de portfolios y un monto simple de collateral estatico. Esto no es market data y no reemplaza a Blemberg.
+
+El CVA por netting set fluye asi:
+
+```text
+FO netting-set CVA request
+  -> cva.api
+  -> xva.application carga el netting set
+  -> exposure.application por cada portfolio asignado
+  -> netting a nivel perfil y ajuste por collateral estatico
+  -> cva.domain formula CVA simplificada
+  -> HTTP response
+```
+
+El netting V1 es intencionalmente simple: agrega perfiles de exposure de los portfolios asignados y resta collateral estatico de los buckets de exposure positiva. No es netting path-level, CSA margining, margin calls, wrong-way risk ni curvas de credito persistidas como master data. CVA por netting set todavia no se escribe en Run History porque ese historial hoy esta atado a portfolio.
 
 ## Como fluye Run History
 
@@ -577,7 +605,8 @@ Para el primer slice de portfolio decidimos:
 - No guardar `spot`, `volatility` ni `riskFreeRate` dentro de la posicion.
 - Validar `underlyingSymbol` contra Blemberg cuando `nexusxva.market-data.validation.enabled=true`.
 - Permitir `nexusxva.market-data.provider=local` como watchlist y provider temporal de pricing inputs para desarrollo.
-- Valorar portfolios solo en `USD` para V1; FX conversion no esta implementado todavia.
+- Valorar portfolios en su `baseCurrency` convirtiendo monedas de market data a traves de la frontera `marketdata`.
+- Usar el provider local de FX solo como datos demo deterministas; tasas FX reales deberian venir de Blemberg cuando se agregue ese contrato.
 - Usar Blemberg como fuente real objetivo de pricing inputs.
 - Usar el provider local solo como fuente temporal de inputs demo.
 - Recalcular pricing de portfolio por request y guardar solo snapshots auditados en Run History.
@@ -586,6 +615,7 @@ La separacion trade/market data es intencional.
 Un portfolio describe que instrumentos tenemos; market data describe el estado del mercado usado para valorar esos instrumentos.
 Por eso NexusXVA mantiene las posiciones como terminos del trade y usa el modulo `marketdata` como frontera para hablar con Blemberg.
 Blemberg valida existencia del instrumento y entrega `spot`, `volatility`, `riskFreeRate` y `dividendYield` reales.
+La conversion FX tambien pertenece a `marketdata`, no a las posiciones persistidas.
 El provider local valida simbolos conocidos y entrega inputs demo temporales de pricing, pero no persiste market data ni reemplaza Blemberg.
 
 ## Decisiones actuales de exposure
@@ -599,8 +629,8 @@ Para Exposure V1 decidimos:
 - Mantener simulaciones deterministicas cuando se entrega un `seed` fijo.
 - Devolver expected exposure, expected negative exposure y PFE por fecha.
 - Excluir posiciones cuando ya estan vencidas para una fecha futura simulada.
+- Convertir valores simulados a la `baseCurrency` del portfolio usando la tasa FX disponible en valuation time.
 - Mantener exposure stateless y sincrono.
-- Mantener USD-only hasta implementar conversion FX.
 
 Este es el puente entre portfolio pricing y CVA.
 CVA debe consumir un perfil de exposure probado, no saltar directo desde pricing actual a valoracion de credito.
@@ -616,7 +646,7 @@ Para CVA V1 decidimos:
 - Interpolar linealmente valores de curva para fechas de exposure dentro del rango de la curva.
 - Usar `lossGivenDefault` directamente, con valores entre `0.0` y `1.0`.
 - Mantener CVA sincrono; persistir solo snapshots auditados de Run History, no counterparties ni curvas como master data.
-- Mantener USD-only y opciones europeas solamente a traves del flujo de exposure reutilizado.
+- Reportar CVA single-portfolio en la `baseCurrency` del portfolio y mantener opciones europeas solamente a traves del flujo de exposure reutilizado.
 
 Esto es intencionalmente simplificado.
 Es suficiente para probar el camino XVA desde portfolio a exposure y luego a ajuste de credito sin introducir todavia counterparties persistidas, curvas de credito persistidas, collateral ni netting sets.
@@ -665,7 +695,7 @@ El slice de exposure se protege con:
 - Tests deterministas de GBM con seeds fijos.
 - Tests de drift donde `dividendYield` cambia los paths simulados.
 - Tests fixture de agregacion para EE, ENE y PFE.
-- Tests de aplicacion para portfolios vacios, posiciones vencidas, regla USD-only y market data faltante.
+- Tests de aplicacion para portfolios vacios, posiciones vencidas, conversion FX y market data faltante.
 - Tests API para requests validos e invalidos de simulacion.
 
 El slice de CVA se protege con:
@@ -673,7 +703,7 @@ El slice de CVA se protege con:
 - Tests de formula para incrementos de probabilidad de default por bucket y discounting.
 - Tests de invariantes: exposure cero, LGD cero y aumento con hazard rate.
 - Tests de aplicacion confirmando que CVA consume Exposure V1.
-- Tests API para requests validos de CVA, errores de validacion, portfolios desconocidos y regla USD-only.
+- Tests API para requests validos de CVA, errores de validacion, portfolios desconocidos y portfolios con baseCurrency no USD.
 
 La regla es:
 
@@ -722,7 +752,7 @@ Siguiente version sugerida:
 - Mantener el smoke real opcional deshabilitado por defecto y activarlo con `RUN_REAL_BLEMBERG_SMOKE=true`.
 - Run History persistido ya existe para snapshots auditados de pricing, exposure y CVA.
 - Agregar FX solo cuando queramos soportar totales multi-currency.
-- Agregar UI de curve-mode CVA, counterparties reales, netting y collateral solo despues de que Dashboard V1 sea usable.
+- Agregar counterparties reales, curvas persistidas como master data, netting y collateral solo despues de que los workflows actuales del dashboard sigan estables.
 
 Fuera de scope inicial:
 

@@ -34,4 +34,14 @@ public record PortfolioGreeks(
                 greeks.rho() * quantity
         );
     }
+
+    public PortfolioGreeks monetaryGreeksConverted(double fxRateToBase) {
+        return new PortfolioGreeks(
+                delta,
+                gamma * fxRateToBase,
+                vega * fxRateToBase,
+                theta * fxRateToBase,
+                rho * fxRateToBase
+        );
+    }
 }

@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "./Dashboard";
-import { DeltaHedgePage } from "./WorkflowPages";
+import { CvaPage, DeltaHedgePage } from "./WorkflowPages";
 import { FrontOfficeDeskPage } from "./FrontOfficeDeskPage";
 import { FrontOfficeWhatIfPage } from "./FrontOfficeWhatIfPage";
 import { StressTestingPage } from "./StressTestingPage";
@@ -93,6 +93,27 @@ describe("Dashboard", () => {
     expect(await screen.findByText("Suggested cash hedge")).toBeInTheDocument();
     expect(screen.getAllByText("Net delta").length).toBeGreaterThan(0);
     expect(screen.getByText("-12")).toBeInTheDocument();
+  });
+
+  it("runs CVA with credit and discount curves", async () => {
+    const fetchMock = mockFetch();
+
+    render(<CvaPage />);
+
+    await screen.findByText("Credit and discount model");
+    await userEvent.click(screen.getByRole("button", { name: /Curve mode/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Run CVA/i }));
+
+    await screen.findByText("CREDIT_CURVE");
+    expect(screen.getByText("DISCOUNT_CURVE")).toBeInTheDocument();
+
+    const cvaCall = fetchMock.mock.calls.find(([url, init]) => url === "/nexus-api/risk/cva" && init?.method === "POST");
+    expect(cvaCall).toBeDefined();
+    const body = JSON.parse(cvaCall?.[1]?.body as string);
+    expect(body.creditCurve).toHaveLength(3);
+    expect(body.discountCurve).toHaveLength(3);
+    expect(body.counterpartyHazardRate).toBeUndefined();
+    expect(body.discountRate).toBeUndefined();
   });
 });
 
@@ -278,6 +299,8 @@ function mockFetch() {
             riskFreeRate: 0.045,
             dividendYield: 0.005,
             currency: "USD",
+            baseCurrency: "USD",
+            fxRateToBase: 1,
             asOf: "2026-06-20T12:00:00Z",
             source: "LOCAL",
             stale: false,
@@ -354,6 +377,37 @@ function mockFetch() {
             suggestedCashEquityQuantity: -12,
             spot: 190,
             estimatedTradeNotional: -2280,
+          },
+        ],
+      });
+    }
+
+    if (url === "/nexus-api/risk/cva" && init?.method === "POST") {
+      const body = JSON.parse(String(init.body));
+      return json({
+        portfolioId: "portfolio-1",
+        valuationDate: body.valuationDate,
+        model: "SIMPLIFIED_CVA",
+        exposureModel: "GBM_BLACK_SCHOLES_EXPOSURE_V1",
+        baseCurrency: "USD",
+        paths: body.paths,
+        timeSteps: body.timeSteps,
+        pfeConfidenceLevel: body.pfeConfidenceLevel,
+        lossGivenDefault: body.lossGivenDefault,
+        counterpartyHazardRate: body.counterpartyHazardRate,
+        discountRate: body.discountRate,
+        creditMethod: body.creditCurve ? "CREDIT_CURVE" : "FLAT_HAZARD_RATE",
+        discountMethod: body.discountCurve ? "DISCOUNT_CURVE" : "FLAT_RATE",
+        cva: 12.34,
+        points: [
+          {
+            date: "2026-12-30",
+            expectedExposure: 100,
+            discountFactor: 0.98,
+            survivalProbability: 0.99,
+            defaultProbabilityIncrement: 0.01,
+            discountedExpectedExposure: 98,
+            cvaContribution: 0.58,
           },
         ],
       });
@@ -438,6 +492,8 @@ function mockFetch() {
               riskFreeRate: 0.04,
               dividendYield: 0,
               currency: "USD",
+              baseCurrency: "USD",
+              fxRateToBase: 1,
               asOf: "2026-06-05T12:00:00Z",
               source: "LOCAL",
               stale: false,
@@ -453,6 +509,7 @@ function mockFetch() {
   });
 
   vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
 }
 
 function tradingLimitFixture() {

@@ -45,12 +45,19 @@
 - Persisted positions should store trade terms, not market data inputs such as spot, volatility, or rates, unless a feature explicitly changes that boundary.
 - External instrument validation must go through the `marketdata` application boundary; portfolio code should not call Blemberg or other providers directly.
 - Portfolio pricing inputs must also go through the `marketdata` application boundary; do not read provider data directly from portfolio code.
+- FX conversion must also go through the `marketdata` application boundary. Do not persist FX rates on positions or portfolios.
+- FX V1 converts monetary values and monetary Greeks into portfolio `baseCurrency`; keep delta in underlying units/shares.
+- The local FX provider is deterministic demo data only. Real FX should come from Blemberg or another explicit market-data adapter later.
 - Blemberg snapshots are diagnostic/cache data only in NexusXVA; pricing and exposure should consume Blemberg pricing inputs, not raw snapshots.
 - Treat Blemberg V1 `GET /v3/api-docs` returning `501 Not Implemented` as expected; runtime integration must not depend on OpenAPI.
 - Pricing, exposure, and CVA now write audit snapshots to `valuation_runs` when run through their main APIs. Future calculations must still recompute from portfolio state and `marketdata`; do not read old valuation runs as source data.
 - CVA V1 should consume exposure profiles through `exposure.application`; do not duplicate simulation logic in `cva`.
-- CVA credit and discount curves are request-scoped for now; do not persist counterparties, curves, or CVA runs until explicitly planned.
+- Counterparties and netting sets live in the `xva` module. Do not store them inside portfolio, exposure, or CVA tables.
+- CVA credit and discount curves are request-scoped for now; do not persist curve master data or CVA result state until explicitly planned.
 - CVA curve inputs remain request-scoped. `valuation_runs` may store the submitted request/response for audit, but it must not become counterparty, curve, or market-data master data.
+- Netting-set CVA V1 is profile-level netting with static collateral. Do not describe it as path-level netting, CSA margining, legal close-out netting, or collateral call simulation.
+- A portfolio can belong to only one netting set in V1.
+- Netting-set setup mutations are ADMIN-owned; FO may consume configured netting sets for CVA when authorized.
 
 ## API Design
 

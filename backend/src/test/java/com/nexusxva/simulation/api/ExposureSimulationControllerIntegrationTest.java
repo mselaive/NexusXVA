@@ -52,15 +52,18 @@ class ExposureSimulationControllerIntegrationTest extends AbstractPostgresIntegr
     }
 
     @Test
-    void nonUsdPortfolioRejectsExposureSimulation() throws Exception {
+    void nonUsdPortfolioSimulatesExposureInPortfolioBaseCurrency() throws Exception {
         String portfolioId = createdPortfolioId("EUR Exposure Book", "EUR");
+        createdPosition(portfolioId, "AAPL", "CALL", "190.0", "2027-06-05", "2.0");
 
         mockMvc.perform(post("/api/simulations/exposure")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody(portfolioId)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.message").value("Exposure simulation V1 supports USD baseCurrency only"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.portfolioId").value(portfolioId))
+                .andExpect(jsonPath("$.baseCurrency").value("EUR"))
+                .andExpect(jsonPath("$.points", hasSize(3)))
+                .andExpect(jsonPath("$.points[0].expectedExposure").isNumber());
     }
 
     @Test

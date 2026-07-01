@@ -212,7 +212,7 @@ export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps
         </nav>
 
         <div className="sidebar-note">
-          <span className="badge">USD V1</span>
+          <span className="badge">FX V1</span>
           <span className="muted">European options · stateless analytics</span>
         </div>
       </aside>

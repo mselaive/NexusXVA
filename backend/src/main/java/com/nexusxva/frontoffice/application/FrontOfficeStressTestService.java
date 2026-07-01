@@ -1,5 +1,7 @@
 package com.nexusxva.frontoffice.application;
 
+import com.nexusxva.marketdata.application.FxRateService;
+import com.nexusxva.marketdata.domain.FxRate;
 import com.nexusxva.marketdata.application.MarketDataPricingInputService;
 import com.nexusxva.marketdata.domain.MarketDataPricingInput;
 import com.nexusxva.portfolio.application.AddEuropeanOptionPositionCommand;
@@ -32,22 +34,24 @@ import org.springframework.transaction.annotation.Transactional;
 public class FrontOfficeStressTestService {
 
     private static final String MODEL = "BLACK_SCHOLES_STRESS_TEST_V1";
-    private static final String SUPPORTED_BASE_CURRENCY = "USD";
 
     private final PortfolioStore portfolioStore;
     private final PortfolioBlackScholesPricingService portfolioPricingService;
     private final MarketDataPricingInputService marketDataPricingInputService;
+    private final FxRateService fxRateService;
     private final EuropeanOptionPricingService pricingService;
 
     public FrontOfficeStressTestService(
             PortfolioStore portfolioStore,
             PortfolioBlackScholesPricingService portfolioPricingService,
             MarketDataPricingInputService marketDataPricingInputService,
+            FxRateService fxRateService,
             EuropeanOptionPricingService pricingService
     ) {
         this.portfolioStore = portfolioStore;
         this.portfolioPricingService = portfolioPricingService;
         this.marketDataPricingInputService = marketDataPricingInputService;
+        this.fxRateService = fxRateService;
         this.pricingService = pricingService;
     }
 
@@ -63,9 +67,6 @@ public class FrontOfficeStressTestService {
                 : valuationDate;
         Portfolio portfolio = portfolioStore.findPortfolio(portfolioId)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
-        if (!SUPPORTED_BASE_CURRENCY.equals(portfolio.baseCurrency())) {
-            throw new IllegalArgumentException("Portfolio pricing V1 supports USD baseCurrency only");
-        }
         if (scenarios == null || scenarios.isEmpty()) {
             throw new IllegalArgumentException("At least one stress scenario is required");
         }
@@ -105,6 +106,7 @@ public class FrontOfficeStressTestService {
                         confirmedPositions,
                         hypotheticalPosition,
                         base.valuationDate(),
+                        portfolio.baseCurrency(),
                         base.totalPrice(),
                         base.totalGreeks()
                 ))
@@ -127,6 +129,7 @@ public class FrontOfficeStressTestService {
             List<EuropeanOptionPosition> confirmedPositions,
             EuropeanOptionPosition hypotheticalPosition,
             LocalDate valuationDate,
+            String baseCurrency,
             double basePrice,
             PortfolioGreeks baseGreeks
     ) {
@@ -138,14 +141,14 @@ public class FrontOfficeStressTestService {
             if (!position.maturityDate().isAfter(valuationDate)) {
                 continue;
             }
-            PortfolioPositionPricingResult priced = priceStressedPosition(position, valuationDate, scenario);
+            PortfolioPositionPricingResult priced = priceStressedPosition(position, valuationDate, baseCurrency, scenario);
             positions.add(priced);
             totalPrice += priced.positionPrice();
             totalGreeks = totalGreeks.plus(priced.positionGreeks());
         }
 
         if (hypotheticalPosition != null) {
-            PortfolioPositionPricingResult priced = priceStressedPosition(hypotheticalPosition, valuationDate, scenario);
+            PortfolioPositionPricingResult priced = priceStressedPosition(hypotheticalPosition, valuationDate, baseCurrency, scenario);
             positions.add(priced);
             totalPrice += priced.positionPrice();
             totalGreeks = totalGreeks.plus(priced.positionGreeks());
@@ -169,15 +172,14 @@ public class FrontOfficeStressTestService {
     private PortfolioPositionPricingResult priceStressedPosition(
             EuropeanOptionPosition position,
             LocalDate valuationDate,
+            String baseCurrency,
             StressScenario scenario
     ) {
         MarketDataPricingInput marketData = marketDataPricingInputService.europeanOptionPricingInput(
                 position.underlyingSymbol(),
                 position.maturityDate()
         );
-        if (!SUPPORTED_BASE_CURRENCY.equals(marketData.currency())) {
-            throw new IllegalArgumentException("Portfolio pricing V1 supports USD market data only");
-        }
+        FxRate fxRate = fxRateService.rate(marketData.currency(), baseCurrency);
 
         double stressedSpot = marketData.spot() * (1.0 + scenario.spotShockPercent());
         double stressedVolatility = marketData.volatility() + basisPointsToDecimal(scenario.volatilityShockBps());
@@ -198,20 +200,24 @@ public class FrontOfficeStressTestService {
         ));
 
         double quantity = position.quantity().doubleValue();
-        double stressedPositionValue = unitResult.price() * quantity;
+        double unitPrice = unitResult.price() * fxRate.rate();
+        double stressedPositionValue = unitPrice * quantity;
         Double executionPrice = position.executionPrice() == null ? null : position.executionPrice().doubleValue();
-        Double tradeValue = executionPrice == null ? null : executionPrice * quantity;
+        Double executionPriceBase = executionPrice == null ? null : executionPrice * fxRate.rate();
+        Double tradeValue = executionPriceBase == null ? null : executionPriceBase * quantity;
         Double unrealizedPnl = tradeValue == null ? null : stressedPositionValue - tradeValue;
-        PortfolioGreeks unitGreeks = PortfolioGreeks.scaled(unitResult.greeks(), 1.0);
-        PortfolioGreeks positionGreeks = PortfolioGreeks.scaled(unitResult.greeks(), quantity);
+        PortfolioGreeks unitGreeks = PortfolioGreeks.scaled(unitResult.greeks(), 1.0)
+                .monetaryGreeksConverted(fxRate.rate());
+        PortfolioGreeks positionGreeks = PortfolioGreeks.scaled(unitResult.greeks(), quantity)
+                .monetaryGreeksConverted(fxRate.rate());
         return new PortfolioPositionPricingResult(
                 position.id(),
                 PortfolioPricingStatus.PRICED,
                 position.underlyingSymbol(),
                 quantity,
-                unitResult.price(),
+                unitPrice,
                 stressedPositionValue,
-                executionPrice,
+                executionPriceBase,
                 tradeValue,
                 unrealizedPnl,
                 unitGreeks,
@@ -222,9 +228,13 @@ public class FrontOfficeStressTestService {
                         stressedRiskFreeRate,
                         stressedDividendYield,
                         marketData.currency(),
+                        baseCurrency,
+                        fxRate.rate(),
                         marketData.asOf(),
-                        marketData.source(),
-                        marketData.stale()
+                        marketData.currency().equals(baseCurrency)
+                                ? marketData.source()
+                                : marketData.source() + "+FX:" + fxRate.source(),
+                        marketData.stale() || fxRate.stale()
                 )
         );
     }

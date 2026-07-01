@@ -33,6 +33,7 @@ FO analyzes and books
 * Individual and portfolio-level Black-Scholes pricing.
 * Monte Carlo Exposure V1.
 * CVA V1.1 with flat mode and simple curves.
+* Counterparties, netting sets, static collateral and netting-set CVA V1.
 * Market data integration through the `marketdata` boundary, using either Blemberg or a local provider.
 
 ## Architecture
@@ -45,9 +46,11 @@ flowchart LR
     API --> Pricing[Pricing Domain]
     API --> Exposure[Exposure / Monte Carlo]
     API --> CVA[CVA]
+    API --> XVA[Counterparties / Netting Sets]
     API --> MarketData[Marketdata Port]
     MarketData --> Blemberg[Blemberg Service]
     Portfolio --> DB[(PostgreSQL)]
+    XVA --> DB
     Auth --> DB
     API --> Notifications[Notifications]
     Notifications --> DB
@@ -150,6 +153,12 @@ Each portfolio pricing, Exposure, and CVA execution stores an audited copy in `v
 
 This does not replace EOD and does not store market data as the official source. It is an execution history used to review what was run, with which parameters, and what the system returned.
 
+## Counterparties, Netting and Collateral
+
+ADMIN can configure counterparties, netting sets, assign portfolios to a netting set, and set a simple static collateral amount. FO can then run CVA in either single-portfolio mode or netting-set mode.
+
+Netting-set CVA V1 aggregates the assigned portfolio exposure profiles, subtracts static collateral from positive exposure buckets, and applies the existing CVA formula. This is intentionally an early model: it is not path-level legal netting, CSA margining, collateral calls, or wrong-way risk.
+
 ## Users and P&L Demo Portfolios
 
 Flyway creates three additional users:
@@ -196,7 +205,7 @@ Common URLs:
 
 Natural next candidates are:
 
-* UI for CVA curve mode.
-* Counterparties, netting, and collateral.
 * FX and multi-currency.
 * Full cash equity lifecycle/EOD for more detailed P&L.
+* Admin UI polish for counterparty/netting-set setup.
+* Persisted credit curve master data for richer CVA.

@@ -116,15 +116,18 @@ class CvaControllerIntegrationTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
-    void nonUsdPortfolioRejectsCvaCalculation() throws Exception {
+    void nonUsdPortfolioCalculatesCvaInPortfolioBaseCurrency() throws Exception {
         String portfolioId = createdPortfolioId("EUR CVA Book", "EUR");
+        createdPosition(portfolioId, "AAPL", "CALL", "190.0", "2027-06-05", "2.0");
 
         mockMvc.perform(post("/api/risk/cva")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody(portfolioId, "0.60", "0.02")))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.message").value("Exposure simulation V1 supports USD baseCurrency only"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.portfolioId").value(portfolioId))
+                .andExpect(jsonPath("$.baseCurrency").value("EUR"))
+                .andExpect(jsonPath("$.cva").isNumber())
+                .andExpect(jsonPath("$.points", hasSize(3)));
     }
 
     @Test

@@ -10,6 +10,8 @@ public record PortfolioPositionMarketDataResponse(
         double riskFreeRate,
         double dividendYield,
         String currency,
+        String baseCurrency,
+        double fxRateToBase,
         Instant asOf,
         String source,
         boolean stale
@@ -22,6 +24,8 @@ public record PortfolioPositionMarketDataResponse(
                 marketData.riskFreeRate(),
                 marketData.dividendYield(),
                 marketData.currency(),
+                marketData.baseCurrency(),
+                marketData.fxRateToBase(),
                 marketData.asOf(),
                 marketData.source(),
                 marketData.stale()

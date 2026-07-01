@@ -10,6 +10,7 @@ public record ExposureSimulationResult(
         UUID portfolioId,
         LocalDate valuationDate,
         String model,
+        String baseCurrency,
         int paths,
         int timeSteps,
         double pfeConfidenceLevel,
@@ -25,6 +26,9 @@ public record ExposureSimulationResult(
         }
         if (model == null || model.isBlank()) {
             throw new IllegalArgumentException("exposure model is required");
+        }
+        if (baseCurrency == null || baseCurrency.isBlank()) {
+            throw new IllegalArgumentException("baseCurrency is required");
         }
         if (points == null) {
             throw new IllegalArgumentException("exposure points are required");

@@ -2,7 +2,7 @@
 
 Spring Boot backend for NexusXVA.
 
-The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option and cash equity positions, portfolio-level pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, simplified CVA V1.1, cash-equity delta hedge analysis, and persisted valuation run history for audit.
+The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option and cash equity positions, portfolio-level pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, simplified CVA V1.1, XVA reference data for counterparties/netting sets/collateral, cash-equity delta hedge analysis, and persisted valuation run history for audit.
 
 ## Requirements
 
@@ -256,7 +256,7 @@ The current test setup covers:
 - portfolio-level Black-Scholes pricing with local market-data inputs
 - Exposure V1 Monte Carlo simulation, deterministic GBM paths, and exposure aggregation
 - simplified CVA V1.1 over the exposure profile
-- Dashboard V1 frontend workflow for FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, portfolios, pricing, exposure and flat CVA
+- Dashboard V1 frontend workflow for FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, portfolios, pricing, exposure and CVA flat/curve modes
 - FO trade lifecycle workflow for amendment and cancellation requests over confirmed positions
 
 The current suite has more than 150 tests, including one real Blemberg smoke test that is skipped unless explicitly enabled.
@@ -512,13 +512,17 @@ Response shape:
 
 V1 pricing rules:
 
-- `baseCurrency` must be `USD`; FX conversion is not implemented yet.
+- Results are reported in the portfolio `baseCurrency`.
+- Market-data pricing inputs may arrive in another currency; NexusXVA converts monetary values through the `marketdata` FX boundary.
+- The local FX provider is a deterministic development fallback for `USD`, `EUR`, `GBP`, `CAD`, `MXN`, and `JPY`.
+- `delta` remains an underlying-unit Greek. Monetary Greeks (`gamma`, `vega`, `theta`, `rho`) are converted to the portfolio base currency.
 - `quantity` scales price and Greeks, so negative quantities represent short exposure.
 - Positions with `maturityDate <= valuationDate` are returned in `unpriceablePositions` with `UNPRICEABLE_EXPIRED` and are excluded from totals.
 - Missing market-data pricing inputs return `400 Bad Request`.
+- Missing FX rates return `400 Bad Request`.
 - Blemberg outages return `503 Service Unavailable`.
 
-The USD-only rule prevents incorrect totals. Without FX conversion, values such as `100 USD + 100 EUR` cannot be safely reported as one portfolio total.
+FX V1 is deterministic and synchronous. It is suitable for portfolio totals and XVA demo flows, but it is not yet a full FX risk model: no stochastic FX paths, FX Greeks, FX options, persisted FX curves, or collateral FX haircuts are implemented.
 
 ### Blemberg Market Data Validation
 
@@ -654,7 +658,7 @@ V1 simulation rules:
 
 ### Simplified CVA V1.1
 
-CVA V1.1 is synchronous: it reuses Exposure V1, then applies a simple credit valuation adjustment formula over expected exposure by date. NexusXVA stores an audit copy in `valuation_runs`; counterparty curves and CVA state are not promoted into persisted master data yet.
+CVA V1.1 is synchronous: it reuses Exposure V1, then applies a simple credit valuation adjustment formula over expected exposure by date. NexusXVA stores an audit copy in `valuation_runs`; credit curves and CVA result state are not promoted into persisted master data yet.
 
 Endpoint:
 
@@ -742,8 +746,57 @@ V1 CVA rules:
 - Missing exposure dates inside a curve range use simple linear interpolation.
 - Exposure dates outside a provided curve range return `400 Bad Request`.
 - `lossGivenDefault` must be between `0.0` and `1.0`.
-- CVA reuses Exposure V1, so USD-only and European-options-only limitations still apply.
-- No counterparty entity, persisted credit curve, netting set, collateral, wrong-way risk, or persisted CVA result is implemented in V1.1.
+- CVA reuses Exposure V1 and reports values in the portfolio `baseCurrency`.
+- European-options-only limitations still apply for the simulation leg.
+- Single-portfolio CVA writes valuation run audit snapshots. Netting-set CVA V1 does not write valuation runs yet because run history is currently portfolio-scoped.
+- Wrong-way risk, path-level netting, margining, CSA rules, persisted credit curves, and persisted CVA result state are still out of scope.
+
+### Counterparties, Netting Sets And Collateral V1
+
+NexusXVA now has a first XVA reference-data slice:
+
+- `GET /api/xva/counterparties`
+- `POST /api/xva/counterparties`
+- `GET /api/xva/netting-sets`
+- `POST /api/xva/netting-sets`
+- `POST /api/xva/netting-sets/{nettingSetId}/portfolios`
+- `DELETE /api/xva/netting-sets/{nettingSetId}/portfolios/{portfolioId}`
+- `PATCH /api/xva/netting-sets/{nettingSetId}/collateral`
+
+Mutating setup endpoints require an `ADMIN` active group when auth is enabled. Read endpoints are available to authenticated groups so FO can select a netting set in CVA.
+
+Netting-set CVA endpoint:
+
+```text
+POST /api/risk/cva/netting-set
+```
+
+Example request:
+
+```json
+{
+  "nettingSetId": "uuid",
+  "valuationDate": "2026-06-30",
+  "horizonDays": 365,
+  "timeSteps": 12,
+  "paths": 1000,
+  "seed": 12345,
+  "pfeConfidenceLevel": 0.95,
+  "lossGivenDefault": 0.6,
+  "counterpartyHazardRate": 0.02,
+  "discountRate": 0.04
+}
+```
+
+V1 rules:
+
+- A counterparty can own multiple netting sets.
+- A portfolio can be assigned to only one netting set.
+- Netting set and portfolio currencies must match.
+- Netting-set CVA V1 supports one base currency per netting set and requires collateral currency to match that base currency.
+- `collateralAmount` is a static amount in the netting set currency.
+- Netting-set CVA aggregates portfolio exposure profiles, subtracts static collateral from positive expected exposure/PFE by bucket, then applies the same CVA calculator.
+- This is profile-level netting, not path-level legal netting or CSA margining.
 
 Implementation shape:
 

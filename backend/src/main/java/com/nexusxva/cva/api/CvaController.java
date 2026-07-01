@@ -6,9 +6,12 @@ import com.nexusxva.auth.domain.AuthSession;
 import com.nexusxva.auth.infrastructure.AuthSessionFilter;
 import com.nexusxva.cva.application.CvaCalculationResult;
 import com.nexusxva.cva.application.CvaCalculationService;
+import com.nexusxva.cva.application.CvaNettingSetCalculationResult;
+import com.nexusxva.cva.application.CvaNettingSetCalculationService;
 import com.nexusxva.shared.error.ResourceNotFoundException;
 import com.nexusxva.valuationruns.application.ValuationRunService;
 import com.nexusxva.valuationruns.domain.ValuationRunType;
+import com.nexusxva.xva.application.XvaReferenceDataService;
 
 import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,17 +28,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class CvaController {
 
     private final CvaCalculationService cvaCalculationService;
+    private final CvaNettingSetCalculationService cvaNettingSetCalculationService;
     private final UserAccessService userAccessService;
     private final ValuationRunService valuationRunService;
+    private final XvaReferenceDataService xvaReferenceDataService;
 
     public CvaController(
             CvaCalculationService cvaCalculationService,
+            CvaNettingSetCalculationService cvaNettingSetCalculationService,
             UserAccessService userAccessService,
-            ValuationRunService valuationRunService
+            ValuationRunService valuationRunService,
+            XvaReferenceDataService xvaReferenceDataService
     ) {
         this.cvaCalculationService = cvaCalculationService;
+        this.cvaNettingSetCalculationService = cvaNettingSetCalculationService;
         this.userAccessService = userAccessService;
         this.valuationRunService = valuationRunService;
+        this.xvaReferenceDataService = xvaReferenceDataService;
     }
 
     @PostMapping("/cva")
@@ -73,6 +82,19 @@ public class CvaController {
             }
             throw exception;
         }
+    }
+
+    @PostMapping("/cva/netting-set")
+    public CvaNettingSetCalculationResponse calculateNettingSetCva(
+            @Valid @RequestBody CvaNettingSetCalculationRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_RUN_CVA);
+        xvaReferenceDataService.getNettingSet(request.nettingSetId())
+                .portfolios()
+                .forEach(portfolio -> userAccessService.requirePortfolioAccess(servletRequest, portfolio.portfolioId()));
+        CvaNettingSetCalculationResult result = cvaNettingSetCalculationService.calculate(request.toCommand());
+        return CvaNettingSetCalculationResponse.from(result);
     }
 
     private Map<String, Object> cvaSummary(CvaCalculationResponse response) {

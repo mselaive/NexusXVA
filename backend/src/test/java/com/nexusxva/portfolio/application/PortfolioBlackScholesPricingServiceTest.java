@@ -2,42 +2,41 @@ package com.nexusxva.portfolio.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
 
 import com.nexusxva.instruments.domain.OptionType;
+import com.nexusxva.marketdata.application.FxRateService;
 import com.nexusxva.marketdata.application.MarketDataPricingInputService;
+import com.nexusxva.marketdata.domain.FxRate;
 import com.nexusxva.marketdata.domain.MarketDataPricingInput;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
+import com.nexusxva.portfolio.domain.CashEquityPosition;
 import com.nexusxva.portfolio.domain.Portfolio;
+import com.nexusxva.portfolio.domain.PortfolioSummary;
 import com.nexusxva.pricing.application.EuropeanOptionPricingService;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-@ExtendWith(MockitoExtension.class)
 class PortfolioBlackScholesPricingServiceTest {
 
     private static final UUID PORTFOLIO_ID = UUID.randomUUID();
     private static final Instant NOW = Instant.parse("2026-06-01T12:00:00Z");
 
-    @Mock
-    private PortfolioStore portfolioStore;
+    private final FakePortfolioStore portfolioStore = new FakePortfolioStore();
 
     @Test
     void scalesPriceAndGreeksByQuantity() {
         EuropeanOptionPosition position = position("AAPL", OptionType.CALL, "100.0", "2027-06-01", "2.0");
         PortfolioBlackScholesPricingService service = service(symbol -> Optional.of(pricingInput(symbol)));
-        when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("USD")));
-        when(portfolioStore.findActiveEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(position));
+        portfolioStore.portfolio = portfolio("USD");
+        portfolioStore.activeOptionPositions = List.of(position);
 
         PortfolioBlackScholesPricingResult result = service.price(PORTFOLIO_ID, LocalDate.parse("2026-06-01"));
 
@@ -55,8 +54,8 @@ class PortfolioBlackScholesPricingServiceTest {
     void shortQuantityProducesNegativePositionValue() {
         EuropeanOptionPosition position = position("AAPL", OptionType.PUT, "100.0", "2027-06-01", "-3.0");
         PortfolioBlackScholesPricingService service = service(symbol -> Optional.of(pricingInput(symbol)));
-        when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("USD")));
-        when(portfolioStore.findActiveEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(position));
+        portfolioStore.portfolio = portfolio("USD");
+        portfolioStore.activeOptionPositions = List.of(position);
 
         PortfolioBlackScholesPricingResult result = service.price(PORTFOLIO_ID, LocalDate.parse("2026-06-01"));
 
@@ -82,8 +81,8 @@ class PortfolioBlackScholesPricingServiceTest {
                 NOW
         );
         PortfolioBlackScholesPricingService service = service(symbol -> Optional.of(pricingInput(symbol)));
-        when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("USD")));
-        when(portfolioStore.findActiveEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(position));
+        portfolioStore.portfolio = portfolio("USD");
+        portfolioStore.activeOptionPositions = List.of(position);
 
         PortfolioBlackScholesPricingResult result = service.price(PORTFOLIO_ID, LocalDate.parse("2026-06-01"));
 
@@ -100,8 +99,8 @@ class PortfolioBlackScholesPricingServiceTest {
     void expiredPositionsAreUnpriceableAndExcludedFromTotals() {
         EuropeanOptionPosition expired = position("AAPL", OptionType.CALL, "100.0", "2026-06-01", "2.0");
         PortfolioBlackScholesPricingService service = service(symbol -> Optional.of(pricingInput(symbol)));
-        when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("USD")));
-        when(portfolioStore.findActiveEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(expired));
+        portfolioStore.portfolio = portfolio("USD");
+        portfolioStore.activeOptionPositions = List.of(expired);
 
         PortfolioBlackScholesPricingResult result = service.price(PORTFOLIO_ID, LocalDate.parse("2026-06-01"));
 
@@ -113,21 +112,26 @@ class PortfolioBlackScholesPricingServiceTest {
     }
 
     @Test
-    void rejectsNonUsdPortfolioForV1() {
+    void convertsUsdMarketDataToNonUsdPortfolioBaseCurrency() {
         PortfolioBlackScholesPricingService service = service(symbol -> Optional.of(pricingInput(symbol)));
-        when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("EUR")));
+        portfolioStore.portfolio = portfolio("EUR");
+        portfolioStore.activeOptionPositions = List.of(position("AAPL", OptionType.CALL, "100.0", "2027-06-01", "1.0"));
 
-        assertThatThrownBy(() -> service.price(PORTFOLIO_ID, LocalDate.parse("2026-06-01")))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Portfolio pricing V1 supports USD baseCurrency only");
+        PortfolioBlackScholesPricingResult result = service.price(PORTFOLIO_ID, LocalDate.parse("2026-06-01"));
+
+        assertThat(result.baseCurrency()).isEqualTo("EUR");
+        assertThat(result.positions().getFirst().marketData().currency()).isEqualTo("USD");
+        assertThat(result.positions().getFirst().marketData().baseCurrency()).isEqualTo("EUR");
+        assertThat(result.positions().getFirst().marketData().fxRateToBase()).isCloseTo(0.917431, tolerance());
+        assertThat(result.positions().getFirst().unitPrice()).isCloseTo(10.4506 * 0.917431, tolerance());
     }
 
     @Test
     void rejectsMissingMarketDataPricingInputs() {
         EuropeanOptionPosition position = position("FAKE", OptionType.CALL, "100.0", "2027-06-01", "1.0");
         PortfolioBlackScholesPricingService service = service(symbol -> Optional.empty());
-        when(portfolioStore.findPortfolio(PORTFOLIO_ID)).thenReturn(Optional.of(portfolio("USD")));
-        when(portfolioStore.findActiveEuropeanOptionPositions(PORTFOLIO_ID)).thenReturn(List.of(position));
+        portfolioStore.portfolio = portfolio("USD");
+        portfolioStore.activeOptionPositions = List.of(position);
 
         assertThatThrownBy(() -> service.price(PORTFOLIO_ID, LocalDate.parse("2026-06-01")))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -143,6 +147,14 @@ class PortfolioBlackScholesPricingServiceTest {
         return new PortfolioBlackScholesPricingService(
                 portfolioStore,
                 pricingInputService,
+                new FxRateService((sourceCurrency, targetCurrency) -> Optional.of(new FxRate(
+                        sourceCurrency,
+                        targetCurrency,
+                        "USD".equals(targetCurrency) ? 1.0 : 1.0 / 1.09,
+                        NOW,
+                        "TEST_FX",
+                        false
+                ))),
                 new EuropeanOptionPricingService()
         );
     }
@@ -177,5 +189,90 @@ class PortfolioBlackScholesPricingServiceTest {
 
     private org.assertj.core.data.Offset<Double> tolerance() {
         return org.assertj.core.data.Offset.offset(1.0e-4);
+    }
+
+    private static class FakePortfolioStore implements PortfolioStore {
+        private Portfolio portfolio;
+        private List<EuropeanOptionPosition> activeOptionPositions = new ArrayList<>();
+
+        @Override
+        public Portfolio createPortfolio(CreatePortfolioCommand command) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<PortfolioSummary> listPortfolioSummaries() {
+            return List.of();
+        }
+
+        @Override
+        public Optional<Portfolio> findPortfolio(UUID portfolioId) {
+            return Optional.ofNullable(portfolio);
+        }
+
+        @Override
+        public boolean existsPortfolio(UUID portfolioId) {
+            return portfolio != null;
+        }
+
+        @Override
+        public Portfolio updatePortfolio(UUID portfolioId, UpdatePortfolioCommand command) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void archivePortfolio(UUID portfolioId, UUID archivedByUserId, String reason) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public EuropeanOptionPosition addEuropeanOptionPosition(UUID portfolioId, AddEuropeanOptionPositionCommand command) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public CashEquityPosition addCashEquityPosition(UUID portfolioId, AddCashEquityPositionCommand command) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<EuropeanOptionPosition> findEuropeanOptionPositions(UUID portfolioId) {
+            return activeOptionPositions;
+        }
+
+        @Override
+        public List<EuropeanOptionPosition> findActiveEuropeanOptionPositions(UUID portfolioId) {
+            return activeOptionPositions;
+        }
+
+        @Override
+        public List<CashEquityPosition> findCashEquityPositions(UUID portfolioId) {
+            return List.of();
+        }
+
+        @Override
+        public List<CashEquityPosition> findActiveCashEquityPositions(UUID portfolioId) {
+            return List.of();
+        }
+
+        @Override
+        public Optional<EuropeanOptionPosition> findEuropeanOptionPosition(UUID portfolioId, UUID positionId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<EuropeanOptionPosition> findEuropeanOptionPosition(UUID positionId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public void markPositionCancelled(UUID positionId) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void markPositionAmended(UUID positionId) {
+            throw new UnsupportedOperationException();
+        }
     }
 }

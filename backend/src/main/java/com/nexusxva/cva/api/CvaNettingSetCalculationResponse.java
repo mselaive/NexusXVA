@@ -1,21 +1,28 @@
 package com.nexusxva.cva.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.nexusxva.cva.application.CvaCalculationResult;
+import com.nexusxva.cva.application.CvaNettingSetCalculationResult;
 import com.nexusxva.cva.domain.CvaCreditMethod;
 import com.nexusxva.cva.domain.CvaDiscountMethod;
-
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record CvaCalculationResponse(
-        UUID portfolioId,
+public record CvaNettingSetCalculationResponse(
+        UUID nettingSetId,
+        UUID counterpartyId,
+        String counterpartyName,
+        String nettingSetName,
+        String baseCurrency,
+        BigDecimal collateralAmount,
+        String collateralCurrency,
+        int portfolioCount,
         LocalDate valuationDate,
         String model,
         String exposureModel,
-        String baseCurrency,
+        boolean profileLevelNettingApproximation,
         int paths,
         int timeSteps,
         double pfeConfidenceLevel,
@@ -28,13 +35,20 @@ public record CvaCalculationResponse(
         List<CvaPointResponse> points
 ) {
 
-    static CvaCalculationResponse from(CvaCalculationResult result) {
-        return new CvaCalculationResponse(
-                result.portfolioId(),
+    static CvaNettingSetCalculationResponse from(CvaNettingSetCalculationResult result) {
+        return new CvaNettingSetCalculationResponse(
+                result.nettingSetId(),
+                result.counterpartyId(),
+                result.counterpartyName(),
+                result.nettingSetName(),
+                result.baseCurrency(),
+                result.collateralAmount(),
+                result.collateralCurrency(),
+                result.portfolioCount(),
                 result.valuationDate(),
                 result.model(),
                 result.exposureModel(),
-                result.baseCurrency(),
+                true,
                 result.paths(),
                 result.timeSteps(),
                 result.pfeConfidenceLevel(),
@@ -44,10 +58,7 @@ public record CvaCalculationResponse(
                 result.creditMethod(),
                 result.discountMethod(),
                 result.cva(),
-                result.points()
-                        .stream()
-                        .map(CvaPointResponse::from)
-                        .toList()
+                result.points().stream().map(CvaPointResponse::from).toList()
         );
     }
 }

@@ -92,7 +92,8 @@ Current notes:
 - Temporary local watchlist validation is available with `nexusxva.market-data.provider=local`; it does not replace Blemberg.
 - Stateless portfolio-level Black-Scholes pricing is implemented at `POST /api/portfolios/{portfolioId}/pricing/black-scholes`.
 - Portfolio pricing requests pricing inputs through `marketdata`, scales price and Greeks by quantity, excludes expired positions as `UNPRICEABLE_EXPIRED`, and records valuation run audit snapshots.
-- Portfolio pricing V1 is USD-only because FX conversion is not implemented yet.
+- Portfolio pricing now has FX V1: results are reported in portfolio `baseCurrency` by converting market-data currency through `marketdata`.
+- Local FX rates are deterministic demo data only; real FX should come from Blemberg later.
 - The local market-data provider supplies temporary demo pricing inputs, including dividend yield, for development; real pricing inputs should come from Blemberg when that service is running.
 - Blemberg HTTP adapter tests should protect instrument validation and European-option pricing input contracts, including stale data, dividend yield, provider failures, and malformed responses.
 - `docs/docs-EN/BlembergBuildSpec.md` is the handoff document for the separate Blemberg repo. Keep NexusXVA aligned with that contract instead of persisting provider/reference/market data locally.
@@ -150,12 +151,12 @@ Current notes:
 - Exposure aggregation returns `expectedExposure`, `expectedNegativeExposure`, and `pfe` per future date.
 - Empty portfolios and all-expired portfolios return zero exposure points.
 - Expired positions are excluded at future dates where `maturityDate <= simulatedDate`.
-- V1 remains USD-only and European-options-only.
+- V1 remains European-options-only for simulation; exposure values are reported in portfolio `baseCurrency` using valuation-time FX conversion.
 - The next functional milestone after simplified CVA is CVA hardening, richer credit inputs, or dashboard visualization.
 
 ## Milestone 6: Simplified CVA
 
-Status: implemented V1.1 for stateless simplified CVA over Exposure V1.
+Status: implemented V1.2 for simplified CVA over Exposure V1, including first netting-set/collateral support.
 
 Goals:
 
@@ -176,7 +177,11 @@ Current notes:
 - The formula is `LGD * sum(discountFactor * expectedExposure * defaultProbabilityIncrement)`.
 - V1.1 supports either flat `counterpartyHazardRate`/`discountRate` or request-provided credit/discount curves.
 - Request-provided curves are interpolated linearly and are not persisted.
-- CVA API requests/responses are copied into valuation run history for audit. No counterparty persistence, collateral, netting, or wrong-way risk is implemented yet.
+- Single-portfolio CVA API requests/responses are copied into valuation run history for audit.
+- Counterparty and netting-set reference data is implemented in the `xva` module.
+- Netting-set CVA V1 aggregates exposure profiles across assigned portfolios and subtracts static collateral before applying CVA.
+- Netting-set CVA is profile-level only; no path-level legal netting, CSA margining, wrong-way risk, persisted credit curves, or persisted CVA result state yet.
+- Netting-set CVA is not copied into valuation run history yet because `valuation_runs` is currently portfolio-scoped.
 
 ## Milestone 7: Dashboard
 
@@ -214,7 +219,7 @@ Current notes:
 - The frontend consumes NexusXVA backend APIs for calculations. FO market-watch widgets may call `/blemberg-api/*` for cached snapshot display, but pricing, exposure, CVA, and stress calculations stay in NexusXVA backend services.
 - The frontend must not reimplement Black-Scholes, Monte Carlo, exposure aggregation, or CVA.
 - Run History V1 is implemented for pricing, exposure and CVA. It stores input/result/summary JSON plus user/group metadata for audit, not for downstream pricing.
-- The first CVA UI uses flat CVA inputs; curve-mode UI can be added after the basic workflow is stable.
+- CVA UI supports both flat inputs and request-scoped credit/discount curve inputs. Curves are not persisted as master data.
 - Multi-leg option strategies and Run History V1 are implemented.
 - Lifecycle Reporting V1 is implemented for BO/FO read-only visibility over amendments and cancellations. It derives metrics from `trade_lifecycle_requests`; do not add duplicated counters for this report.
 - Cash Equities and Delta Hedge V1 are implemented. Cash equities use a separate position model, FO/BO booking, and portfolio pricing support; Delta Hedge is stateless analysis and must not auto-book hedges. See `docs/docs-ES/CashEquitiesYDeltaHedgingPlan.md`.

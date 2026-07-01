@@ -1,6 +1,8 @@
 package com.nexusxva.portfolio.application;
 
+import com.nexusxva.marketdata.application.FxRateService;
 import com.nexusxva.marketdata.application.MarketDataPricingInputService;
+import com.nexusxva.marketdata.domain.FxRate;
 import com.nexusxva.marketdata.domain.MarketDataPricingInput;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.portfolio.domain.CashEquityPosition;
@@ -26,19 +28,21 @@ import java.util.UUID;
 public class PortfolioBlackScholesPricingService {
 
     private static final String MODEL = "BLACK_SCHOLES";
-    private static final String SUPPORTED_BASE_CURRENCY = "USD";
 
     private final PortfolioStore portfolioStore;
     private final MarketDataPricingInputService marketDataPricingInputService;
+    private final FxRateService fxRateService;
     private final EuropeanOptionPricingService pricingService;
 
     public PortfolioBlackScholesPricingService(
             PortfolioStore portfolioStore,
             MarketDataPricingInputService marketDataPricingInputService,
+            FxRateService fxRateService,
             EuropeanOptionPricingService pricingService
     ) {
         this.portfolioStore = portfolioStore;
         this.marketDataPricingInputService = marketDataPricingInputService;
+        this.fxRateService = fxRateService;
         this.pricingService = pricingService;
     }
 
@@ -64,7 +68,7 @@ public class PortfolioBlackScholesPricingService {
                 continue;
             }
 
-            PortfolioPositionPricingResult pricedPosition = pricePosition(position, resolvedValuationDate);
+            PortfolioPositionPricingResult pricedPosition = pricePosition(position, portfolio.baseCurrency(), resolvedValuationDate);
             pricedPositions.add(pricedPosition);
             totalPrice += pricedPosition.positionPrice();
             if (pricedPosition.tradeValue() == null) {
@@ -77,7 +81,7 @@ public class PortfolioBlackScholesPricingService {
         }
 
         for (CashEquityPosition position : portfolioStore.findActiveCashEquityPositions(portfolioId)) {
-            CashEquityPositionPricingResult pricedPosition = priceCashEquityPosition(position, resolvedValuationDate);
+            CashEquityPositionPricingResult pricedPosition = priceCashEquityPosition(position, portfolio.baseCurrency(), resolvedValuationDate);
             pricedCashEquities.add(pricedPosition);
             totalPrice += pricedPosition.marketValue();
             if (pricedPosition.tradeValue() == null) {
@@ -114,7 +118,7 @@ public class PortfolioBlackScholesPricingService {
         LocalDate resolvedValuationDate = valuationDate == null
                 ? LocalDate.now(ZoneOffset.UTC)
                 : valuationDate;
-        portfolio(portfolioId);
+        Portfolio portfolio = portfolio(portfolioId);
         if (!command.maturityDate().isAfter(resolvedValuationDate)) {
             throw new IllegalArgumentException("Hypothetical trade maturityDate must be after valuationDate for Black-Scholes what-if");
         }
@@ -129,30 +133,25 @@ public class PortfolioBlackScholesPricingService {
                 PositionLifecycleStatus.ACTIVE,
                 Instant.EPOCH,
                 Instant.EPOCH
-        ), resolvedValuationDate);
+        ), portfolio.baseCurrency(), resolvedValuationDate);
     }
 
     private Portfolio portfolio(UUID portfolioId) {
-        Portfolio portfolio = portfolioStore.findPortfolio(portfolioId)
+        return portfolioStore.findPortfolio(portfolioId)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
-
-        if (!SUPPORTED_BASE_CURRENCY.equals(portfolio.baseCurrency())) {
-            throw new IllegalArgumentException("Portfolio pricing V1 supports USD baseCurrency only");
-        }
-        return portfolio;
     }
 
     private PortfolioPositionPricingResult pricePosition(
             EuropeanOptionPosition position,
+            String baseCurrency,
             LocalDate valuationDate
     ) {
         MarketDataPricingInput marketData = marketDataPricingInputService.europeanOptionPricingInput(
                 position.underlyingSymbol(),
                 position.maturityDate()
         );
-        if (!SUPPORTED_BASE_CURRENCY.equals(marketData.currency())) {
-            throw new IllegalArgumentException("Portfolio pricing V1 supports USD market data only");
-        }
+        FxRate fxRate = fxRateService.rate(marketData.currency(), baseCurrency);
+        double fxRateToBase = fxRate.rate();
 
         double timeToMaturityYears = ChronoUnit.DAYS.between(valuationDate, position.maturityDate()) / 365.0;
         BlackScholesResult unitResult = pricingService.priceWithBlackScholes(new BlackScholesInput(
@@ -166,21 +165,23 @@ public class PortfolioBlackScholesPricingService {
         ));
 
         double quantity = position.quantity().doubleValue();
-        double positionPrice = unitResult.price() * quantity;
+        double unitPrice = unitResult.price() * fxRateToBase;
+        double positionPrice = unitPrice * quantity;
         Double executionPrice = position.executionPrice() == null ? null : position.executionPrice().doubleValue();
-        Double tradeValue = executionPrice == null ? null : executionPrice * quantity;
+        Double executionPriceBase = executionPrice == null ? null : executionPrice * fxRateToBase;
+        Double tradeValue = executionPriceBase == null ? null : executionPriceBase * quantity;
         Double unrealizedPnl = tradeValue == null ? null : positionPrice - tradeValue;
-        PortfolioGreeks unitGreeks = PortfolioGreeks.scaled(unitResult.greeks(), 1.0);
-        PortfolioGreeks positionGreeks = PortfolioGreeks.scaled(unitResult.greeks(), quantity);
+        PortfolioGreeks unitGreeks = PortfolioGreeks.scaled(unitResult.greeks(), 1.0).monetaryGreeksConverted(fxRateToBase);
+        PortfolioGreeks positionGreeks = PortfolioGreeks.scaled(unitResult.greeks(), quantity).monetaryGreeksConverted(fxRateToBase);
 
         return new PortfolioPositionPricingResult(
                 position.id(),
                 PortfolioPricingStatus.PRICED,
                 position.underlyingSymbol(),
                 quantity,
-                unitResult.price(),
+                unitPrice,
                 positionPrice,
-                executionPrice,
+                executionPriceBase,
                 tradeValue,
                 unrealizedPnl,
                 unitGreeks,
@@ -191,29 +192,33 @@ public class PortfolioBlackScholesPricingService {
                         marketData.riskFreeRate(),
                         marketData.dividendYield(),
                         marketData.currency(),
+                        baseCurrency,
+                        fxRateToBase,
                         marketData.asOf(),
-                        marketData.source(),
-                        marketData.stale()
+                        marketDataSource(marketData, baseCurrency, fxRate),
+                        marketDataStale(marketData, baseCurrency, fxRate)
                 )
         );
     }
 
     private CashEquityPositionPricingResult priceCashEquityPosition(
             CashEquityPosition position,
+            String baseCurrency,
             LocalDate valuationDate
     ) {
         MarketDataPricingInput marketData = marketDataPricingInputService.europeanOptionPricingInput(
                 position.underlyingSymbol(),
                 valuationDate.plusYears(1)
         );
-        if (!SUPPORTED_BASE_CURRENCY.equals(marketData.currency())) {
-            throw new IllegalArgumentException("Portfolio pricing V1 supports USD market data only");
-        }
+        FxRate fxRate = fxRateService.rate(marketData.currency(), baseCurrency);
+        double fxRateToBase = fxRate.rate();
 
         double quantity = position.quantity().doubleValue();
-        double marketValue = marketData.spot() * quantity;
+        double spot = marketData.spot() * fxRateToBase;
+        double marketValue = spot * quantity;
         Double executionPrice = position.executionPrice() == null ? null : position.executionPrice().doubleValue();
-        Double tradeValue = executionPrice == null ? null : executionPrice * quantity;
+        Double executionPriceBase = executionPrice == null ? null : executionPrice * fxRateToBase;
+        Double tradeValue = executionPriceBase == null ? null : executionPriceBase * quantity;
         Double unrealizedPnl = tradeValue == null ? null : marketValue - tradeValue;
         PortfolioGreeks positionGreeks = new PortfolioGreeks(quantity, 0.0, 0.0, 0.0, 0.0);
 
@@ -222,9 +227,9 @@ public class PortfolioBlackScholesPricingService {
                 PortfolioPricingStatus.PRICED,
                 position.underlyingSymbol(),
                 quantity,
-                marketData.spot(),
+                spot,
                 marketValue,
-                executionPrice,
+                executionPriceBase,
                 tradeValue,
                 unrealizedPnl,
                 positionGreeks,
@@ -234,11 +239,26 @@ public class PortfolioBlackScholesPricingService {
                         marketData.riskFreeRate(),
                         marketData.dividendYield(),
                         marketData.currency(),
+                        baseCurrency,
+                        fxRateToBase,
                         marketData.asOf(),
-                        marketData.source(),
-                        marketData.stale()
+                        marketDataSource(marketData, baseCurrency, fxRate),
+                        marketDataStale(marketData, baseCurrency, fxRate)
                 )
         );
+    }
+
+    private String marketDataSource(MarketDataPricingInput marketData, String baseCurrency, FxRate fxRate) {
+        if (marketData.currency().equals(baseCurrency)) {
+            return marketData.source();
+        }
+        return marketData.source() + "+" + fxRate.source();
+    }
+
+    private boolean marketDataStale(MarketDataPricingInput marketData, String baseCurrency, FxRate fxRate) {
+        return marketData.currency().equals(baseCurrency)
+                ? marketData.stale()
+                : marketData.stale() || fxRate.stale();
     }
 
     private UnpriceablePortfolioPosition expiredPosition(EuropeanOptionPosition position) {

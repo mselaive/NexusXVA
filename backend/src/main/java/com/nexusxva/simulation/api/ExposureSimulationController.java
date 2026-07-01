@@ -78,6 +78,7 @@ public class ExposureSimulationController {
         summary.put("paths", response.paths());
         summary.put("timeSteps", response.timeSteps());
         summary.put("pfeConfidenceLevel", response.pfeConfidenceLevel());
+        summary.put("baseCurrency", response.baseCurrency());
         summary.put("points", response.points().size());
         return summary;
     }

@@ -65,7 +65,9 @@ European option position:
 - Use a 3-letter uppercase `baseCurrency`, default `USD`.
 - Allow positive and negative quantity for long/short positions, but reject zero quantity.
 - Allow past `maturityDate`; pricing decides whether a trade can be valued.
-- Portfolio Black-Scholes pricing V1 is USD-only and must reject non-USD portfolios until FX is explicitly implemented.
+- Portfolio Black-Scholes pricing supports FX V1: convert monetary values to portfolio `baseCurrency` through `marketdata`.
+- Do not persist FX rates, spot, vol, risk-free rate, dividend yield, or provider metadata inside positions.
+- Keep `delta` in underlying units; convert monetary values and monetary Greeks (`gamma`, `vega`, `theta`, `rho`) to the portfolio base currency.
 - Expired positions should be reported as `UNPRICEABLE_EXPIRED` and excluded from valuation totals.
 - Do not persist portfolio pricing results unless a future valuation-storage feature explicitly asks for it.
 

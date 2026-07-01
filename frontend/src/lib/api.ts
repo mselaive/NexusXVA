@@ -15,6 +15,8 @@ import type {
   CreateCashEquityBookingRequest,
   CvaCalculationRequest,
   CvaCalculationResponse,
+  CvaNettingSetCalculationRequest,
+  CvaNettingSetCalculationResponse,
   DeltaHedgeAnalysisRequest,
   DeltaHedgeAnalysisResponse,
   ExposureSimulationRequest,
@@ -27,6 +29,8 @@ import type {
   FrontOfficeWhatIfResponse,
   LoginRequest,
   NotificationPage,
+  Counterparty,
+  NettingSet,
   Portfolio,
   PortfolioDailyPnl,
   PortfolioEodSnapshot,
@@ -305,6 +309,16 @@ export const nexusApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  runNettingSetCva: (body: CvaNettingSetCalculationRequest) =>
+    request<CvaNettingSetCalculationResponse>("/risk/cva/netting-set", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listCounterparties: () => request<Counterparty[]>("/xva/counterparties"),
+
+  listNettingSets: () => request<NettingSet[]>("/xva/netting-sets"),
 
   listValuationRuns: (filters: {
     runType?: ValuationRunType | "";

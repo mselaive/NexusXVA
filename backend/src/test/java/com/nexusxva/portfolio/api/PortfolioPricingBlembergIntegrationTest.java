@@ -68,7 +68,7 @@ class PortfolioPricingBlembergIntegrationTest extends AbstractPostgresIntegratio
     }
 
     @Test
-    void rejectsNonUsdBlembergMarketDataForPortfolioPricingV1() throws Exception {
+    void convertsNonUsdBlembergMarketDataToPortfolioBaseCurrency() throws Exception {
         when(marketDataPricingInputGateway.findEuropeanOptionPricingInput(eq("AAPL"), eq(MATURITY_DATE)))
                 .thenReturn(Optional.of(pricingInput("AAPL", "EUR", false)));
         String portfolioId = createdPortfolioId("Non USD Market Data Book", "USD");
@@ -81,9 +81,11 @@ class PortfolioPricingBlembergIntegrationTest extends AbstractPostgresIntegratio
                                   "valuationDate": "2026-06-01"
                                 }
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.message").value("Portfolio pricing V1 supports USD market data only"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.baseCurrency").value("USD"))
+                .andExpect(jsonPath("$.positions[0].marketData.currency").value("EUR"))
+                .andExpect(jsonPath("$.positions[0].marketData.baseCurrency").value("USD"))
+                .andExpect(jsonPath("$.positions[0].marketData.fxRateToBase").isNumber());
     }
 
     @Test

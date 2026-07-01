@@ -26,6 +26,7 @@ import type {
   AddEuropeanOptionPositionRequest,
   CreateOptionStrategyBookingRequest,
   CvaCalculationResponse,
+  CvaNettingSetCalculationResponse,
   ExposureSimulationResponse,
   OptionType,
   OptionStrategyType,
@@ -37,6 +38,7 @@ import type {
   BlembergMarketSnapshot,
   DeltaHedgeAnalysisResponse,
   EuropeanOptionPosition,
+  NettingSet,
   TradeBooking,
   TradeLifecycleRequest,
   TradingLimitSnapshot,
@@ -56,6 +58,22 @@ type RunForm = {
   lossGivenDefault: string;
   counterpartyHazardRate: string;
   discountRate: string;
+};
+
+type CvaMode = "flat" | "curves";
+type CvaScope = "portfolio" | "nettingSet";
+type CreditCurveInputMode = "survivalProbability" | "cumulativeDefaultProbability";
+
+type CreditCurveFormRow = {
+  id: string;
+  date: string;
+  value: string;
+};
+
+type DiscountCurveFormRow = {
+  id: string;
+  date: string;
+  discountFactor: string;
 };
 
 type TradeTicketForm = {
@@ -169,8 +187,8 @@ const howTo = {
     { title: "2. LGD", body: "Loss Given Default. 0.6 means 60% of positive exposure is lost if the counterparty defaults." },
     { title: "3. Hazard rate", body: "Flat annual default intensity. Higher hazard rate increases default probability and usually increases CVA." },
     { title: "4. Discount rate", body: "Flat annual discount rate used to discount future exposure contributions back to valuation date." },
+    { title: "Curve mode", body: "Use credit curve points for survival/default probability and discount curve points for discount factors. Curves override flat hazard and flat discount rate." },
     { title: "Run CVA", body: "The output shows total CVA and bucket contributions with exposure, discount factor, survival probability, default increment, and contribution." },
-    { title: "Curve mode later", body: "The backend supports credit and discount curves, but Dashboard V1 currently exposes the simpler flat mode." },
   ],
   deltaHedge: [
     { title: "Purpose", body: "Delta Hedge converts option delta into an equivalent share quantity so FO can decide whether to book a cash equity hedge." },
@@ -237,7 +255,7 @@ export function OverviewPage() {
         <Metric label="Portfolios" value={formatNumber(portfolios.length, 0)} />
         <Metric label="Positions" value={formatNumber(totalPositions, 0)} />
         <Metric label="Market data" value="Local/Blemberg" />
-        <Metric label="CVA mode" value="Flat UI" />
+        <Metric label="CVA mode" value="Flat / curve UI" />
       </div>
 
       <div className="workflow-lanes">
@@ -1304,20 +1322,46 @@ export function ExposurePage() {
 
 export function CvaPage() {
   const [selectedId, setSelectedId] = useState(initialPortfolioIdFromUrl);
+  const [cvaScope, setCvaScope] = useState<CvaScope>("portfolio");
+  const [nettingSets, setNettingSets] = useState<NettingSet[]>([]);
+  const [selectedNettingSetId, setSelectedNettingSetId] = useState("");
   const [form, setForm] = useState(defaultRunForm);
-  const [cva, setCva] = useState<CvaCalculationResponse | null>(null);
+  const [cvaMode, setCvaMode] = useState<CvaMode>("flat");
+  const [creditCurveMode, setCreditCurveMode] = useState<CreditCurveInputMode>("survivalProbability");
+  const [creditCurve, setCreditCurve] = useState(defaultCreditCurveRows);
+  const [discountCurve, setDiscountCurve] = useState(defaultDiscountCurveRows);
+  const [cva, setCva] = useState<CvaCalculationResponse | CvaNettingSetCalculationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    nexusApi.listNettingSets()
+      .then((items) => {
+        setNettingSets(items);
+        if (!selectedNettingSetId && items.length > 0) {
+          setSelectedNettingSetId(items[0].id);
+        }
+      })
+      .catch(() => undefined);
+  }, [selectedNettingSetId]);
+
   async function runCva() {
-    if (!selectedId) {
+    if (cvaScope === "portfolio" && !selectedId) {
       setError("Select a portfolio first.");
+      return;
+    }
+    if (cvaScope === "nettingSet" && !selectedNettingSetId) {
+      setError("Select a netting set first.");
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      setCva(await nexusApi.runCva(toCvaRequest(selectedId, form)));
+      if (cvaScope === "nettingSet") {
+        setCva(await nexusApi.runNettingSetCva(toCvaNettingSetRequest(selectedNettingSetId, form, cvaMode, creditCurveMode, creditCurve, discountCurve)));
+      } else {
+        setCva(await nexusApi.runCva(toCvaRequest(selectedId, form, cvaMode, creditCurveMode, creditCurve, discountCurve)));
+      }
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -1328,16 +1372,232 @@ export function CvaPage() {
   return (
     <AppShell title="CVA" eyebrow="Credit valuation adjustment" howTo={howTo.cva}>
       <Alert message={error} />
-      <RunSetup selectedId={selectedId} setSelectedId={setSelectedId} form={form} setForm={setForm} onError={setError} includeCva />
+      <CvaScopePanel
+        scope={cvaScope}
+        setScope={(scope) => {
+          setCvaScope(scope);
+          setCva(null);
+        }}
+        nettingSets={nettingSets}
+        selectedNettingSetId={selectedNettingSetId}
+        setSelectedNettingSetId={setSelectedNettingSetId}
+      />
+      <RunSetup
+        selectedId={selectedId}
+        setSelectedId={setSelectedId}
+        form={form}
+        setForm={setForm}
+        onError={setError}
+        includeCva
+        cvaMode={cvaMode}
+        showPortfolioPicker={cvaScope === "portfolio"}
+      />
+      <CvaCurveModePanel
+        mode={cvaMode}
+        setMode={setCvaMode}
+        creditCurveMode={creditCurveMode}
+        setCreditCurveMode={setCreditCurveMode}
+        creditCurve={creditCurve}
+        setCreditCurve={setCreditCurve}
+        discountCurve={discountCurve}
+        setDiscountCurve={setDiscountCurve}
+        valuationDate={form.valuationDate}
+      />
       <div className="panel">
-        <SectionTitle title="CVA contribution" info="Dashboard V1 uses flat LGD, hazard rate and discount rate. Curve-mode is supported by the backend and can be added to the UI later." />
+        <SectionTitle title="CVA contribution" info="Flat mode uses hazard rate and discount rate. Curve mode sends credit and discount curves to the backend and those curves take precedence." />
         <button className="btn warning section-action" type="button" onClick={runCva} disabled={loading}>
           {loading ? <Loader2 size={16} /> : <Shield size={16} />}
-          Run CVA
+          Run {cvaScope === "nettingSet" ? "Netting Set CVA" : "CVA"}
         </button>
         {cva ? <CvaResult cva={cva} /> : <EmptyState text="Run CVA to see adjustment and bucket-level contributions." />}
       </div>
     </AppShell>
+  );
+}
+
+function CvaScopePanel({
+  scope,
+  setScope,
+  nettingSets,
+  selectedNettingSetId,
+  setSelectedNettingSetId,
+}: {
+  scope: CvaScope;
+  setScope: (scope: CvaScope) => void;
+  nettingSets: NettingSet[];
+  selectedNettingSetId: string;
+  setSelectedNettingSetId: (value: string) => void;
+}) {
+  const selected = nettingSets.find((candidate) => candidate.id === selectedNettingSetId);
+  return (
+    <div className="panel section">
+      <SectionTitle title="CVA scope" info="Single portfolio CVA uses one portfolio. Netting set CVA aggregates portfolios assigned to a counterparty netting set and applies static collateral before CVA." />
+      <div className="stress-mode-toggle" role="group" aria-label="CVA scope">
+        <button className={scope === "portfolio" ? "active" : ""} type="button" onClick={() => setScope("portfolio")}>Single portfolio</button>
+        <button className={scope === "nettingSet" ? "active" : ""} type="button" onClick={() => setScope("nettingSet")}>Netting set</button>
+      </div>
+      {scope === "nettingSet" ? (
+        <div className="form-grid">
+          <label>
+            Netting set
+            <select className="select" value={selectedNettingSetId} onChange={(event) => setSelectedNettingSetId(event.target.value)}>
+              {nettingSets.length === 0 ? <option value="">No netting sets configured</option> : null}
+              {nettingSets.map((nettingSet) => (
+                <option key={nettingSet.id} value={nettingSet.id}>
+                  {nettingSet.counterpartyName} / {nettingSet.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Metric label="Collateral" value={selected ? `${formatCurrency(selected.collateralAmount)} ${selected.collateralCurrency}` : "-"} />
+          <Metric label="Portfolios" value={selected ? String(selected.portfolios.length) : "0"} />
+          <Metric label="Currency" value={selected?.baseCurrency ?? "-"} />
+          <p className="mini-note">V1 uses profile-level netting and static collateral. It is useful for early counterparty CVA, but it is not yet path-level CSA margining.</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CvaCurveModePanel({
+  mode,
+  setMode,
+  creditCurveMode,
+  setCreditCurveMode,
+  creditCurve,
+  setCreditCurve,
+  discountCurve,
+  setDiscountCurve,
+  valuationDate,
+}: {
+  mode: CvaMode;
+  setMode: (mode: CvaMode) => void;
+  creditCurveMode: CreditCurveInputMode;
+  setCreditCurveMode: (mode: CreditCurveInputMode) => void;
+  creditCurve: CreditCurveFormRow[];
+  setCreditCurve: (rows: CreditCurveFormRow[]) => void;
+  discountCurve: DiscountCurveFormRow[];
+  setDiscountCurve: (rows: DiscountCurveFormRow[]) => void;
+  valuationDate: string;
+}) {
+  return (
+    <div className="panel section cva-curve-panel">
+      <SectionTitle title="Credit and discount model" info="Flat mode uses one hazard rate and one discount rate. Curve mode lets you provide dated credit probabilities and discount factors." />
+      <div className="stress-mode-toggle" role="group" aria-label="CVA model mode">
+        <button className={mode === "flat" ? "active" : ""} type="button" onClick={() => setMode("flat")}>Flat rates</button>
+        <button className={mode === "curves" ? "active" : ""} type="button" onClick={() => setMode("curves")}>Curve mode</button>
+      </div>
+      {mode === "curves" ? (
+        <div className="curve-editor-grid">
+          <section className="curve-editor">
+            <div className="curve-editor-head">
+              <div>
+                <h3>Credit curve</h3>
+                <p>Dates must cover every exposure bucket. Survival must go down over time; cumulative default must go up.</p>
+              </div>
+              <select
+                className="select"
+                value={creditCurveMode}
+                onChange={(event) => {
+                  const nextMode = event.target.value as CreditCurveInputMode;
+                  setCreditCurveMode(nextMode);
+                  setCreditCurve(defaultCreditCurveRows(valuationDate, nextMode));
+                }}
+              >
+                <option value="survivalProbability">Survival probability</option>
+                <option value="cumulativeDefaultProbability">Cumulative default probability</option>
+              </select>
+            </div>
+            <CurveTable
+              rows={creditCurve}
+              valueLabel={creditCurveMode === "survivalProbability" ? "Survival" : "Cumulative default"}
+              valuePlaceholder={creditCurveMode === "survivalProbability" ? "0.98" : "0.02"}
+              onChange={(nextRows) => setCreditCurve(nextRows)}
+            />
+            <div className="curve-actions">
+              <button className="btn secondary" type="button" onClick={() => setCreditCurve([...creditCurve, nextCreditCurveRow(valuationDate, creditCurve.length + 1, creditCurveMode)])}>Add credit point</button>
+              <button className="btn secondary" type="button" onClick={() => setCreditCurve(defaultCreditCurveRows(valuationDate, creditCurveMode))}>Reset credit curve</button>
+            </div>
+          </section>
+
+          <section className="curve-editor">
+            <div className="curve-editor-head">
+              <div>
+                <h3>Discount curve</h3>
+                <p>Discount factors are between 0 and 1 and are interpolated linearly by date.</p>
+              </div>
+            </div>
+            <DiscountCurveTable rows={discountCurve} onChange={setDiscountCurve} />
+            <div className="curve-actions">
+              <button className="btn secondary" type="button" onClick={() => setDiscountCurve([...discountCurve, nextDiscountCurveRow(valuationDate, discountCurve.length + 1)])}>Add discount point</button>
+              <button className="btn secondary" type="button" onClick={() => setDiscountCurve(defaultDiscountCurveRows(valuationDate))}>Reset discount curve</button>
+            </div>
+          </section>
+        </div>
+      ) : (
+        <p className="mini-note">Flat mode sends LGD, counterparty hazard rate and discount rate. Curves are not included in the request.</p>
+      )}
+    </div>
+  );
+}
+
+function CurveTable({
+  rows,
+  valueLabel,
+  valuePlaceholder,
+  onChange,
+}: {
+  rows: CreditCurveFormRow[];
+  valueLabel: string;
+  valuePlaceholder: string;
+  onChange: (rows: CreditCurveFormRow[]) => void;
+}) {
+  return (
+    <div className="table-wrap compact-curve-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>{valueLabel}</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <td><input className="input" type="date" value={row.date} onChange={(event) => onChange(updateCreditCurveRow(rows, row.id, { date: event.target.value }))} /></td>
+              <td><input className="input" type="number" min="0" max="1" step="0.0001" placeholder={valuePlaceholder} value={row.value} onChange={(event) => onChange(updateCreditCurveRow(rows, row.id, { value: event.target.value }))} /></td>
+              <td><button className="icon-link danger-text" type="button" onClick={() => onChange(rows.filter((candidate) => candidate.id !== row.id))}>Remove</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DiscountCurveTable({ rows, onChange }: { rows: DiscountCurveFormRow[]; onChange: (rows: DiscountCurveFormRow[]) => void }) {
+  return (
+    <div className="table-wrap compact-curve-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Discount factor</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <td><input className="input" type="date" value={row.date} onChange={(event) => onChange(updateDiscountCurveRow(rows, row.id, { date: event.target.value }))} /></td>
+              <td><input className="input" type="number" min="0" max="1" step="0.0001" placeholder="0.96" value={row.discountFactor} onChange={(event) => onChange(updateDiscountCurveRow(rows, row.id, { discountFactor: event.target.value }))} /></td>
+              <td><button className="icon-link danger-text" type="button" onClick={() => onChange(rows.filter((candidate) => candidate.id !== row.id))}>Remove</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -1348,6 +1608,8 @@ function RunSetup({
   setForm,
   onError,
   includeCva = false,
+  cvaMode = "flat",
+  showPortfolioPicker = true,
 }: {
   selectedId: string;
   setSelectedId: (value: string) => void;
@@ -1355,6 +1617,8 @@ function RunSetup({
   setForm: (value: RunForm) => void;
   onError: (value: string) => void;
   includeCva?: boolean;
+  cvaMode?: CvaMode;
+  showPortfolioPicker?: boolean;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -1369,7 +1633,7 @@ function RunSetup({
   return (
     <div className="panel section">
       <SectionTitle title="Run setup" info="These values are sent to the backend simulation/CVA endpoint. The frontend does not calculate paths or valuation adjustments." />
-      <PortfolioPicker value={selectedId} onChange={setSelectedId} onError={onError} />
+      {showPortfolioPicker ? <PortfolioPicker value={selectedId} onChange={setSelectedId} onError={onError} /> : null}
       <div className="preset-grid" aria-label="Simulation presets">
         {runPresets.map((preset) => (
           <button className="preset-card" key={preset.name} type="button" onClick={() => applyPreset(preset.values)}>
@@ -1387,8 +1651,12 @@ function RunSetup({
         {includeCva ? (
           <>
             <RunField label="LGD" value={form.lossGivenDefault} type="number" step="0.01" onChange={(lossGivenDefault) => setForm({ ...form, lossGivenDefault })} />
-            <RunField label="Hazard rate" value={form.counterpartyHazardRate} type="number" step="0.001" onChange={(counterpartyHazardRate) => setForm({ ...form, counterpartyHazardRate })} />
-            <RunField label="Discount rate" value={form.discountRate} type="number" step="0.001" onChange={(discountRate) => setForm({ ...form, discountRate })} />
+            {cvaMode === "flat" ? (
+              <>
+                <RunField label="Hazard rate" value={form.counterpartyHazardRate} type="number" step="0.001" onChange={(counterpartyHazardRate) => setForm({ ...form, counterpartyHazardRate })} />
+                <RunField label="Discount rate" value={form.discountRate} type="number" step="0.001" onChange={(discountRate) => setForm({ ...form, discountRate })} />
+              </>
+            ) : null}
           </>
         ) : null}
       </div>
@@ -1423,13 +1691,102 @@ function randomSeed() {
   return String(Math.floor(Math.random() * 900000) + 100000);
 }
 
-function toCvaRequest(portfolioId: string, form: RunForm) {
-  return {
+function toCvaRequest(
+  portfolioId: string,
+  form: RunForm,
+  mode: CvaMode,
+  creditCurveMode: CreditCurveInputMode,
+  creditCurve: CreditCurveFormRow[],
+  discountCurve: DiscountCurveFormRow[],
+) {
+  const baseRequest = {
     ...toExposureRequest(portfolioId, form),
     lossGivenDefault: Number(form.lossGivenDefault),
+  };
+
+  if (mode === "curves") {
+    return {
+      ...baseRequest,
+      creditCurve: creditCurve.map((point) => creditCurveMode === "survivalProbability"
+        ? { date: point.date, survivalProbability: Number(point.value) }
+        : { date: point.date, cumulativeDefaultProbability: Number(point.value) }),
+      discountCurve: discountCurve.map((point) => ({
+        date: point.date,
+        discountFactor: Number(point.discountFactor),
+      })),
+    };
+  }
+
+  return {
+    ...baseRequest,
     counterpartyHazardRate: Number(form.counterpartyHazardRate),
     discountRate: Number(form.discountRate),
   };
+}
+
+function toCvaNettingSetRequest(
+  nettingSetId: string,
+  form: RunForm,
+  mode: CvaMode,
+  creditCurveMode: CreditCurveInputMode,
+  creditCurve: CreditCurveFormRow[],
+  discountCurve: DiscountCurveFormRow[],
+) {
+  const { portfolioId: _portfolioId, ...request } = toCvaRequest("ignored", form, mode, creditCurveMode, creditCurve, discountCurve);
+  return {
+    ...request,
+    nettingSetId,
+  };
+}
+
+function defaultCreditCurveRows(startDate = todayIsoDate(), mode: CreditCurveInputMode = "survivalProbability"): CreditCurveFormRow[] {
+  const values = mode === "survivalProbability" ? ["0.99", "0.97", "0.94"] : ["0.01", "0.03", "0.06"];
+  return values.map((value, index) => ({
+    id: `credit-${index + 1}`,
+    date: addMonths(startDate, (index + 1) * 6),
+    value,
+  }));
+}
+
+function defaultDiscountCurveRows(startDate = todayIsoDate()): DiscountCurveFormRow[] {
+  return ["0.98", "0.96", "0.93"].map((discountFactor, index) => ({
+    id: `discount-${index + 1}`,
+    date: addMonths(startDate, (index + 1) * 6),
+    discountFactor,
+  }));
+}
+
+function nextCreditCurveRow(startDate: string, pointNumber: number, mode: CreditCurveInputMode): CreditCurveFormRow {
+  const lastValue = mode === "survivalProbability"
+    ? Math.max(0, 0.99 - pointNumber * 0.02)
+    : Math.min(1, 0.01 + pointNumber * 0.02);
+  return {
+    id: `credit-${Date.now()}-${pointNumber}`,
+    date: addMonths(startDate, pointNumber * 6),
+    value: lastValue.toFixed(4),
+  };
+}
+
+function nextDiscountCurveRow(startDate: string, pointNumber: number): DiscountCurveFormRow {
+  return {
+    id: `discount-${Date.now()}-${pointNumber}`,
+    date: addMonths(startDate, pointNumber * 6),
+    discountFactor: Math.max(0, 0.99 - pointNumber * 0.02).toFixed(4),
+  };
+}
+
+function updateCreditCurveRow(rows: CreditCurveFormRow[], id: string, patch: Partial<CreditCurveFormRow>) {
+  return rows.map((row) => row.id === id ? { ...row, ...patch } : row);
+}
+
+function updateDiscountCurveRow(rows: DiscountCurveFormRow[], id: string, patch: Partial<DiscountCurveFormRow>) {
+  return rows.map((row) => row.id === id ? { ...row, ...patch } : row);
+}
+
+function addMonths(date: string, months: number) {
+  const next = new Date(`${date}T00:00:00Z`);
+  next.setUTCMonth(next.getUTCMonth() + months);
+  return next.toISOString().slice(0, 10);
 }
 
 function SectionTitle({ title, info }: { title: string; info: string }) {
@@ -1698,6 +2055,7 @@ function PricingResult({ pricing }: { pricing: PortfolioPricingResponse }) {
               <th>Vol</th>
               <th>Rate</th>
               <th>Dividend</th>
+              <th>FX</th>
               <th>Source</th>
             </tr>
           </thead>
@@ -1715,6 +2073,7 @@ function PricingResult({ pricing }: { pricing: PortfolioPricingResponse }) {
                 <td>{formatPercent(position.marketData.volatility)}</td>
                 <td>{formatPercent(position.marketData.riskFreeRate)}</td>
                 <td>{formatPercent(position.marketData.dividendYield)}</td>
+                <td>{position.marketData.currency === position.marketData.baseCurrency ? position.marketData.currency : `${position.marketData.currency}/${position.marketData.baseCurrency} ${formatNumber(position.marketData.fxRateToBase, 4)}`}</td>
                 <td>{position.marketData.source}{position.marketData.stale ? " · stale" : ""}</td>
               </tr>
             ))}
@@ -1731,6 +2090,7 @@ function PricingResult({ pricing }: { pricing: PortfolioPricingResponse }) {
                 <td>—</td>
                 <td>—</td>
                 <td>—</td>
+                <td>{position.marketData.currency === position.marketData.baseCurrency ? position.marketData.currency : `${position.marketData.currency}/${position.marketData.baseCurrency} ${formatNumber(position.marketData.fxRateToBase, 4)}`}</td>
                 <td>{position.marketData.source}{position.marketData.stale ? " · stale" : ""}</td>
               </tr>
             ))}
@@ -1878,6 +2238,7 @@ function ExposureResult({ exposure }: { exposure: ExposureSimulationResponse }) 
     <div className="table-spacing">
       <div className="summary-strip">
         <Metric label="Model" value={exposure.model} />
+        <Metric label="Currency" value={exposure.baseCurrency} />
         <Metric label="Paths" value={formatNumber(exposure.paths, 0)} />
         <Metric label="Time steps" value={formatNumber(exposure.timeSteps, 0)} />
         <Metric label="PFE confidence" value={formatPercent(exposure.pfeConfidenceLevel)} />
@@ -1885,12 +2246,12 @@ function ExposureResult({ exposure }: { exposure: ExposureSimulationResponse }) 
       <div className="table-spacing">
         <ExposureChart points={exposure.points} />
       </div>
-      <ExposureTable points={exposure.points} />
+      <ExposureTable points={exposure.points} currency={exposure.baseCurrency} />
     </div>
   );
 }
 
-function ExposureTable({ points }: { points: ExposureSimulationResponse["points"] }) {
+function ExposureTable({ points, currency }: { points: ExposureSimulationResponse["points"]; currency: string }) {
   return (
     <div className="table-wrap">
       <table>
@@ -1906,9 +2267,9 @@ function ExposureTable({ points }: { points: ExposureSimulationResponse["points"
           {points.map((point) => (
             <tr key={point.date}>
               <td>{point.date}</td>
-              <td>{formatCurrency(point.expectedExposure)}</td>
-              <td>{formatCurrency(point.expectedNegativeExposure)}</td>
-              <td>{formatCurrency(point.pfe)}</td>
+              <td>{formatCurrency(point.expectedExposure, currency)}</td>
+              <td>{formatCurrency(point.expectedNegativeExposure, currency)}</td>
+              <td>{formatCurrency(point.pfe, currency)}</td>
             </tr>
           ))}
         </tbody>
@@ -1917,15 +2278,23 @@ function ExposureTable({ points }: { points: ExposureSimulationResponse["points"
   );
 }
 
-function CvaResult({ cva }: { cva: CvaCalculationResponse }) {
+function CvaResult({ cva }: { cva: CvaCalculationResponse | CvaNettingSetCalculationResponse }) {
+  const isNettingSet = "nettingSetId" in cva;
   return (
     <div className="table-spacing">
       <div className="summary-strip">
         <Metric label="CVA" value={formatCurrency(cva.cva)} />
+        <Metric label="Currency" value={cva.baseCurrency} />
+        {isNettingSet ? <Metric label="Counterparty" value={cva.counterpartyName} /> : null}
+        {isNettingSet ? <Metric label="Netting set" value={cva.nettingSetName} /> : null}
         <Metric label="Credit method" value={cva.creditMethod} />
         <Metric label="Discount method" value={cva.discountMethod} />
         <Metric label="LGD" value={formatPercent(cva.lossGivenDefault)} />
+        {isNettingSet ? <Metric label="Collateral" value={`${formatCurrency(cva.collateralAmount)} ${cva.collateralCurrency}`} /> : null}
       </div>
+      {isNettingSet && cva.profileLevelNettingApproximation ? (
+        <p className="mini-note">Netting set CVA V1 aggregates portfolio exposure profiles and subtracts static collateral. Path-level netting and margin calls come later.</p>
+      ) : null}
       <div className="table-wrap table-spacing">
         <table>
           <thead>
@@ -1943,12 +2312,12 @@ function CvaResult({ cva }: { cva: CvaCalculationResponse }) {
             {cva.points.map((point) => (
               <tr key={point.date}>
                 <td>{point.date}</td>
-                <td>{formatCurrency(point.expectedExposure)}</td>
+                <td>{formatCurrency(point.expectedExposure, cva.baseCurrency)}</td>
                 <td>{formatNumber(point.discountFactor)}</td>
                 <td>{formatPercent(point.survivalProbability)}</td>
                 <td>{formatPercent(point.defaultProbabilityIncrement)}</td>
-                <td>{formatCurrency(point.discountedExpectedExposure)}</td>
-                <td>{formatCurrency(point.cvaContribution)}</td>
+                <td>{formatCurrency(point.discountedExpectedExposure, cva.baseCurrency)}</td>
+                <td>{formatCurrency(point.cvaContribution, cva.baseCurrency)}</td>
               </tr>
             ))}
           </tbody>

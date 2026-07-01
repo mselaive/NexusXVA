@@ -282,6 +282,8 @@ export type PortfolioPositionMarketData = {
   riskFreeRate: number;
   dividendYield: number;
   currency: string;
+  baseCurrency: string;
+  fxRateToBase: number;
   asOf: string;
   source: string;
   stale: boolean;
@@ -469,6 +471,7 @@ export type ExposureSimulationResponse = {
   portfolioId: string;
   valuationDate: string;
   model: string;
+  baseCurrency: string;
   paths: number;
   timeSteps: number;
   pfeConfidenceLevel: number;
@@ -484,8 +487,25 @@ export type ExposurePoint = {
 
 export type CvaCalculationRequest = ExposureSimulationRequest & {
   lossGivenDefault: number;
-  counterpartyHazardRate: number;
-  discountRate: number;
+  counterpartyHazardRate?: number;
+  discountRate?: number;
+  creditCurve?: CreditCurvePointRequest[];
+  discountCurve?: DiscountCurvePointRequest[];
+};
+
+export type CvaNettingSetCalculationRequest = Omit<CvaCalculationRequest, "portfolioId"> & {
+  nettingSetId: string;
+};
+
+export type CreditCurvePointRequest = {
+  date: string;
+  survivalProbability?: number;
+  cumulativeDefaultProbability?: number;
+};
+
+export type DiscountCurvePointRequest = {
+  date: string;
+  discountFactor: number;
 };
 
 export type CvaCalculationResponse = {
@@ -493,6 +513,7 @@ export type CvaCalculationResponse = {
   valuationDate: string;
   model: string;
   exposureModel: string;
+  baseCurrency: string;
   paths: number;
   timeSteps: number;
   pfeConfidenceLevel: number;
@@ -503,6 +524,49 @@ export type CvaCalculationResponse = {
   discountMethod: "FLAT_RATE" | "DISCOUNT_CURVE";
   cva: number;
   points: CvaPoint[];
+};
+
+export type CvaNettingSetCalculationResponse = Omit<CvaCalculationResponse, "portfolioId"> & {
+  nettingSetId: string;
+  counterpartyId: string;
+  counterpartyName: string;
+  nettingSetName: string;
+  baseCurrency: string;
+  collateralAmount: number;
+  collateralCurrency: string;
+  portfolioCount: number;
+  profileLevelNettingApproximation: boolean;
+};
+
+export type Counterparty = {
+  id: string;
+  name: string;
+  externalId: string | null;
+  creditRating: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NettingSetPortfolio = {
+  portfolioId: string;
+  portfolioName: string;
+  baseCurrency: string;
+  assignedAt: string;
+};
+
+export type NettingSet = {
+  id: string;
+  counterpartyId: string;
+  counterpartyName: string;
+  name: string;
+  baseCurrency: string;
+  collateralAmount: number;
+  collateralCurrency: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  portfolios: NettingSetPortfolio[];
 };
 
 export type CvaPoint = {

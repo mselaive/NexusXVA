@@ -1,5 +1,6 @@
 package com.nexusxva.exposure.application;
 
+import com.nexusxva.marketdata.application.FxRateService;
 import com.nexusxva.exposure.domain.ExposureAggregator;
 import com.nexusxva.exposure.domain.ExposurePoint;
 import com.nexusxva.marketdata.application.MarketDataPricingInputService;
@@ -31,10 +32,10 @@ import java.util.stream.Collectors;
 public class ExposureSimulationService {
 
     private static final String MODEL = "GBM_BLACK_SCHOLES_EXPOSURE_V1";
-    private static final String SUPPORTED_BASE_CURRENCY = "USD";
 
     private final PortfolioStore portfolioStore;
     private final MarketDataPricingInputService marketDataPricingInputService;
+    private final FxRateService fxRateService;
     private final EuropeanOptionPricingService pricingService;
     private final GbmPathGenerator pathGenerator;
     private final ExposureAggregator exposureAggregator;
@@ -43,11 +44,13 @@ public class ExposureSimulationService {
     public ExposureSimulationService(
             PortfolioStore portfolioStore,
             MarketDataPricingInputService marketDataPricingInputService,
+            FxRateService fxRateService,
             EuropeanOptionPricingService pricingService
     ) {
         this(
                 portfolioStore,
                 marketDataPricingInputService,
+                fxRateService,
                 pricingService,
                 new GbmPathGenerator(),
                 new ExposureAggregator()
@@ -57,12 +60,14 @@ public class ExposureSimulationService {
     private ExposureSimulationService(
             PortfolioStore portfolioStore,
             MarketDataPricingInputService marketDataPricingInputService,
+            FxRateService fxRateService,
             EuropeanOptionPricingService pricingService,
             GbmPathGenerator pathGenerator,
             ExposureAggregator exposureAggregator
     ) {
         this.portfolioStore = portfolioStore;
         this.marketDataPricingInputService = marketDataPricingInputService;
+        this.fxRateService = fxRateService;
         this.pricingService = pricingService;
         this.pathGenerator = pathGenerator;
         this.exposureAggregator = exposureAggregator;
@@ -72,9 +77,6 @@ public class ExposureSimulationService {
     public ExposureSimulationResult simulate(ExposureSimulationCommand command) {
         Portfolio portfolio = portfolioStore.findPortfolio(command.portfolioId())
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
-        if (!SUPPORTED_BASE_CURRENCY.equals(portfolio.baseCurrency())) {
-            throw new IllegalArgumentException("Exposure simulation V1 supports USD baseCurrency only");
-        }
 
         List<EuropeanOptionPosition> priceablePositions = portfolioStore
                 .findActiveEuropeanOptionPositions(command.portfolioId())
@@ -90,25 +92,27 @@ public class ExposureSimulationService {
                     zeroPortfolioValues,
                     command.pfeConfidenceLevel()
             );
-            return result(command, points);
+            return result(command, portfolio.baseCurrency(), points);
         }
 
         Map<String, MarketDataPricingInput> marketDataBySymbol = marketDataBySymbol(priceablePositions);
+        Map<String, Double> fxRateToBaseBySymbol = fxRateToBaseBySymbol(marketDataBySymbol, portfolio.baseCurrency());
         Map<String, double[][]> pathsBySymbol = pathsBySymbol(command, marketDataBySymbol);
-        double[][] portfolioValues = portfolioValues(command, exposureDates, priceablePositions, marketDataBySymbol, pathsBySymbol);
+        double[][] portfolioValues = portfolioValues(command, exposureDates, priceablePositions, marketDataBySymbol, fxRateToBaseBySymbol, pathsBySymbol);
         List<ExposurePoint> points = exposureAggregator.aggregate(
                 exposureDates,
                 portfolioValues,
                 command.pfeConfidenceLevel()
         );
-        return result(command, points);
+        return result(command, portfolio.baseCurrency(), points);
     }
 
-    private ExposureSimulationResult result(ExposureSimulationCommand command, List<ExposurePoint> points) {
+    private ExposureSimulationResult result(ExposureSimulationCommand command, String baseCurrency, List<ExposurePoint> points) {
         return new ExposureSimulationResult(
                 command.portfolioId(),
                 command.valuationDate(),
                 MODEL,
+                baseCurrency,
                 command.paths(),
                 command.timeSteps(),
                 command.pfeConfidenceLevel(),
@@ -136,12 +140,21 @@ public class ExposureSimulationService {
                     entry.getKey(),
                     entry.getValue()
             );
-            if (!SUPPORTED_BASE_CURRENCY.equals(input.currency())) {
-                throw new IllegalArgumentException("Exposure simulation V1 supports USD market data only");
-            }
             marketData.put(entry.getKey(), input);
         }
         return Map.copyOf(marketData);
+    }
+
+    private Map<String, Double> fxRateToBaseBySymbol(
+            Map<String, MarketDataPricingInput> marketDataBySymbol,
+            String baseCurrency
+    ) {
+        Map<String, Double> fxRates = new HashMap<>();
+        for (Map.Entry<String, MarketDataPricingInput> entry : marketDataBySymbol.entrySet()) {
+            MarketDataPricingInput input = entry.getValue();
+            fxRates.put(entry.getKey(), fxRateService.rate(input.currency(), baseCurrency).rate());
+        }
+        return Map.copyOf(fxRates);
     }
 
     private Map<String, double[][]> pathsBySymbol(
@@ -173,13 +186,14 @@ public class ExposureSimulationService {
             List<LocalDate> exposureDates,
             List<EuropeanOptionPosition> positions,
             Map<String, MarketDataPricingInput> marketDataBySymbol,
+            Map<String, Double> fxRateToBaseBySymbol,
             Map<String, double[][]> pathsBySymbol
     ) {
         double[][] portfolioValues = new double[command.paths()][command.timeSteps()];
         for (int path = 0; path < command.paths(); path++) {
             for (int step = 0; step < command.timeSteps(); step++) {
                 LocalDate exposureDate = exposureDates.get(step);
-                portfolioValues[path][step] = portfolioValue(path, step + 1, exposureDate, positions, marketDataBySymbol, pathsBySymbol);
+                portfolioValues[path][step] = portfolioValue(path, step + 1, exposureDate, positions, marketDataBySymbol, fxRateToBaseBySymbol, pathsBySymbol);
             }
         }
         return portfolioValues;
@@ -191,6 +205,7 @@ public class ExposureSimulationService {
             LocalDate exposureDate,
             List<EuropeanOptionPosition> positions,
             Map<String, MarketDataPricingInput> marketDataBySymbol,
+            Map<String, Double> fxRateToBaseBySymbol,
             Map<String, double[][]> pathsBySymbol
     ) {
         double value = 0.0;
@@ -210,7 +225,7 @@ public class ExposureSimulationService {
                     input.volatility(),
                     input.dividendYield()
             ));
-            value += unitResult.price() * position.quantity().doubleValue();
+            value += unitResult.price() * position.quantity().doubleValue() * fxRateToBaseBySymbol.get(position.underlyingSymbol());
         }
         return value;
     }

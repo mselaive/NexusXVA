@@ -24,6 +24,7 @@ import { logBlembergRefreshOutcome, summarizeBlembergRefresh } from "@/lib/blemb
 import { formatCurrency, formatNumber, formatPercent, todayIsoDate } from "@/lib/format";
 import type {
   AddEuropeanOptionPositionRequest,
+  CashEquityPosition,
   CreateOptionStrategyBookingRequest,
   CvaCalculationResponse,
   CvaNettingSetCalculationResponse,
@@ -59,6 +60,12 @@ type RunForm = {
   counterpartyHazardRate: string;
   discountRate: string;
 };
+
+type LifecyclePosition = EuropeanOptionPosition | CashEquityPosition;
+
+function isCashEquityPosition(position: LifecyclePosition) {
+  return !("optionType" in position);
+}
 
 type CvaMode = "flat" | "curves";
 type CvaScope = "portfolio" | "nettingSet";
@@ -174,7 +181,7 @@ const howTo = {
     { title: "Unpriceable rows", body: "Expired positions are excluded from totals and reported separately instead of failing the whole run." },
   ],
   exposure: [
-    { title: "1. Select portfolio", body: "Pick a USD portfolio with live European option positions. Exposure V1 reprices those positions across simulated future dates." },
+    { title: "1. Select portfolio", body: "Pick a portfolio with live European option positions. Exposure V1 reprices those positions across simulated future dates and reports values in the portfolio base currency." },
     { title: "2. Valuation date", body: "Starting date of the simulation. Positions already matured by this date do not contribute to exposure." },
     { title: "3. Horizon days", body: "How far forward the simulation runs. Use 365 for one year, 730 for two years, etc." },
     { title: "4. Time steps", body: "Number of future buckets in the exposure curve. More steps give a smoother profile but cost more compute." },
@@ -277,7 +284,7 @@ export function PortfoliosPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [lifecycleAction, setLifecycleAction] = useState<"amend" | "cancel" | null>(null);
-  const [lifecyclePosition, setLifecyclePosition] = useState<EuropeanOptionPosition | null>(null);
+  const [lifecyclePosition, setLifecyclePosition] = useState<LifecyclePosition | null>(null);
   const [lifecycleRequests, setLifecycleRequests] = useState<TradeLifecycleRequest[]>([]);
   const [amendForm, setAmendForm] = useState<TradeTicketForm>(initialTradeFormFromUrl);
   const [portfolioPickerReloadKey, setPortfolioPickerReloadKey] = useState(0);
@@ -344,20 +351,32 @@ export function PortfoliosPage() {
     }
   }
 
-  function openAmend(position: EuropeanOptionPosition) {
+  function openAmend(position: LifecyclePosition) {
     setLifecyclePosition(position);
     setLifecycleAction("amend");
-    setAmendForm({
-      underlyingSymbol: position.underlyingSymbol,
-      optionType: position.optionType,
-      strike: String(position.strike),
-      maturityDate: position.maturityDate,
-      quantity: String(position.quantity),
-      executionPrice: position.executionPrice == null ? "" : String(position.executionPrice),
-    });
+    if (isCashEquityPosition(position)) {
+      setAmendForm({
+        underlyingSymbol: position.underlyingSymbol,
+        optionType: "CALL",
+        strike: "",
+        maturityDate: todayIsoDate(),
+        quantity: String(position.quantity),
+        executionPrice: position.executionPrice == null ? "" : String(position.executionPrice),
+      });
+    } else {
+      const optionPosition = position as EuropeanOptionPosition;
+      setAmendForm({
+        underlyingSymbol: optionPosition.underlyingSymbol,
+        optionType: optionPosition.optionType,
+        strike: String(optionPosition.strike),
+        maturityDate: optionPosition.maturityDate,
+        quantity: String(optionPosition.quantity),
+        executionPrice: optionPosition.executionPrice == null ? "" : String(optionPosition.executionPrice),
+      });
+    }
   }
 
-  function openCancel(position: EuropeanOptionPosition) {
+  function openCancel(position: LifecyclePosition) {
     setLifecyclePosition(position);
     setLifecycleAction("cancel");
   }
@@ -376,8 +395,19 @@ export function PortfoliosPage() {
     setSuccess(null);
     try {
       if (lifecycleAction === "cancel") {
-        await nexusApi.requestPositionCancel(lifecyclePosition.id);
+        if (isCashEquityPosition(lifecyclePosition)) {
+          await nexusApi.requestCashEquityCancel(lifecyclePosition.id);
+        } else {
+          await nexusApi.requestPositionCancel(lifecyclePosition.id);
+        }
         setSuccess(`${lifecyclePosition.underlyingSymbol} cancellation request sent to BO. It will stay pending until Back Office reviews it.`);
+      } else if (isCashEquityPosition(lifecyclePosition)) {
+        await nexusApi.requestCashEquityAmend(lifecyclePosition.id, {
+          underlyingSymbol: amendForm.underlyingSymbol.trim().toUpperCase(),
+          quantity: Number(amendForm.quantity),
+          executionPrice: amendForm.executionPrice ? Number(amendForm.executionPrice) : null,
+        });
+        setSuccess(`${lifecyclePosition.underlyingSymbol} cash equity amendment request sent to BO. The original position remains active until approval.`);
       } else {
         await nexusApi.requestPositionAmend(lifecyclePosition.id, {
           underlyingSymbol: amendForm.underlyingSymbol.trim().toUpperCase(),
@@ -1239,9 +1269,20 @@ export function PricingPage() {
         <div className="summary-strip">
           <Metric label="Previous close" value={dailyPnl?.previousEodDate ?? "No EOD"} />
           <Metric label="Daily P&L" value={dailyPnl ? formatCurrency(dailyPnl.dailyPnl, dailyPnl.baseCurrency) : "Unavailable"} />
+          <Metric label="Since trade P&L" value={dailyPnl ? formatCurrency(dailyPnl.sinceTradePnl, dailyPnl.baseCurrency) : "Unavailable"} />
           <Metric label="No reference" value={formatNumber(dailyPnl?.positionsWithoutReference ?? 0, 0)} />
-          <Metric label="EOD source" value={latestEod?.source ?? "Not captured"} />
         </div>
+        <p className="mini-note pnl-note">
+          Daily P&L resets against the latest EOD close. If you run EOD and immediately reprice, Daily P&L can be 0 because the close became the reference. Use Unrealized P&L below to compare market value against the trade execution price.
+        </p>
+        {dailyPnl ? (
+          <div className="summary-strip pnl-product-strip">
+            <Metric label="Options daily" value={formatCurrency(dailyPnl.optionDailyPnl, dailyPnl.baseCurrency)} />
+            <Metric label="Cash daily" value={formatCurrency(dailyPnl.cashEquityDailyPnl, dailyPnl.baseCurrency)} />
+            <Metric label="Options since trade" value={formatCurrency(dailyPnl.optionSinceTradePnl, dailyPnl.baseCurrency)} />
+            <Metric label="Cash since trade" value={formatCurrency(dailyPnl.cashEquitySinceTradePnl, dailyPnl.baseCurrency)} />
+          </div>
+        ) : null}
         {dailyPnl ? <DailyPnlTable pnl={dailyPnl} /> : null}
       </div>
       <div className="panel">
@@ -1259,20 +1300,26 @@ function DailyPnlTable({ pnl }: { pnl: PortfolioDailyPnl }) {
         <thead>
           <tr>
             <th>Symbol</th>
+            <th>Product</th>
             <th>Current value</th>
             <th>Reference value</th>
             <th>Reference</th>
             <th>Daily P&L</th>
+            <th>Trade value</th>
+            <th>Since trade P&L</th>
           </tr>
         </thead>
         <tbody>
           {pnl.positions.map((position) => (
             <tr key={position.positionId}>
               <td>{position.underlyingSymbol}</td>
+              <td>{position.instrumentType === "CASH_EQUITY" ? "Cash equity" : "European option"}</td>
               <td>{formatCurrency(position.currentMarketValue, pnl.baseCurrency)}</td>
               <td>{position.referenceValue == null ? "Unavailable" : formatCurrency(position.referenceValue, pnl.baseCurrency)}</td>
               <td>{position.referenceMethod.replaceAll("_", " ")}</td>
               <td>{position.dailyPnl == null ? "Unavailable" : formatCurrency(position.dailyPnl, pnl.baseCurrency)}</td>
+              <td>{position.tradeValue == null ? "Unavailable" : formatCurrency(position.tradeValue, pnl.baseCurrency)}</td>
+              <td>{position.sinceTradePnl == null ? "Unavailable" : formatCurrency(position.sinceTradePnl, pnl.baseCurrency)}</td>
             </tr>
           ))}
         </tbody>
@@ -1437,9 +1484,9 @@ function CvaScopePanel({
         <button className={scope === "nettingSet" ? "active" : ""} type="button" onClick={() => setScope("nettingSet")}>Netting set</button>
       </div>
       {scope === "nettingSet" ? (
-        <div className="form-grid">
-          <label>
-            Netting set
+        <div className="cva-scope-content">
+          <label className="field cva-netting-selector">
+            <span>Netting set</span>
             <select className="select" value={selectedNettingSetId} onChange={(event) => setSelectedNettingSetId(event.target.value)}>
               {nettingSets.length === 0 ? <option value="">No netting sets configured</option> : null}
               {nettingSets.map((nettingSet) => (
@@ -1449,9 +1496,12 @@ function CvaScopePanel({
               ))}
             </select>
           </label>
-          <Metric label="Collateral" value={selected ? `${formatCurrency(selected.collateralAmount)} ${selected.collateralCurrency}` : "-"} />
-          <Metric label="Portfolios" value={selected ? String(selected.portfolios.length) : "0"} />
-          <Metric label="Currency" value={selected?.baseCurrency ?? "-"} />
+          <div className="cva-scope-cards">
+            <Metric label="Counterparty" value={selected?.counterpartyName ?? "-"} />
+            <Metric label="Collateral" value={selected ? `${formatCurrency(selected.collateralAmount)} ${selected.collateralCurrency}` : "-"} />
+            <Metric label="Portfolios" value={selected ? String(selected.portfolios.length) : "0"} />
+            <Metric label="Base currency" value={selected?.baseCurrency ?? "-"} />
+          </div>
           <p className="mini-note">V1 uses profile-level netting and static collateral. It is useful for early counterparty CVA, but it is not yet path-level CSA margining.</p>
         </div>
       ) : null}
@@ -1553,50 +1603,50 @@ function CurveTable({
   onChange: (rows: CreditCurveFormRow[]) => void;
 }) {
   return (
-    <div className="table-wrap compact-curve-table">
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>{valueLabel}</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <td><input className="input" type="date" value={row.date} onChange={(event) => onChange(updateCreditCurveRow(rows, row.id, { date: event.target.value }))} /></td>
-              <td><input className="input" type="number" min="0" max="1" step="0.0001" placeholder={valuePlaceholder} value={row.value} onChange={(event) => onChange(updateCreditCurveRow(rows, row.id, { value: event.target.value }))} /></td>
-              <td><button className="icon-link danger-text" type="button" onClick={() => onChange(rows.filter((candidate) => candidate.id !== row.id))}>Remove</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="curve-row-list">
+      <div className="curve-row curve-row-head">
+        <span>Date</span>
+        <span>{valueLabel}</span>
+        <span />
+      </div>
+      {rows.map((row) => (
+        <div className="curve-row" key={row.id}>
+          <label>
+            <span>Date</span>
+            <input className="input" type="date" value={row.date} onChange={(event) => onChange(updateCreditCurveRow(rows, row.id, { date: event.target.value }))} />
+          </label>
+          <label>
+            <span>{valueLabel}</span>
+            <input className="input" type="number" min="0" max="1" step="0.0001" placeholder={valuePlaceholder} value={row.value} onChange={(event) => onChange(updateCreditCurveRow(rows, row.id, { value: event.target.value }))} />
+          </label>
+          <button className="icon-link danger-text" type="button" onClick={() => onChange(rows.filter((candidate) => candidate.id !== row.id))}>Remove</button>
+        </div>
+      ))}
     </div>
   );
 }
 
 function DiscountCurveTable({ rows, onChange }: { rows: DiscountCurveFormRow[]; onChange: (rows: DiscountCurveFormRow[]) => void }) {
   return (
-    <div className="table-wrap compact-curve-table">
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Discount factor</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <td><input className="input" type="date" value={row.date} onChange={(event) => onChange(updateDiscountCurveRow(rows, row.id, { date: event.target.value }))} /></td>
-              <td><input className="input" type="number" min="0" max="1" step="0.0001" placeholder="0.96" value={row.discountFactor} onChange={(event) => onChange(updateDiscountCurveRow(rows, row.id, { discountFactor: event.target.value }))} /></td>
-              <td><button className="icon-link danger-text" type="button" onClick={() => onChange(rows.filter((candidate) => candidate.id !== row.id))}>Remove</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="curve-row-list">
+      <div className="curve-row curve-row-head">
+        <span>Date</span>
+        <span>Discount factor</span>
+        <span />
+      </div>
+      {rows.map((row) => (
+        <div className="curve-row" key={row.id}>
+          <label>
+            <span>Date</span>
+            <input className="input" type="date" value={row.date} onChange={(event) => onChange(updateDiscountCurveRow(rows, row.id, { date: event.target.value }))} />
+          </label>
+          <label>
+            <span>Discount factor</span>
+            <input className="input" type="number" min="0" max="1" step="0.0001" placeholder="0.96" value={row.discountFactor} onChange={(event) => onChange(updateDiscountCurveRow(rows, row.id, { discountFactor: event.target.value }))} />
+          </label>
+          <button className="icon-link danger-text" type="button" onClick={() => onChange(rows.filter((candidate) => candidate.id !== row.id))}>Remove</button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1836,8 +1886,8 @@ function PositionTable({
   onCancel,
 }: {
   portfolio: Portfolio;
-  onAmend?: (position: EuropeanOptionPosition) => void;
-  onCancel?: (position: EuropeanOptionPosition) => void;
+  onAmend?: (position: LifecyclePosition) => void;
+  onCancel?: (position: LifecyclePosition) => void;
 }) {
   if (portfolio.positions.length === 0 && portfolio.cashEquityPositions.length === 0) {
     return <EmptyState text="No positions in this portfolio." />;
@@ -1906,6 +1956,7 @@ function PositionTable({
                 <th>Execution price</th>
                 <th>Status</th>
                 <th>Updated</th>
+                {onAmend || onCancel ? <th>Actions</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -1917,6 +1968,20 @@ function PositionTable({
                   <td>{position.executionPrice == null ? "Unavailable" : formatNumber(position.executionPrice, 4)}</td>
                   <td><span className={`lifecycle-status ${(position.lifecycleStatus ?? "ACTIVE").toLowerCase()}`}>{position.lifecycleStatus ?? "ACTIVE"}</span></td>
                   <td>{new Date(position.updatedAt).toLocaleString()}</td>
+                  {onAmend || onCancel ? (
+                    <td>
+                      {(position.lifecycleStatus ?? "ACTIVE") === "ACTIVE" ? (
+                        <div className="row-actions">
+                          {onAmend ? <button className="text-action" type="button" onClick={() => onAmend(position)}>Request Amend</button> : null}
+                          {onCancel ? <button className="text-action danger" type="button" onClick={() => onCancel(position)}>Request Cancel</button> : null}
+                        </div>
+                      ) : (
+                        <span className="muted-cell">
+                          {(position.lifecycleStatus ?? "ACTIVE") === "AMENDED" ? "Use replacement ACTIVE position" : "Closed history"}
+                        </span>
+                      )}
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
@@ -1937,7 +2002,7 @@ function LifecycleRequestModal({
   onSubmit,
 }: {
   action: "amend" | "cancel";
-  position: EuropeanOptionPosition;
+  position: LifecyclePosition;
   amendForm: TradeTicketForm;
   onAmendFormChange: (next: TradeTicketForm) => void;
   loading: boolean;
@@ -1954,9 +2019,21 @@ function LifecycleRequestModal({
         <div>
           <span className="page-eyebrow">Front Office lifecycle</span>
           <h2>{action === "cancel" ? "Request cancellation" : "Request amendment"}</h2>
-          <p>{position.optionType} {position.underlyingSymbol} · {formatNumber(position.quantity, 2)} @ {formatNumber(position.strike, 2)}</p>
+          <p>{positionSummary(position)}</p>
         </div>
-        {action === "amend" ? (
+        {action === "amend" && isCashEquityPosition(position) ? (
+          <div className="form-grid">
+            <Field label="Underlying">
+              <input className="input ticker-input" value={amendForm.underlyingSymbol} onChange={(event) => onAmendFormChange({ ...amendForm, underlyingSymbol: event.target.value })} />
+            </Field>
+            <Field label="Quantity">
+              <input className="input" type="number" step="1" value={amendForm.quantity} onChange={(event) => onAmendFormChange({ ...amendForm, quantity: event.target.value })} />
+            </Field>
+            <Field label="Execution price">
+              <input className="input" type="number" min="0" step="0.01" value={amendForm.executionPrice} onChange={(event) => onAmendFormChange({ ...amendForm, executionPrice: event.target.value })} />
+            </Field>
+          </div>
+        ) : action === "amend" ? (
           <div className="form-grid">
             <Field label="Underlying">
               <input className="input ticker-input" value={amendForm.underlyingSymbol} onChange={(event) => onAmendFormChange({ ...amendForm, underlyingSymbol: event.target.value })} />
@@ -1994,6 +2071,14 @@ function LifecycleRequestModal({
   );
 }
 
+function positionSummary(position: LifecyclePosition) {
+  if (isCashEquityPosition(position)) {
+    return `Cash equity ${position.underlyingSymbol} · ${formatNumber(position.quantity, 2)} shares`;
+  }
+  const optionPosition = position as EuropeanOptionPosition;
+  return `${optionPosition.optionType} ${optionPosition.underlyingSymbol} · ${formatNumber(optionPosition.quantity, 2)} @ ${formatNumber(optionPosition.strike, 2)}`;
+}
+
 function LifecycleRequestTable({ requests }: { requests: TradeLifecycleRequest[] }) {
   if (requests.length === 0) {
     return <EmptyState text="No lifecycle requests for this portfolio." />;
@@ -2016,8 +2101,8 @@ function LifecycleRequestTable({ requests }: { requests: TradeLifecycleRequest[]
             <tr key={request.id}>
               <td><span className={`booking-status ${request.status.toLowerCase()}`}>{request.status.replaceAll("_", " ")}</span></td>
               <td>{request.requestType}</td>
-              <td>{request.originalOptionType} {request.originalUnderlyingSymbol} · {formatNumber(request.originalQuantity, 2)} @ {formatNumber(request.originalStrike, 2)}</td>
-              <td>{request.requestType === "AMEND" ? `${request.requestedOptionType} ${request.requestedUnderlyingSymbol} · ${formatNumber(request.requestedQuantity ?? 0, 2)} @ ${formatNumber(request.requestedStrike ?? 0, 2)}` : "Full cancellation"}</td>
+              <td>{formatLifecycleOriginal(request)}</td>
+              <td>{request.requestType === "AMEND" ? formatLifecycleRequested(request) : "Full cancellation"}</td>
               <td>{new Date(request.submittedAt).toLocaleString()}</td>
               <td>{request.rejectionReason ?? "—"}</td>
             </tr>
@@ -2026,6 +2111,22 @@ function LifecycleRequestTable({ requests }: { requests: TradeLifecycleRequest[]
       </table>
     </div>
   );
+}
+
+function formatLifecycleOriginal(request: TradeLifecycleRequest) {
+  if (request.instrumentType === "CASH_EQUITY") {
+    const execution = request.originalExecutionPrice == null ? "execution unavailable" : `exec ${formatNumber(request.originalExecutionPrice, 4)}`;
+    return `Cash equity ${request.originalUnderlyingSymbol} · ${formatNumber(request.originalQuantity, 2)} · ${execution}`;
+  }
+  return `${request.originalOptionType} ${request.originalUnderlyingSymbol} · ${formatNumber(request.originalQuantity, 2)} @ ${formatNumber(request.originalStrike ?? 0, 2)}`;
+}
+
+function formatLifecycleRequested(request: TradeLifecycleRequest) {
+  if (request.instrumentType === "CASH_EQUITY") {
+    const execution = request.requestedExecutionPrice == null ? "execution unavailable" : `exec ${formatNumber(request.requestedExecutionPrice, 4)}`;
+    return `Cash equity ${request.requestedUnderlyingSymbol} · ${formatNumber(request.requestedQuantity ?? 0, 2)} · ${execution}`;
+  }
+  return `${request.requestedOptionType} ${request.requestedUnderlyingSymbol} · ${formatNumber(request.requestedQuantity ?? 0, 2)} @ ${formatNumber(request.requestedStrike ?? 0, 2)}`;
 }
 
 function PricingResult({ pricing }: { pricing: PortfolioPricingResponse }) {
@@ -2173,7 +2274,7 @@ function DeltaHedgeResult({ result }: { result: DeltaHedgeAnalysisResponse }) {
   const totalTradeNotional = result.rows.reduce((sum, row) => sum + Math.abs(row.estimatedTradeNotional), 0);
 
   return (
-    <div className="table-spacing">
+    <div className="delta-hedge-result">
       <div className="summary-strip">
         <Metric label="Model" value={result.model} />
         <Metric label="Net delta" value={formatNumber(totalNetDelta, 2)} />
@@ -2295,6 +2396,9 @@ function CvaResult({ cva }: { cva: CvaCalculationResponse | CvaNettingSetCalcula
       {isNettingSet && cva.profileLevelNettingApproximation ? (
         <p className="mini-note">Netting set CVA V1 aggregates portfolio exposure profiles and subtracts static collateral. Path-level netting and margin calls come later.</p>
       ) : null}
+      <p className="mini-note cva-contribution-note">
+        CVA contribution is the bucket-level expected loss: discounted expected exposure multiplied by LGD and the default probability increment for that bucket. The table contributions add up to total CVA.
+      </p>
       <div className="table-wrap table-spacing">
         <table>
           <thead>

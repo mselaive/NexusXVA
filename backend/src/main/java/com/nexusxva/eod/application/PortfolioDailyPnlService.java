@@ -2,6 +2,7 @@ package com.nexusxva.eod.application;
 
 import com.nexusxva.eod.domain.PortfolioEodSnapshot;
 import com.nexusxva.eod.domain.PositionEodSnapshot;
+import com.nexusxva.portfolio.application.CashEquityPositionPricingResult;
 import com.nexusxva.portfolio.application.PortfolioBlackScholesPricingResult;
 import com.nexusxva.portfolio.application.PortfolioBlackScholesPricingService;
 import com.nexusxva.portfolio.application.PortfolioPositionPricingResult;
@@ -38,37 +39,63 @@ public class PortfolioDailyPnlService {
                         .collect(Collectors.toMap(PositionEodSnapshot::positionId, Function.identity()));
 
         double totalDailyPnl = 0.0;
+        double totalSinceTradePnl = 0.0;
+        double optionDailyPnl = 0.0;
+        double cashEquityDailyPnl = 0.0;
+        double optionSinceTradePnl = 0.0;
+        double cashEquitySinceTradePnl = 0.0;
         int unavailable = 0;
+        int withoutExecutionPrice = 0;
         ArrayList<PositionDailyPnl> positions = new ArrayList<>();
 
         for (PortfolioPositionPricingResult position : pricing.positions()) {
-            PositionEodSnapshot prior = previousByPosition.get(position.positionId());
-            Double referenceValue;
-            String method;
-            if (prior != null) {
-                referenceValue = prior.marketValue();
-                method = "PRIOR_EOD";
-            } else if (position.tradeValue() != null) {
-                referenceValue = position.tradeValue();
-                method = "EXECUTION";
-            } else {
-                referenceValue = null;
-                method = "UNAVAILABLE";
-            }
-            Double dailyPnl = referenceValue == null ? null : position.positionPrice() - referenceValue;
-            if (dailyPnl == null) {
-                unavailable++;
-            } else {
-                totalDailyPnl += dailyPnl;
-            }
-            positions.add(new PositionDailyPnl(
+            PositionDailyPnl pnl = pnlFor(
+                    "EUROPEAN_OPTION",
                     position.positionId(),
                     position.underlyingSymbol(),
                     position.positionPrice(),
-                    referenceValue,
-                    dailyPnl,
-                    method
-            ));
+                    position.tradeValue(),
+                    position.unrealizedPnl(),
+                    previousByPosition
+            );
+            positions.add(pnl);
+            if (pnl.dailyPnl() == null) {
+                unavailable++;
+            } else {
+                totalDailyPnl += pnl.dailyPnl();
+                optionDailyPnl += pnl.dailyPnl();
+            }
+            if (pnl.sinceTradePnl() == null) {
+                withoutExecutionPrice++;
+            } else {
+                totalSinceTradePnl += pnl.sinceTradePnl();
+                optionSinceTradePnl += pnl.sinceTradePnl();
+            }
+        }
+
+        for (CashEquityPositionPricingResult position : pricing.cashEquityPositions()) {
+            PositionDailyPnl pnl = pnlFor(
+                    "CASH_EQUITY",
+                    position.positionId(),
+                    position.underlyingSymbol(),
+                    position.marketValue(),
+                    position.tradeValue(),
+                    position.unrealizedPnl(),
+                    previousByPosition
+            );
+            positions.add(pnl);
+            if (pnl.dailyPnl() == null) {
+                unavailable++;
+            } else {
+                totalDailyPnl += pnl.dailyPnl();
+                cashEquityDailyPnl += pnl.dailyPnl();
+            }
+            if (pnl.sinceTradePnl() == null) {
+                withoutExecutionPrice++;
+            } else {
+                totalSinceTradePnl += pnl.sinceTradePnl();
+                cashEquitySinceTradePnl += pnl.sinceTradePnl();
+            }
         }
 
         return new PortfolioDailyPnl(
@@ -78,8 +105,50 @@ public class PortfolioDailyPnlService {
                 pricing.baseCurrency(),
                 pricing.totalPrice(),
                 totalDailyPnl,
+                totalSinceTradePnl,
+                optionDailyPnl,
+                cashEquityDailyPnl,
+                optionSinceTradePnl,
+                cashEquitySinceTradePnl,
                 unavailable,
+                withoutExecutionPrice,
                 positions
+        );
+    }
+
+    private PositionDailyPnl pnlFor(
+            String instrumentType,
+            UUID positionId,
+            String underlyingSymbol,
+            double currentMarketValue,
+            Double tradeValue,
+            Double sinceTradePnl,
+            Map<UUID, PositionEodSnapshot> previousByPosition
+    ) {
+        PositionEodSnapshot prior = previousByPosition.get(positionId);
+        Double referenceValue;
+        String method;
+        if (prior != null) {
+            referenceValue = prior.marketValue();
+            method = "PRIOR_EOD";
+        } else if (tradeValue != null) {
+            referenceValue = tradeValue;
+            method = "EXECUTION";
+        } else {
+            referenceValue = null;
+            method = "UNAVAILABLE";
+        }
+        Double dailyPnl = referenceValue == null ? null : currentMarketValue - referenceValue;
+        return new PositionDailyPnl(
+                positionId,
+                instrumentType,
+                underlyingSymbol,
+                currentMarketValue,
+                referenceValue,
+                dailyPnl,
+                tradeValue,
+                sinceTradePnl,
+                method
         );
     }
 }

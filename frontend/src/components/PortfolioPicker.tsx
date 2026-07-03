@@ -12,9 +12,10 @@ type PortfolioPickerProps = {
   onRefresh?: () => void;
   reloadKey?: number;
   autoSelectFirst?: boolean;
+  showRefresh?: boolean;
 };
 
-export function PortfolioPicker({ value, onChange, onError, onRefresh, reloadKey = 0, autoSelectFirst = true }: PortfolioPickerProps) {
+export function PortfolioPicker({ value, onChange, onError, onRefresh, reloadKey = 0, autoSelectFirst = true, showRefresh = true }: PortfolioPickerProps) {
   const [portfolios, setPortfolios] = useState<PortfolioSummary[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -52,9 +53,11 @@ export function PortfolioPicker({ value, onChange, onError, onRefresh, reloadKey
           ))}
         </select>
       </label>
-      <button className="icon-btn picker-refresh" type="button" onClick={loadPortfolios} disabled={loading} title="Refresh portfolios" aria-label="Refresh portfolios">
-        {loading ? <Loader2 size={15} /> : <RefreshCw size={15} />}
-      </button>
+      {showRefresh ? (
+        <button className="icon-btn picker-refresh" type="button" onClick={loadPortfolios} disabled={loading} title="Refresh portfolios" aria-label="Refresh portfolios">
+          {loading ? <Loader2 size={15} /> : <RefreshCw size={15} />}
+        </button>
+      ) : null}
     </div>
   );
 }

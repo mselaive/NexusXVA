@@ -6,6 +6,7 @@ import java.util.UUID;
 
 public record PositionEodSnapshotResponse(
         UUID positionId,
+        String instrumentType,
         String underlyingSymbol,
         double quantity,
         double unitPrice,
@@ -20,6 +21,7 @@ public record PositionEodSnapshotResponse(
     static PositionEodSnapshotResponse from(PositionEodSnapshot snapshot) {
         return new PositionEodSnapshotResponse(
                 snapshot.positionId(),
+                snapshot.instrumentType(),
                 snapshot.underlyingSymbol(),
                 snapshot.quantity(),
                 snapshot.unitPrice(),

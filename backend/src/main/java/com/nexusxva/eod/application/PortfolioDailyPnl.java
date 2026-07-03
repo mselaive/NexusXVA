@@ -11,7 +11,13 @@ public record PortfolioDailyPnl(
         String baseCurrency,
         double currentMarketValue,
         double dailyPnl,
+        double sinceTradePnl,
+        double optionDailyPnl,
+        double cashEquityDailyPnl,
+        double optionSinceTradePnl,
+        double cashEquitySinceTradePnl,
         int positionsWithoutReference,
+        int positionsWithoutExecutionPrice,
         List<PositionDailyPnl> positions
 ) {
     public PortfolioDailyPnl {

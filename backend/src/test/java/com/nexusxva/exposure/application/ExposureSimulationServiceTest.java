@@ -267,12 +267,27 @@ class ExposureSimulationServiceTest {
         }
 
         @Override
+        public Optional<CashEquityPosition> findCashEquityPosition(UUID positionId) {
+            return Optional.empty();
+        }
+
+        @Override
         public void markPositionCancelled(UUID positionId) {
             throw new UnsupportedOperationException();
         }
 
         @Override
         public void markPositionAmended(UUID positionId) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void markCashEquityPositionCancelled(UUID positionId) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void markCashEquityPositionAmended(UUID positionId) {
             throw new UnsupportedOperationException();
         }
     }

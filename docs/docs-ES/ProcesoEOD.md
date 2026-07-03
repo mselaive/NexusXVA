@@ -28,6 +28,7 @@ Blemberg actualiza market data
   -> NexusXVA recorre todos los portfolios
   -> para cada portfolio corre Pricing y controles de calidad
   -> guarda portfolio_eod_runs y position snapshots
+  -> cada snapshot de posicion guarda instrumentType: EUROPEAN_OPTION o CASH_EQUITY
   -> reporta CAPTURED, SKIPPED o FAILED por portfolio
 ```
 
@@ -87,6 +88,8 @@ referenceMethod = UNAVAILABLE
 dailyPnl = null
 ```
 
+El reporting separa Daily P&L de opciones y cash equities usando el `instrumentType` persistido en cada snapshot EOD de posicion; no se infiere el producto desde campos nulos.
+
 Unrealized P&L sigue comparando contra el trade original:
 
 ```text
@@ -99,7 +102,7 @@ unrealizedPnl = currentMarketValue - executionTradeValue
 - `EOD snapshot cannot use stale market data`: Blemberg debe refrescarse antes del cierre.
 - `EOD snapshot requires all active positions to be priceable`: existe una posicion vencida o sin inputs validos.
 - `Market data service unavailable`: Blemberg no responde.
-- Portfolio no USD: fuera del alcance de Pricing/EOD V1.
+- FX faltante o invalido: el cierre no puede convertir alguna posicion a la moneda base del portfolio.
 
 Un error no crea un snapshot parcial para ese portfolio. Los demas portfolios continúan: el batch no pierde cierres correctos por el fallo de un libro.
 

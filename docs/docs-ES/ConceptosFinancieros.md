@@ -493,9 +493,10 @@ Son una valoracion stateless para una fecha y unos inputs de mercado.
 
 ---
 
-## 26. Por qué V1 solo valora portfolios en USD
+## 26. FX y base currency del portfolio
 
-Un portfolio puede tener `baseCurrency`, pero valorar correctamente varias monedas requiere **FX conversion**.
+Un portfolio tiene una `baseCurrency`, que es la moneda de reporting para los totales del portfolio.
+La market data puede venir en otra moneda, por lo que NexusXVA convierte valores monetarios mediante la frontera FX de `marketdata`.
 
 Ejemplo:
 
@@ -509,10 +510,9 @@ No podemos sumar directamente:
 ```
 
 Para hacerlo bien se necesita una tasa FX, por ejemplo EUR/USD, y una politica clara de conversion.
-Como eso todavia no esta implementado, el pricing de portfolio V1 acepta solo portfolios `USD` y market data `USD`.
 
-Esto evita devolver totales incorrectos.
-No significa que NexusXVA solo pueda guardar portfolios en USD; significa que el endpoint actual de pricing de portfolio solo calcula totales en USD hasta que implementemos FX.
+FX V1 ya convierte precios, P&L, exposure y CVA a la `baseCurrency` del portfolio.
+El provider local de FX es data demo deterministica. Un modelo productivo todavia necesita tasas FX reales desde Blemberg u otro adapter de market data, curvas FX persistidas si fueran necesarias y eventualmente analiticas de riesgo FX.
 
 ---
 

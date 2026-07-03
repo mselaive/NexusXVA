@@ -1,7 +1,12 @@
 package com.nexusxva.tradebooking.api;
 
+import com.nexusxva.audit.application.AuditEventCommand;
+import com.nexusxva.audit.application.AuditService;
+import com.nexusxva.audit.domain.AuditOutcome;
 import com.nexusxva.auth.application.FeaturePermissionCode;
 import com.nexusxva.auth.application.UserAccessService;
+import com.nexusxva.auth.domain.AuthSession;
+import com.nexusxva.auth.infrastructure.AuthSessionFilter;
 import com.nexusxva.tradebooking.domain.TradeBookingRequest;
 import com.nexusxva.tradebooking.application.TradeBookingService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,10 +26,16 @@ public class PortfolioTradeBookingController {
 
     private final TradeBookingService service;
     private final UserAccessService userAccessService;
+    private final AuditService auditService;
 
-    public PortfolioTradeBookingController(TradeBookingService service, UserAccessService userAccessService) {
+    public PortfolioTradeBookingController(
+            TradeBookingService service,
+            UserAccessService userAccessService,
+            AuditService auditService
+    ) {
         this.service = service;
         this.userAccessService = userAccessService;
+        this.auditService = auditService;
     }
 
     @PostMapping("/european-options")
@@ -40,6 +51,7 @@ public class PortfolioTradeBookingController {
                 request.toCommand(),
                 TradeBookingActorResolver.resolve(servletRequest)
         );
+        auditBookingSubmitted(servletRequest, booking);
         return ResponseEntity
                 .created(URI.create("/api/trade-bookings/" + booking.id()))
                 .body(TradeBookingResponse.from(booking));
@@ -58,6 +70,7 @@ public class PortfolioTradeBookingController {
                 request.toCommand(),
                 TradeBookingActorResolver.resolve(servletRequest)
         );
+        auditBookingSubmitted(servletRequest, booking);
         return ResponseEntity
                 .created(URI.create("/api/trade-bookings/" + booking.id()))
                 .body(TradeBookingResponse.from(booking));
@@ -76,8 +89,37 @@ public class PortfolioTradeBookingController {
                 request.toCommand(),
                 TradeBookingActorResolver.resolve(servletRequest)
         );
+        auditBookingSubmitted(servletRequest, booking);
         return ResponseEntity
                 .created(URI.create("/api/trade-bookings/" + booking.id()))
                 .body(TradeBookingResponse.from(booking));
+    }
+
+    private void auditBookingSubmitted(HttpServletRequest request, TradeBookingRequest booking) {
+        auditService.record(AuditEventCommand.of(
+                "TRADE_BOOKING_SUBMITTED",
+                "FRONT_OFFICE",
+                "SUBMIT_BOOKING",
+                AuditOutcome.SUCCESS,
+                currentSession(request),
+                request,
+                201,
+                "TRADE_BOOKING",
+                booking.id(),
+                "Trade booking submitted for BO validation",
+                auditService.metadata(java.util.Map.of(
+                        "portfolioId", booking.portfolioId(),
+                        "portfolioName", booking.portfolioName(),
+                        "instrumentType", booking.instrumentType(),
+                        "bookingType", booking.bookingType().name(),
+                        "symbol", booking.underlyingSymbol(),
+                        "quantity", booking.quantity()
+                ))
+        ));
+    }
+
+    private AuthSession currentSession(HttpServletRequest request) {
+        Object value = request.getAttribute(AuthSessionFilter.SESSION_ATTRIBUTE);
+        return value instanceof AuthSession session ? session : null;
     }
 }

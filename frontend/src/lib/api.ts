@@ -1,15 +1,20 @@
 import type {
   AddEuropeanOptionPositionRequest,
+  AmendCashEquityPositionRequest,
   AdminPortfolioSummary,
   AdminUserAccess,
   AdminUserPage,
   AdminWorkflowMap,
   ApiError,
+  AuditEvent,
+  AuditEventPage,
+  AuditOutcome,
   AuthResponse,
   BlembergHealthResponse,
   BlembergCoverageResponse,
   BlembergSnapshotsResponse,
   BlembergRefreshResponse,
+  BackOfficeOperationsReport,
   CreatePortfolioRequest,
   CreateOptionStrategyBookingRequest,
   CreateCashEquityBookingRequest,
@@ -23,6 +28,7 @@ import type {
   ExposureSimulationResponse,
   EodBatchResult,
   FrontOfficeDeskResponse,
+  FrontOfficePnlReport,
   FrontOfficeStressTestRequest,
   FrontOfficeStressTestResponse,
   FrontOfficeWhatIfRequest,
@@ -125,6 +131,8 @@ export const nexusApi = {
 
   listPortfolios: () => request<PortfolioSummary[]>("/portfolios"),
 
+  listValuationRunPortfolios: () => request<PortfolioSummary[]>("/valuation-runs/portfolios"),
+
   getPortfolio: (portfolioId: string) => request<Portfolio>(`/portfolios/${portfolioId}`),
 
   createPortfolio: (body: CreatePortfolioRequest) =>
@@ -155,6 +163,8 @@ export const nexusApi = {
 
   getFrontOfficeDesk: () => request<FrontOfficeDeskResponse>("/front-office/desk"),
 
+  getFrontOfficePnlReport: () => request<FrontOfficePnlReport>("/front-office/reports/desk-pnl"),
+
   runFrontOfficeWhatIf: (body: FrontOfficeWhatIfRequest) =>
     request<FrontOfficeWhatIfResponse>("/front-office/what-if/european-option", {
       method: "POST",
@@ -181,6 +191,17 @@ export const nexusApi = {
 
   requestPositionCancel: (positionId: string) =>
     request<TradeLifecycleRequest>(`/front-office/lifecycle/positions/${positionId}/cancel`, {
+      method: "POST",
+    }),
+
+  requestCashEquityAmend: (positionId: string, body: AmendCashEquityPositionRequest) =>
+    request<TradeLifecycleRequest>(`/front-office/lifecycle/cash-equities/${positionId}/amend`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  requestCashEquityCancel: (positionId: string) =>
+    request<TradeLifecycleRequest>(`/front-office/lifecycle/cash-equities/${positionId}/cancel`, {
       method: "POST",
     }),
 
@@ -219,6 +240,8 @@ export const nexusApi = {
   },
 
   getBackOfficeLifecycleReport: () => request<TradeLifecycleReport>("/back-office/lifecycle-report"),
+
+  getBackOfficeOperationsReport: () => request<BackOfficeOperationsReport>("/back-office/reports/operations"),
 
   approveLifecycleRequest: (requestId: string) =>
     request<TradeLifecycleRequest>(`/back-office/lifecycle-requests/${requestId}/approve`, {
@@ -384,6 +407,37 @@ export const nexusApi = {
     const params = portfolioId ? `?portfolioId=${encodeURIComponent(portfolioId)}` : "";
     return request<AdminWorkflowMap>(`/admin/workflow-map${params}`);
   },
+
+  listAuditEvents: (filters: {
+    userId?: string;
+    username?: string;
+    module?: string;
+    eventType?: string;
+    outcome?: AuditOutcome | "";
+    resourceType?: string;
+    resourceId?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    size?: number;
+  } = {}) => {
+    const params = new URLSearchParams({
+      page: String(filters.page ?? 0),
+      size: String(filters.size ?? 25),
+    });
+    if (filters.userId?.trim()) params.set("userId", filters.userId.trim());
+    if (filters.username?.trim()) params.set("username", filters.username.trim());
+    if (filters.module?.trim()) params.set("module", filters.module.trim());
+    if (filters.eventType?.trim()) params.set("eventType", filters.eventType.trim());
+    if (filters.outcome) params.set("outcome", filters.outcome);
+    if (filters.resourceType?.trim()) params.set("resourceType", filters.resourceType.trim());
+    if (filters.resourceId?.trim()) params.set("resourceId", filters.resourceId.trim());
+    if (filters.from?.trim()) params.set("from", filters.from.trim());
+    if (filters.to?.trim()) params.set("to", filters.to.trim());
+    return request<AuditEventPage>(`/admin/audit-events?${params.toString()}`);
+  },
+
+  getAuditEvent: (eventId: string) => request<AuditEvent>(`/admin/audit-events/${eventId}`),
 };
 
 export const authApi = {

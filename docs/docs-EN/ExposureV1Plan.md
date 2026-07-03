@@ -74,9 +74,8 @@ For each future date, return:
 
 ## V1 Constraints
 
-- USD-only, matching current portfolio pricing.
+- Historical note: the original V1 plan was USD-only. The current implementation reports exposure in the portfolio base currency through the `marketdata` FX boundary.
 - European options only.
-- No FX conversion.
 - No counterparty, netting sets, collateral, or credit spreads.
 - No persisted exposure results.
 - No CVA calculation in this endpoint.
@@ -88,5 +87,5 @@ For each future date, return:
 - Expired positions are excluded by future date.
 - Short positions can create negative portfolio values.
 - `dividendYield` affects the GBM drift.
-- Non-USD portfolios reject consistently with portfolio pricing.
+- Non-USD portfolios convert market values into portfolio base currency consistently with portfolio pricing.
 - Missing market data returns a clean API error.

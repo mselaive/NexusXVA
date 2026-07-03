@@ -26,10 +26,13 @@ FO analyzes and books
 * Persisted portfolio management.
 * u-Pad for sending bookings to BO.
 * Amendments and cancellations with maker-checker workflow.
+* FO P&L Snapshot and BO Operations Reporting derived from bookings, lifecycle and EOD.
 * Persisted user notifications.
 * Trade Economics V1 with execution premium and unrealized P&L.
 * Immutable EOD snapshots and Daily P&L against the previous close.
 * Persisted Run History for pricing, exposure, and CVA auditability.
+* Audit Trail V1 for user activity, denied access, workflow actions, and ADMIN review.
+* Rotated backend technical logs for system, auth, market-data integration, EOD jobs, and errors.
 * Individual and portfolio-level Black-Scholes pricing.
 * Monte Carlo Exposure V1.
 * CVA V1.1 with flat mode and simple curves.
@@ -42,6 +45,7 @@ FO analyzes and books
 flowchart LR
     UI[Next.js Dashboard] --> API[NexusXVA Backend]
     API --> Auth[Auth + Groups]
+    API --> Audit[Audit Trail]
     API --> Portfolio[Portfolio Store]
     API --> Pricing[Pricing Domain]
     API --> Exposure[Exposure / Monte Carlo]
@@ -52,6 +56,7 @@ flowchart LR
     Portfolio --> DB[(PostgreSQL)]
     XVA --> DB
     Auth --> DB
+    Audit --> DB
     API --> Notifications[Notifications]
     Notifications --> DB
 ```
@@ -76,8 +81,8 @@ flowchart TD
 ## Groups
 
 * **FO**: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, Portfolios, Pricing, Exposure, CVA, and Run History.
-* **BO**: Trade Validation, Lifecycle Reporting, Trading Limits, EOD Control, and Run History.
-* **ADMIN**: users, groups, FO permissions, portfolio visibility, workflow map, and Run History.
+* **BO**: Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control, and Run History.
+* **ADMIN**: users, groups, FO permissions, portfolio visibility, workflow map, Audit Logs, and Run History.
 
 A user can belong to multiple groups. After login, the user chooses the active group for the session.
 
@@ -91,7 +96,7 @@ Confirmed positions have a `lifecycleStatus`:
 
 When BO approves an amendment, the original position is marked as `AMENDED` and a new `ACTIVE` position is created. Because of this, an `AMENDED` position is not modified again; the next change must be made on the newly created active position.
 
-BO also has **Lifecycle Reporting**, which summarizes amendments/cancellations, pending request aging, average review time, and concentration by portfolio/symbol. FO can query its own lifecycle report through the API, while BO can see the full operational book.
+BO also has **Lifecycle Reporting**, which summarizes amendments/cancellations, pending request aging, average review time, and concentration by portfolio/symbol. **Operations Reporting** adds a daily control view for pending bookings, pending lifecycle requests, missing EOD closes and corrected EOD runs. FO can query its own lifecycle and P&L snapshot through the API, while BO can see the full operational book.
 
 ## Notifications
 
@@ -153,6 +158,17 @@ Each portfolio pricing, Exposure, and CVA execution stores an audited copy in `v
 
 This does not replace EOD and does not store market data as the official source. It is an execution history used to review what was run, with which parameters, and what the system returned.
 
+## Audit Trail and Logs
+
+NexusXVA separates user audit from technical logging:
+
+* `audit_events` in PostgreSQL is the official activity trail. It records auth events, denied access, workflow approvals/rejections, portfolio changes, EOD corrections and valuation requests with user, active group, session, endpoint, resource and correlation id.
+* ADMIN can inspect it from **Audit Logs** using filters by user, module, outcome, resource and date.
+* Backend log files are for debugging and support. Docker persists them in the `backend-logs` volume under `/app/logs`.
+* Logs include `correlationId`, user and active group when available, so an audit event can be linked back to technical errors.
+
+Audit metadata is sanitized. Passwords, cookies, CSRF tokens, raw request bodies and full responses are not stored.
+
 ## Counterparties, Netting and Collateral
 
 ADMIN can configure counterparties, netting sets, assign portfolios to a netting set, and set a simple static collateral amount. FO can then run CVA in either single-portfolio mode or netting-set mode.
@@ -176,6 +192,38 @@ Created portfolios:
 * `P&L Demo - Macro Hedges`
 
 Each book includes execution premiums and a test previous EOD.
+
+## Workflow Demo Portfolios
+
+To populate ADMIN Workflows and BO queues with realistic demo entries:
+
+```bash
+docker compose exec -T postgres psql -U nexusxva -d nexusxva < backend/src/main/resources/db/demo/demo_workflows.sql
+```
+
+This creates:
+
+* `Workflow Demo - FO Tech Intake`
+* `Workflow Demo - Macro Approval Queue`
+* `Workflow Demo - Metals Lifecycle`
+
+The seed includes pending, confirmed and rejected trade bookings plus pending, approved and rejected lifecycle requests. To see them, log in as ADMIN and open **Workflows**; use the portfolio filter to focus on one demo book. BO users can also inspect them in **Trade Validation** and **Lifecycle Reporting**.
+
+## Heavy Demo Portfolios
+
+To create larger books that put more pressure on pricing, stress testing, exposure, CVA and table rendering:
+
+```bash
+docker compose exec -T postgres psql -U nexusxva -d nexusxva < backend/src/main/resources/db/demo/demo_heavy_portfolios.sql
+```
+
+This creates three synthetic heavy books:
+
+* `Heavy Demo - Mega Tech Vol Warehouse`
+* `Heavy Demo - Cross Asset Scenario Grid`
+* `Heavy Demo - Metals Macro Hedge Stack`
+
+Together they include roughly 512 European option positions, 32 cash equity positions, plus 99 workflow-visible booking requests and 81 lifecycle requests in pending, accepted/confirmed and rejected states.
 
 ## Run Everything
 
@@ -205,7 +253,7 @@ Common URLs:
 
 Natural next candidates are:
 
-* FX and multi-currency.
-* Full cash equity lifecycle/EOD for more detailed P&L.
 * Admin UI polish for counterparty/netting-set setup.
 * Persisted credit curve master data for richer CVA.
+* Persisted valuation/EOD reporting history if FO/BO need saved report views.
+* Cash equity lots/executions for average cost and realized P&L.

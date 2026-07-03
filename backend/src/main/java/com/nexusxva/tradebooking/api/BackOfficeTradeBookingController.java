@@ -1,6 +1,12 @@
 package com.nexusxva.tradebooking.api;
 
+import com.nexusxva.audit.application.AuditEventCommand;
+import com.nexusxva.audit.application.AuditService;
+import com.nexusxva.audit.domain.AuditOutcome;
+import com.nexusxva.auth.domain.AuthSession;
+import com.nexusxva.auth.infrastructure.AuthSessionFilter;
 import com.nexusxva.tradebooking.application.TradeBookingService;
+import com.nexusxva.tradebooking.domain.TradeBookingRequest;
 import com.nexusxva.tradebooking.domain.TradeBookingStatus;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -18,9 +24,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class BackOfficeTradeBookingController {
 
     private final TradeBookingService service;
+    private final AuditService auditService;
 
-    public BackOfficeTradeBookingController(TradeBookingService service) {
+    public BackOfficeTradeBookingController(TradeBookingService service, AuditService auditService) {
         this.service = service;
+        this.auditService = auditService;
     }
 
     @GetMapping
@@ -44,9 +52,9 @@ public class BackOfficeTradeBookingController {
             @PathVariable UUID bookingId,
             HttpServletRequest request
     ) {
-        return TradeBookingResponse.from(
-                service.approve(bookingId, TradeBookingActorResolver.resolve(request))
-        );
+        TradeBookingRequest booking = service.approve(bookingId, TradeBookingActorResolver.resolve(request));
+        auditReview(request, booking, "TRADE_BOOKING_APPROVED", "APPROVE_BOOKING", "Trade booking approved");
+        return TradeBookingResponse.from(booking);
     }
 
     @PostMapping("/{bookingId}/reject")
@@ -55,12 +63,38 @@ public class BackOfficeTradeBookingController {
             @Valid @RequestBody RejectTradeBookingRequest body,
             HttpServletRequest request
     ) {
-        return TradeBookingResponse.from(
-                service.reject(
-                        bookingId,
-                        TradeBookingActorResolver.resolve(request),
-                        body.rejectionReason()
-                )
+        TradeBookingRequest booking = service.reject(
+                bookingId,
+                TradeBookingActorResolver.resolve(request),
+                body.rejectionReason()
         );
+        auditReview(request, booking, "TRADE_BOOKING_REJECTED", "REJECT_BOOKING", "Trade booking rejected");
+        return TradeBookingResponse.from(booking);
+    }
+
+    private void auditReview(HttpServletRequest request, TradeBookingRequest booking, String eventType, String action, String message) {
+        auditService.record(AuditEventCommand.of(
+                eventType,
+                "BACK_OFFICE",
+                action,
+                AuditOutcome.SUCCESS,
+                currentSession(request),
+                request,
+                200,
+                "TRADE_BOOKING",
+                booking.id(),
+                message,
+                auditService.metadata(java.util.Map.of(
+                        "portfolioId", booking.portfolioId(),
+                        "status", booking.status().name(),
+                        "symbol", booking.underlyingSymbol(),
+                        "confirmedPositionIds", booking.confirmedPositionIds()
+                ))
+        ));
+    }
+
+    private AuthSession currentSession(HttpServletRequest request) {
+        Object value = request.getAttribute(AuthSessionFilter.SESSION_ATTRIBUTE);
+        return value instanceof AuthSession session ? session : null;
     }
 }

@@ -1,5 +1,8 @@
 package com.nexusxva.admin.api;
 
+import com.nexusxva.audit.application.AuditEventCommand;
+import com.nexusxva.audit.application.AuditService;
+import com.nexusxva.audit.domain.AuditOutcome;
 import com.nexusxva.admin.application.AdminAccessService;
 import com.nexusxva.auth.domain.AuthSession;
 import com.nexusxva.auth.infrastructure.AuthSessionFilter;
@@ -23,10 +26,12 @@ public class AdminController {
 
     private final AdminAccessService service;
     private final PortfolioService portfolioService;
+    private final AuditService auditService;
 
-    public AdminController(AdminAccessService service, PortfolioService portfolioService) {
+    public AdminController(AdminAccessService service, PortfolioService portfolioService, AuditService auditService) {
         this.service = service;
         this.portfolioService = portfolioService;
+        this.auditService = auditService;
     }
 
     @GetMapping("/users")
@@ -56,6 +61,19 @@ public class AdminController {
                 session == null ? null : session.user().id(),
                 "Archived by ADMIN"
         );
+        auditService.record(AuditEventCommand.of(
+                "ADMIN_PORTFOLIO_ARCHIVED",
+                "ADMIN",
+                "ARCHIVE_PORTFOLIO",
+                AuditOutcome.SUCCESS,
+                session,
+                servletRequest,
+                204,
+                "PORTFOLIO",
+                portfolioId,
+                "Portfolio archived by ADMIN",
+                null
+        ));
         return ResponseEntity.noContent().build();
     }
 
@@ -65,7 +83,21 @@ public class AdminController {
             @Valid @RequestBody UpdateUserGroupsRequest request,
             HttpServletRequest servletRequest
     ) {
-        return service.updateGroups(userId, request.groups(), currentSession(servletRequest));
+        AdminUserAccessResponse response = service.updateGroups(userId, request.groups(), currentSession(servletRequest));
+        auditService.record(AuditEventCommand.of(
+                "ADMIN_USER_GROUPS_CHANGED",
+                "ADMIN",
+                "UPDATE_USER_GROUPS",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "USER",
+                userId,
+                "User groups changed",
+                auditService.metadata(java.util.Map.of("groups", request.groups()))
+        ));
+        return response;
     }
 
     @PutMapping("/users/{userId}/permissions")
@@ -74,7 +106,21 @@ public class AdminController {
             @Valid @RequestBody UpdateUserPermissionsRequest request,
             HttpServletRequest servletRequest
     ) {
-        return service.updatePermissions(userId, request.permissions(), currentSession(servletRequest));
+        AdminUserAccessResponse response = service.updatePermissions(userId, request.permissions(), currentSession(servletRequest));
+        auditService.record(AuditEventCommand.of(
+                "ADMIN_USER_PERMISSIONS_CHANGED",
+                "ADMIN",
+                "UPDATE_USER_PERMISSIONS",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "USER",
+                userId,
+                "User feature permissions changed",
+                auditService.metadata(java.util.Map.of("permissions", request.permissions()))
+        ));
+        return response;
     }
 
     @PutMapping("/users/{userId}/portfolio-access")
@@ -83,7 +129,24 @@ public class AdminController {
             @Valid @RequestBody UpdateUserPortfolioAccessRequest request,
             HttpServletRequest servletRequest
     ) {
-        return service.updatePortfolioAccess(userId, request.accessMode(), request.portfolioIds(), currentSession(servletRequest));
+        AdminUserAccessResponse response = service.updatePortfolioAccess(userId, request.accessMode(), request.portfolioIds(), currentSession(servletRequest));
+        auditService.record(AuditEventCommand.of(
+                "ADMIN_PORTFOLIO_ACCESS_CHANGED",
+                "ADMIN",
+                "UPDATE_PORTFOLIO_ACCESS",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "USER",
+                userId,
+                "User portfolio access changed",
+                auditService.metadata(java.util.Map.of(
+                        "accessMode", request.accessMode(),
+                        "portfolioIds", request.portfolioIds()
+                ))
+        ));
+        return response;
     }
 
     @GetMapping("/workflow-map")

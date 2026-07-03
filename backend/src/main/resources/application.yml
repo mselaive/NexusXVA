@@ -44,6 +44,10 @@ nexusxva:
     blemberg:
       base-url: ${BLEMBERG_BASE_URL:http://localhost:8081}
       timeout: ${BLEMBERG_TIMEOUT:2s}
+  log:
+    file-enabled: ${NEXUSXVA_LOG_FILE_ENABLED:true}
+    dir: ${NEXUSXVA_LOG_DIR:logs}
+    retention-days: ${NEXUSXVA_LOG_RETENTION_DAYS:14}
 
 server:
   port: 8080

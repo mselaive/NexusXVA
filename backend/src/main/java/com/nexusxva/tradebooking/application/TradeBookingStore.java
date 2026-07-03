@@ -3,6 +3,7 @@ package com.nexusxva.tradebooking.application;
 import com.nexusxva.tradebooking.domain.BookingActor;
 import com.nexusxva.tradebooking.domain.TradeBookingRequest;
 import com.nexusxva.tradebooking.domain.TradeBookingStatus;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +16,7 @@ public interface TradeBookingStore {
             UUID portfolioId,
             String portfolioName,
             CreateEuropeanOptionBookingCommand command,
+            BigDecimal bookingNotional,
             BookingActor submittedBy
     );
 
@@ -23,6 +25,7 @@ public interface TradeBookingStore {
             String portfolioName,
             CreateOptionStrategyBookingCommand command,
             UUID strategyId,
+            BigDecimal bookingNotional,
             BookingActor submittedBy
     );
 
@@ -30,6 +33,7 @@ public interface TradeBookingStore {
             UUID portfolioId,
             String portfolioName,
             CreateCashEquityBookingCommand command,
+            BigDecimal bookingNotional,
             BookingActor submittedBy
     );
 

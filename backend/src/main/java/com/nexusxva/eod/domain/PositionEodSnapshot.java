@@ -5,6 +5,7 @@ import java.util.UUID;
 
 public record PositionEodSnapshot(
         UUID positionId,
+        String instrumentType,
         String underlyingSymbol,
         double quantity,
         double unitPrice,

@@ -14,6 +14,7 @@ import com.nexusxva.tradebooking.domain.TradeBookingRequest;
 import com.nexusxva.tradebooking.domain.TradeBookingStatus;
 import com.nexusxva.tradebooking.domain.TradeBookingType;
 import com.nexusxva.tradinglimits.application.TradingLimitService;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -54,8 +55,8 @@ public class TradeBookingService {
         Portfolio portfolio = portfolioStore.findPortfolio(portfolioId)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
         marketDataValidationService.validateUnderlyingSymbol(command.underlyingSymbol());
-        tradingLimitService.validateBooking(submittedBy, portfolio.baseCurrency(), command);
-        TradeBookingRequest booking = tradeBookingStore.create(portfolioId, portfolio.name(), command, submittedBy);
+        BigDecimal bookingNotional = tradingLimitService.validateBooking(submittedBy, portfolio.baseCurrency(), command);
+        TradeBookingRequest booking = tradeBookingStore.create(portfolioId, portfolio.name(), command, bookingNotional, submittedBy);
         notificationService.notifyTradeBookingSubmitted(booking);
         return booking;
     }
@@ -69,13 +70,14 @@ public class TradeBookingService {
         Portfolio portfolio = portfolioStore.findPortfolio(portfolioId)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
         marketDataValidationService.validateUnderlyingSymbol(command.underlyingSymbol());
-        tradingLimitService.validateStrategyBooking(submittedBy, portfolio.baseCurrency(), command.legs());
+        BigDecimal bookingNotional = tradingLimitService.validateStrategyBooking(submittedBy, portfolio.baseCurrency(), command.legs());
         UUID strategyId = command.newStrategyId();
         TradeBookingRequest booking = tradeBookingStore.createStrategy(
                 portfolioId,
                 portfolio.name(),
                 command,
                 strategyId,
+                bookingNotional,
                 submittedBy
         );
         notificationService.notifyTradeBookingSubmitted(booking);
@@ -91,8 +93,8 @@ public class TradeBookingService {
         Portfolio portfolio = portfolioStore.findPortfolio(portfolioId)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
         marketDataValidationService.validateUnderlyingSymbol(command.underlyingSymbol());
-        tradingLimitService.validateCashEquityBooking(submittedBy, portfolio.baseCurrency(), command);
-        TradeBookingRequest booking = tradeBookingStore.createCashEquity(portfolioId, portfolio.name(), command, submittedBy);
+        BigDecimal bookingNotional = tradingLimitService.validateCashEquityBooking(submittedBy, portfolio.baseCurrency(), command);
+        TradeBookingRequest booking = tradeBookingStore.createCashEquity(portfolioId, portfolio.name(), command, bookingNotional, submittedBy);
         notificationService.notifyTradeBookingSubmitted(booking);
         return booking;
     }

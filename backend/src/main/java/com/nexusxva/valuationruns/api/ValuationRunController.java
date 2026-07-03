@@ -4,6 +4,7 @@ import com.nexusxva.auth.application.UserAccessService;
 import com.nexusxva.auth.domain.AuthSession;
 import com.nexusxva.auth.infrastructure.AuthSessionFilter;
 import com.nexusxva.portfolio.application.PortfolioService;
+import com.nexusxva.portfolio.api.PortfolioSummaryResponse;
 import com.nexusxva.portfolio.domain.PortfolioSummary;
 import com.nexusxva.valuationruns.application.ValuationRunSearchCriteria;
 import com.nexusxva.valuationruns.application.ValuationRunService;
@@ -59,6 +60,14 @@ public class ValuationRunController {
                 ))
                 .stream()
                 .map(ValuationRunResponse::from)
+                .toList();
+    }
+
+    @GetMapping("/portfolios")
+    public List<PortfolioSummaryResponse> portfolios(HttpServletRequest request) {
+        return userAccessService.filterVisiblePortfolios(request, portfolioService.listPortfolios())
+                .stream()
+                .map(PortfolioSummaryResponse::from)
                 .toList();
     }
 

@@ -3,6 +3,9 @@ package com.nexusxva.simulation.api;
 import com.nexusxva.auth.application.UserAccessService;
 import com.nexusxva.auth.domain.AuthSession;
 import com.nexusxva.auth.infrastructure.AuthSessionFilter;
+import com.nexusxva.audit.application.AuditEventCommand;
+import com.nexusxva.audit.application.AuditService;
+import com.nexusxva.audit.domain.AuditOutcome;
 import com.nexusxva.exposure.application.ExposureSimulationResult;
 import com.nexusxva.exposure.application.ExposureSimulationService;
 import com.nexusxva.shared.error.ResourceNotFoundException;
@@ -26,15 +29,18 @@ public class ExposureSimulationController {
     private final ExposureSimulationService exposureSimulationService;
     private final UserAccessService userAccessService;
     private final ValuationRunService valuationRunService;
+    private final AuditService auditService;
 
     public ExposureSimulationController(
             ExposureSimulationService exposureSimulationService,
             UserAccessService userAccessService,
-            ValuationRunService valuationRunService
+            ValuationRunService valuationRunService,
+            AuditService auditService
     ) {
         this.exposureSimulationService = exposureSimulationService;
         this.userAccessService = userAccessService;
         this.valuationRunService = valuationRunService;
+        this.auditService = auditService;
     }
 
     @PostMapping("/exposure")
@@ -56,6 +62,19 @@ public class ExposureSimulationController {
                     response,
                     exposureSummary(response)
             );
+            auditService.record(AuditEventCommand.of(
+                    "EXPOSURE_RUN",
+                    "EXPOSURE",
+                    "RUN_EXPOSURE",
+                    AuditOutcome.SUCCESS,
+                    currentSession(servletRequest),
+                    servletRequest,
+                    200,
+                    "PORTFOLIO",
+                    request.portfolioId(),
+                    "Exposure simulation requested",
+                    auditService.metadata(exposureSummary(response))
+            ));
             return response;
         } catch (RuntimeException exception) {
             if (!(exception instanceof ResourceNotFoundException)) {

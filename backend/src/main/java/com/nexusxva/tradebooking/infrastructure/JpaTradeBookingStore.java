@@ -8,6 +8,7 @@ import com.nexusxva.tradebooking.domain.BookingActor;
 import com.nexusxva.tradebooking.domain.TradeBookingRequest;
 import com.nexusxva.tradebooking.domain.TradeBookingStatus;
 import jakarta.persistence.criteria.Predicate;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -31,10 +32,11 @@ class JpaTradeBookingStore implements TradeBookingStore {
             UUID portfolioId,
             String portfolioName,
             CreateEuropeanOptionBookingCommand command,
+            BigDecimal bookingNotional,
             BookingActor submittedBy
     ) {
         return repository.save(
-                TradeBookingEntity.create(portfolioId, portfolioName, command, submittedBy)
+                TradeBookingEntity.create(portfolioId, portfolioName, command, bookingNotional, submittedBy)
         ).toDomain();
     }
 
@@ -44,10 +46,11 @@ class JpaTradeBookingStore implements TradeBookingStore {
             String portfolioName,
             com.nexusxva.tradebooking.application.CreateOptionStrategyBookingCommand command,
             UUID strategyId,
+            BigDecimal bookingNotional,
             BookingActor submittedBy
     ) {
         return repository.save(
-                TradeBookingEntity.createStrategy(portfolioId, portfolioName, command, strategyId, submittedBy)
+                TradeBookingEntity.createStrategy(portfolioId, portfolioName, command, strategyId, bookingNotional, submittedBy)
         ).toDomain();
     }
 
@@ -56,10 +59,11 @@ class JpaTradeBookingStore implements TradeBookingStore {
             UUID portfolioId,
             String portfolioName,
             CreateCashEquityBookingCommand command,
+            BigDecimal bookingNotional,
             BookingActor submittedBy
     ) {
         return repository.save(
-                TradeBookingEntity.createCashEquity(portfolioId, portfolioName, command, submittedBy)
+                TradeBookingEntity.createCashEquity(portfolioId, portfolioName, command, bookingNotional, submittedBy)
         ).toDomain();
     }
 

@@ -1,6 +1,8 @@
 package com.nexusxva.tradelifecycle.application;
 
+import com.nexusxva.portfolio.application.AddCashEquityPositionCommand;
 import com.nexusxva.portfolio.application.AddEuropeanOptionPositionCommand;
+import com.nexusxva.portfolio.domain.CashEquityPosition;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.tradebooking.domain.BookingActor;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequest;
@@ -20,8 +22,21 @@ public interface TradeLifecycleStore {
             BookingActor submittedBy
     );
 
+    TradeLifecycleRequest createAmend(
+            CashEquityPosition originalPosition,
+            String portfolioName,
+            AddCashEquityPositionCommand requestedTerms,
+            BookingActor submittedBy
+    );
+
     TradeLifecycleRequest createCancel(
             EuropeanOptionPosition originalPosition,
+            String portfolioName,
+            BookingActor submittedBy
+    );
+
+    TradeLifecycleRequest createCancel(
+            CashEquityPosition originalPosition,
             String portfolioName,
             BookingActor submittedBy
     );

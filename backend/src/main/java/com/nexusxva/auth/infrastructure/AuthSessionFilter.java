@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -47,7 +48,13 @@ public class AuthSessionFilter extends OncePerRequestFilter {
         }
 
         Optional<AuthSession> session = sessionToken(request).flatMap(authService::findSession);
-        session.ifPresent(value -> request.setAttribute(SESSION_ATTRIBUTE, value));
+        session.ifPresent(value -> {
+            request.setAttribute(SESSION_ATTRIBUTE, value);
+            MDC.put("userId", value.user().id().toString());
+            MDC.put("username", value.user().username());
+            MDC.put("activeGroup", value.activeGroup() == null ? "" : value.activeGroup());
+            MDC.put("sessionId", value.id().toString());
+        });
 
         if (isPublic(request)) {
             filterChain.doFilter(request, response);
@@ -115,6 +122,7 @@ public class AuthSessionFilter extends OncePerRequestFilter {
             case "BO" -> path.startsWith("/api/back-office/trade-bookings")
                     || path.startsWith("/api/back-office/lifecycle-requests")
                     || path.startsWith("/api/back-office/lifecycle-report")
+                    || path.startsWith("/api/back-office/reports")
                     || path.startsWith("/api/back-office/trading-limits")
                     || path.startsWith("/api/back-office/eod")
                     || path.startsWith("/api/valuation-runs")

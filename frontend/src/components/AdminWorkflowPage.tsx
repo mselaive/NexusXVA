@@ -172,7 +172,7 @@ export function AdminWorkflowPage() {
         ))}
       </div>
 
-      <div className="admin-workflow-layout visual">
+      <div className="admin-workflow-stack visual">
         <section className="panel workflow-map-panel visual">
           <div className="admin-card-head">
             <div>
@@ -189,7 +189,7 @@ export function AdminWorkflowPage() {
             <div className="empty">No workflow data available.</div>
           )}
         </section>
-        <section className="panel workflow-detail-panel">
+        <section className="panel workflow-detail-panel full-width">
           {visibleNode ? <WorkflowBookingList node={visibleNode} /> : <div className="empty">Select a node.</div>}
         </section>
       </div>
@@ -265,7 +265,7 @@ function WorkflowBookingList({ node }: { node: AdminWorkflowNode }) {
       {node.bookings.length === 0 ? (
         <div className="empty">No bookings in this node.</div>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap workflow-booking-table">
           <table>
             <thead>
               <tr>

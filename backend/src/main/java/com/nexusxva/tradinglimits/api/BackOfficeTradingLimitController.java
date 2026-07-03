@@ -1,6 +1,12 @@
 package com.nexusxva.tradinglimits.api;
 
+import com.nexusxva.audit.application.AuditEventCommand;
+import com.nexusxva.audit.application.AuditService;
+import com.nexusxva.audit.domain.AuditOutcome;
+import com.nexusxva.auth.domain.AuthSession;
+import com.nexusxva.auth.infrastructure.AuthSessionFilter;
 import com.nexusxva.tradinglimits.application.TradingLimitService;
+import com.nexusxva.tradinglimits.domain.TradingLimitSnapshot;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -17,9 +23,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class BackOfficeTradingLimitController {
 
     private final TradingLimitService service;
+    private final AuditService auditService;
 
-    public BackOfficeTradingLimitController(TradingLimitService service) {
+    public BackOfficeTradingLimitController(TradingLimitService service, AuditService auditService) {
         this.service = service;
+        this.auditService = auditService;
     }
 
     @GetMapping
@@ -42,12 +50,32 @@ public class BackOfficeTradingLimitController {
             @Valid @RequestBody UpdateTradingLimitRequest request,
             HttpServletRequest servletRequest
     ) {
-        return TradingLimitSnapshotResponse.from(
-                service.update(
-                        userId,
-                        request.toCommand(),
-                        TradingLimitActorResolver.resolve(servletRequest)
-                )
+        TradingLimitSnapshot snapshot = service.update(
+                userId,
+                request.toCommand(),
+                TradingLimitActorResolver.resolve(servletRequest)
         );
+        auditService.record(AuditEventCommand.of(
+                snapshot.policy() != null && snapshot.policy().active() ? "TRADING_LIMIT_UPDATED" : "TRADING_LIMIT_DISABLED",
+                "BACK_OFFICE",
+                        "UPDATE_TRADING_LIMIT",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "USER",
+                userId,
+                "Trading limit policy changed",
+                auditService.metadata(java.util.Map.of(
+                        "status", snapshot.status(),
+                        "notionalCurrency", snapshot.policy() == null ? "USD" : snapshot.policy().notionalCurrency()
+                ))
+        ));
+        return TradingLimitSnapshotResponse.from(snapshot);
+    }
+
+    private AuthSession currentSession(HttpServletRequest request) {
+        Object value = request.getAttribute(AuthSessionFilter.SESSION_ATTRIBUTE);
+        return value instanceof AuthSession session ? session : null;
     }
 }

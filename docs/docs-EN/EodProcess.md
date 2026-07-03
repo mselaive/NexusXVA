@@ -19,6 +19,7 @@ Blemberg refresh
   -> NexusXVA iterates over all portfolios
   -> pricing and quality gates run independently for each book
   -> portfolio and position EOD snapshots are persisted
+  -> each position snapshot carries instrumentType: EUROPEAN_OPTION or CASH_EQUITY
   -> each portfolio reports CAPTURED, SKIPPED, or FAILED
 ```
 
@@ -37,7 +38,7 @@ Rollback in NexusXVA means an audited correction, not physical deletion:
 
 Portfolios are archived instead of hard-deleted. Archived portfolios disappear from operational workflows, but historical EOD snapshots remain in the database.
 
-Daily P&L uses prior EOD value for existing positions and execution trade value for positions created after the close. Missing references remain unavailable.
+Daily P&L uses prior EOD value for existing positions and execution trade value for positions created after the close. Missing references remain unavailable. Reporting separates option Daily P&L from cash-equity Daily P&L by using the persisted `instrumentType` on each EOD position snapshot.
 
 The scheduler is disabled by default:
 
@@ -48,4 +49,4 @@ NEXUSXVA_EOD_ZONE=America/New_York
 NEXUSXVA_EOD_ALLOW_STALE=false
 ```
 
-Expected failures include duplicate close dates, stale market data, unpriceable active positions, unavailable Blemberg, and non-USD portfolios.
+Expected failures include duplicate close dates, stale market data, unpriceable active positions, unavailable Blemberg, and missing or invalid FX conversion into the portfolio base currency.

@@ -71,6 +71,8 @@ export type CreateCashEquityBookingRequest = {
   executionPrice?: number | null;
 };
 
+export type AmendCashEquityPositionRequest = CreateCashEquityBookingRequest;
+
 export type TradeBookingStatus = "PENDING_VALIDATION" | "CONFIRMED" | "REJECTED";
 export type TradeBookingType = "SINGLE_OPTION" | "OPTION_STRATEGY" | "CASH_EQUITY";
 export type OptionStrategyType = "CALL_SPREAD" | "PUT_SPREAD" | "STRADDLE" | "STRANGLE" | "RISK_REVERSAL" | "BUTTERFLY" | "CUSTOM";
@@ -152,6 +154,55 @@ export type FrontOfficeDeskResponse = {
   bookings: FrontOfficeDeskBooking[];
 };
 
+export type FrontOfficePnlPortfolioRow = {
+  portfolioId: string;
+  portfolioName: string;
+  baseCurrency: string;
+  positionCount: number;
+  latestEodDate: string | null;
+  status: "OK" | "FAILED";
+  currentMarketValue: number | null;
+  dailyPnl: number | null;
+  sinceTradePnl: number | null;
+  optionDailyPnl: number | null;
+  cashEquityDailyPnl: number | null;
+  optionSinceTradePnl: number | null;
+  cashEquitySinceTradePnl: number | null;
+  pendingBookings: number;
+  rejectedBookings: number;
+  pendingLifecycleRequests: number;
+  rejectedLifecycleRequests: number;
+  errorMessage: string | null;
+};
+
+export type FrontOfficePnlReport = {
+  valuationDate: string;
+  generatedAt: string;
+  portfolios: FrontOfficePnlPortfolioRow[];
+};
+
+export type BackOfficeEodPortfolioStatus = {
+  portfolioId: string;
+  portfolioName: string;
+  baseCurrency: string;
+  positionCount: number;
+  latestEodDate: string | null;
+  latestEodStatus: "ACTIVE" | "VOIDED" | "SUPERSEDED" | "MISSING";
+  missingTodayClose: boolean;
+  correctedRuns: number;
+};
+
+export type BackOfficeOperationsReport = {
+  businessDate: string;
+  generatedAt: string;
+  portfolios: number;
+  pendingTradeBookings: number;
+  pendingLifecycleRequests: number;
+  portfoliosWithoutTodayClose: number;
+  correctedEodRuns: number;
+  eodPortfolios: BackOfficeEodPortfolioStatus[];
+};
+
 export type TradeBookingPage = {
   items: TradeBooking[];
   page: number;
@@ -168,18 +219,21 @@ export type TradeLifecycleRequest = {
   portfolioId: string | null;
   portfolioName: string;
   positionId: string | null;
+  instrumentType: "EUROPEAN_OPTION" | "CASH_EQUITY";
   requestType: TradeLifecycleRequestType;
   status: TradeLifecycleRequestStatus;
   originalUnderlyingSymbol: string;
-  originalOptionType: OptionType;
-  originalStrike: number;
-  originalMaturityDate: string;
+  originalOptionType: OptionType | null;
+  originalStrike: number | null;
+  originalMaturityDate: string | null;
   originalQuantity: number;
+  originalExecutionPrice: number | null;
   requestedUnderlyingSymbol: string | null;
   requestedOptionType: OptionType | null;
   requestedStrike: number | null;
   requestedMaturityDate: string | null;
   requestedQuantity: number | null;
+  requestedExecutionPrice: number | null;
   submittedBy: BookingActor;
   submittedAt: string;
   reviewedBy: BookingActor | null;
@@ -291,6 +345,7 @@ export type PortfolioPositionMarketData = {
 
 export type PositionEodSnapshot = {
   positionId: string;
+  instrumentType: "EUROPEAN_OPTION" | "CASH_EQUITY";
   underlyingSymbol: string;
   quantity: number;
   unitPrice: number;
@@ -311,6 +366,10 @@ export type PortfolioEodSnapshot = {
   totalMarketValue: number;
   totalTradeValue: number;
   totalUnrealizedPnl: number;
+  optionMarketValue: number;
+  cashEquityMarketValue: number;
+  optionUnrealizedPnl: number;
+  cashEquityUnrealizedPnl: number;
   positionsWithoutExecutionPrice: number;
   capturedAt: string;
   source: string;
@@ -341,10 +400,13 @@ export type EodBatchResult = {
 
 export type PositionDailyPnl = {
   positionId: string;
+  instrumentType: "EUROPEAN_OPTION" | "CASH_EQUITY";
   underlyingSymbol: string;
   currentMarketValue: number;
   referenceValue: number | null;
   dailyPnl: number | null;
+  tradeValue: number | null;
+  sinceTradePnl: number | null;
   referenceMethod: "PRIOR_EOD" | "EXECUTION" | "UNAVAILABLE";
 };
 
@@ -355,7 +417,13 @@ export type PortfolioDailyPnl = {
   baseCurrency: string;
   currentMarketValue: number;
   dailyPnl: number;
+  sinceTradePnl: number;
+  optionDailyPnl: number;
+  cashEquityDailyPnl: number;
+  optionSinceTradePnl: number;
+  cashEquitySinceTradePnl: number;
   positionsWithoutReference: number;
+  positionsWithoutExecutionPrice: number;
   positions: PositionDailyPnl[];
 };
 
@@ -795,6 +863,40 @@ export type LoginRequest = {
 
 export type BlembergHealthResponse = {
   status?: string;
+};
+
+export type AuditOutcome = "SUCCESS" | "FAILURE" | "DENIED";
+
+export type AuditEvent = {
+  id: string;
+  occurredAt: string;
+  eventType: string;
+  module: string;
+  action: string;
+  outcome: AuditOutcome;
+  actorUserId: string | null;
+  username: string | null;
+  displayName: string | null;
+  activeGroup: string | null;
+  sessionId: string | null;
+  httpMethod: string | null;
+  path: string | null;
+  statusCode: number | null;
+  resourceType: string | null;
+  resourceId: string | null;
+  correlationId: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  message: string | null;
+  metadata: unknown;
+};
+
+export type AuditEventPage = {
+  items: AuditEvent[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
 };
 
 export type BlembergRefreshResponse = {

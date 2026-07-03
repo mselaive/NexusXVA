@@ -237,6 +237,8 @@ export function EodControlPage() {
                   <th>Market value</th>
                   <th>Trade value</th>
                   <th>Unrealized P&L</th>
+                  <th>Option P&L</th>
+                  <th>Cash P&L</th>
                   <th>Missing economics</th>
                   <th>Positions</th>
                   <th>Source</th>
@@ -253,6 +255,8 @@ export function EodControlPage() {
                     <td>{formatCurrency(snapshot.totalMarketValue, snapshot.baseCurrency)}</td>
                     <td>{formatCurrency(snapshot.totalTradeValue, snapshot.baseCurrency)}</td>
                     <td>{formatCurrency(snapshot.totalUnrealizedPnl, snapshot.baseCurrency)}</td>
+                    <td>{formatCurrency(snapshot.optionUnrealizedPnl, snapshot.baseCurrency)}</td>
+                    <td>{formatCurrency(snapshot.cashEquityUnrealizedPnl, snapshot.baseCurrency)}</td>
                     <td>{formatNumber(snapshot.positionsWithoutExecutionPrice, 0)}</td>
                     <td>{formatNumber(snapshot.positions.length, 0)}</td>
                     <td>{snapshot.source}</td>

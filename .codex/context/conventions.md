@@ -51,6 +51,9 @@
 - Blemberg snapshots are diagnostic/cache data only in NexusXVA; pricing and exposure should consume Blemberg pricing inputs, not raw snapshots.
 - Treat Blemberg V1 `GET /v3/api-docs` returning `501 Not Implemented` as expected; runtime integration must not depend on OpenAPI.
 - Pricing, exposure, and CVA now write audit snapshots to `valuation_runs` when run through their main APIs. Future calculations must still recompute from portfolio state and `marketdata`; do not read old valuation runs as source data.
+- User activity belongs in `audit_events`, not in file logs. Use Audit Trail for who/what/when/group/session/resource questions.
+- Technical logs under `logs/backend/*` are for debugging and support only; include correlation ids and sanitized context, never passwords, cookies, CSRF tokens, raw request bodies, or full responses.
+- `valuation_runs` is calculation execution history; `audit_events` is user/security activity history. Do not collapse these two concepts into one table.
 - CVA V1 should consume exposure profiles through `exposure.application`; do not duplicate simulation logic in `cva`.
 - Counterparties and netting sets live in the `xva` module. Do not store them inside portfolio, exposure, or CVA tables.
 - CVA credit and discount curves are request-scoped for now; do not persist curve master data or CVA result state until explicitly planned.
@@ -88,6 +91,8 @@
 - User notifications are persisted in NexusXVA and belong to the user, not the active group. Workflow events should notify the maker/checker users, but notifications must not replace backend workflow state.
 - Option `executionPrice` means premium per unit. Never substitute strike, spot, notional, or theoretical price for missing execution economics; return P&L as unavailable.
 - EOD snapshots are audited per portfolio/business date and must not overwrite trades or positions. Corrections use `VOIDED`/`SUPERSEDED` runs with reasons; never physically delete EOD history. Daily P&L and latest close use only `ACTIVE` EOD runs, falling back to execution value only for positions absent from that close.
+- EOD position snapshots must carry `instrumentType` so option and cash-equity P&L can be reported separately without inferring product from nullable fields.
+- FO/BO reporting pages should be read-only derivations over source workflow/EOD tables unless a persisted report/audit requirement is explicit.
 - Manual EOD capture belongs to BO. FO may read EOD/Daily P&L, while scheduled EOD runs as a system process.
 - The normal EOD operation is a global batch over active portfolios. Process books independently and report `CAPTURED`, `SKIPPED`, or `FAILED`; one failed book must not roll back successful closes for other portfolios.
 - Portfolios should be archived, not hard-deleted. Archived portfolios must disappear from operational workflows while preserving booking, lifecycle, and EOD history.

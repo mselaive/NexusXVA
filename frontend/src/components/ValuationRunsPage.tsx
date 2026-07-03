@@ -4,9 +4,8 @@ import React from "react";
 import { Activity, AlertTriangle, CheckCircle2, History, Loader2, RefreshCw } from "lucide-react";
 import { nexusApi } from "@/lib/api";
 import { formatNumber } from "@/lib/format";
-import type { ValuationRun, ValuationRunStatus, ValuationRunType } from "@/lib/types";
+import type { PortfolioSummary, ValuationRun, ValuationRunStatus, ValuationRunType } from "@/lib/types";
 import { AppShell } from "./AppShell";
-import { PortfolioPicker } from "./PortfolioPicker";
 
 const howTo = [
   {
@@ -24,6 +23,7 @@ const howTo = [
 ];
 
 export function ValuationRunsPage() {
+  const [portfolios, setPortfolios] = React.useState<PortfolioSummary[]>([]);
   const [runs, setRuns] = React.useState<ValuationRun[]>([]);
   const [selected, setSelected] = React.useState<ValuationRun | null>(null);
   const [runType, setRunType] = React.useState<ValuationRunType | "">("");
@@ -31,6 +31,14 @@ export function ValuationRunsPage() {
   const [portfolioId, setPortfolioId] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+
+  async function loadPortfolios() {
+    try {
+      setPortfolios(await nexusApi.listValuationRunPortfolios());
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Portfolio filter unavailable");
+    }
+  }
 
   async function loadRuns() {
     setLoading(true);
@@ -50,6 +58,10 @@ export function ValuationRunsPage() {
       setLoading(false);
     }
   }
+
+  React.useEffect(() => {
+    void loadPortfolios();
+  }, []);
 
   React.useEffect(() => {
     void loadRuns();
@@ -75,7 +87,17 @@ export function ValuationRunsPage() {
         </div>
         <div className="toolbar valuation-filters">
           <div className="valuation-portfolio-filter">
-            <PortfolioPicker value={portfolioId} onChange={setPortfolioId} onError={setError} autoSelectFirst={false} />
+            <label className="field picker-field">
+              <span>Portfolio</span>
+              <select className="select" value={portfolioId} onChange={(event) => setPortfolioId(event.target.value)}>
+                <option value="">All portfolios</option>
+                {portfolios.map((portfolio) => (
+                  <option key={portfolio.id} value={portfolio.id}>
+                    {portfolio.name} · {portfolio.baseCurrency} · {portfolio.positionCount} positions
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <label className="field compact-field">
             <span>Run type</span>

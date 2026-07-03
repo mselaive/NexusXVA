@@ -160,5 +160,7 @@ Provider outages, refresh failures, timeouts, or malformed internal provider dat
 
 ## Current Currency Rule
 
-NexusXVA portfolio pricing V1 accepts only USD portfolios and USD market data.
-FX is a future milestone, so Blemberg should return USD pricing inputs for the current watchlist.
+NexusXVA portfolio pricing converts market-data currency into the portfolio `baseCurrency`.
+Blemberg pricing inputs must keep returning the instrument `currency`; NexusXVA uses its `marketdata` FX boundary to convert portfolio values.
+
+Blemberg should add an FX-rate contract as the next market-data capability so NexusXVA can replace its local/demo FX provider.

@@ -4,6 +4,9 @@ import com.nexusxva.auth.application.FeaturePermissionCode;
 import com.nexusxva.auth.application.UserAccessService;
 import com.nexusxva.auth.domain.AuthSession;
 import com.nexusxva.auth.infrastructure.AuthSessionFilter;
+import com.nexusxva.audit.application.AuditEventCommand;
+import com.nexusxva.audit.application.AuditService;
+import com.nexusxva.audit.domain.AuditOutcome;
 import com.nexusxva.cva.application.CvaCalculationResult;
 import com.nexusxva.cva.application.CvaCalculationService;
 import com.nexusxva.cva.application.CvaNettingSetCalculationResult;
@@ -32,19 +35,22 @@ public class CvaController {
     private final UserAccessService userAccessService;
     private final ValuationRunService valuationRunService;
     private final XvaReferenceDataService xvaReferenceDataService;
+    private final AuditService auditService;
 
     public CvaController(
             CvaCalculationService cvaCalculationService,
             CvaNettingSetCalculationService cvaNettingSetCalculationService,
             UserAccessService userAccessService,
             ValuationRunService valuationRunService,
-            XvaReferenceDataService xvaReferenceDataService
+            XvaReferenceDataService xvaReferenceDataService,
+            AuditService auditService
     ) {
         this.cvaCalculationService = cvaCalculationService;
         this.cvaNettingSetCalculationService = cvaNettingSetCalculationService;
         this.userAccessService = userAccessService;
         this.valuationRunService = valuationRunService;
         this.xvaReferenceDataService = xvaReferenceDataService;
+        this.auditService = auditService;
     }
 
     @PostMapping("/cva")
@@ -67,6 +73,19 @@ public class CvaController {
                     response,
                     cvaSummary(response)
             );
+            auditService.record(AuditEventCommand.of(
+                    "CVA_RUN",
+                    "XVA",
+                    "RUN_CVA",
+                    AuditOutcome.SUCCESS,
+                    currentSession(servletRequest),
+                    servletRequest,
+                    200,
+                    "PORTFOLIO",
+                    request.portfolioId(),
+                    "Portfolio CVA requested",
+                    auditService.metadata(cvaSummary(response))
+            ));
             return response;
         } catch (RuntimeException exception) {
             if (!(exception instanceof ResourceNotFoundException)) {
@@ -94,12 +113,38 @@ public class CvaController {
                 .portfolios()
                 .forEach(portfolio -> userAccessService.requirePortfolioAccess(servletRequest, portfolio.portfolioId()));
         CvaNettingSetCalculationResult result = cvaNettingSetCalculationService.calculate(request.toCommand());
-        return CvaNettingSetCalculationResponse.from(result);
+        CvaNettingSetCalculationResponse response = CvaNettingSetCalculationResponse.from(result);
+        auditService.record(AuditEventCommand.of(
+                "NETTING_SET_CVA_RUN",
+                "XVA",
+                "RUN_NETTING_SET_CVA",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "NETTING_SET",
+                request.nettingSetId(),
+                "Netting set CVA requested",
+                auditService.metadata(nettingSetCvaSummary(response))
+        ));
+        return response;
     }
 
     private Map<String, Object> cvaSummary(CvaCalculationResponse response) {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("cva", response.cva());
+        summary.put("exposureModel", response.exposureModel());
+        summary.put("creditMethod", response.creditMethod());
+        summary.put("discountMethod", response.discountMethod());
+        summary.put("points", response.points().size());
+        return summary;
+    }
+
+    private Map<String, Object> nettingSetCvaSummary(CvaNettingSetCalculationResponse response) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("cva", response.cva());
+        summary.put("counterpartyId", response.counterpartyId());
+        summary.put("portfolioCount", response.portfolioCount());
         summary.put("exposureModel", response.exposureModel());
         summary.put("creditMethod", response.creditMethod());
         summary.put("discountMethod", response.discountMethod());

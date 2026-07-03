@@ -1,5 +1,8 @@
 package com.nexusxva.eod.api;
 
+import com.nexusxva.audit.application.AuditEventCommand;
+import com.nexusxva.audit.application.AuditService;
+import com.nexusxva.audit.domain.AuditOutcome;
 import com.nexusxva.auth.domain.AuthSession;
 import com.nexusxva.auth.infrastructure.AuthSessionFilter;
 import com.nexusxva.eod.application.PortfolioEodService;
@@ -29,21 +32,46 @@ public class BackOfficeEodController {
     private final PortfolioEodService service;
     private final PortfolioEodBatchService batchService;
     private final PortfolioStore portfolioStore;
+    private final AuditService auditService;
 
     public BackOfficeEodController(
             PortfolioEodService service,
             PortfolioEodBatchService batchService,
-            PortfolioStore portfolioStore
+            PortfolioStore portfolioStore,
+            AuditService auditService
     ) {
         this.service = service;
         this.batchService = batchService;
         this.portfolioStore = portfolioStore;
+        this.auditService = auditService;
     }
 
     @PostMapping("/run")
-    public EodBatchResponse captureAll(@RequestBody(required = false) CapturePortfolioEodRequest request) {
+    public EodBatchResponse captureAll(
+            @RequestBody(required = false) CapturePortfolioEodRequest request,
+            HttpServletRequest servletRequest
+    ) {
         LocalDate businessDate = request == null ? null : request.businessDate();
-        return EodBatchResponse.from(batchService.captureAll(businessDate, "MANUAL_BO_BATCH"));
+        EodBatchResponse response = EodBatchResponse.from(batchService.captureAll(businessDate, "MANUAL_BO_BATCH"));
+        auditService.record(AuditEventCommand.of(
+                "EOD_BATCH_STARTED",
+                "BACK_OFFICE",
+                "RUN_EOD_BATCH",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "EOD_BATCH",
+                null,
+                "BO ran EOD batch",
+                auditService.metadata(java.util.Map.of(
+                        "businessDate", response.businessDate(),
+                        "captured", response.captured(),
+                        "skipped", response.skipped(),
+                        "failed", response.failed()
+                ))
+        ));
+        return response;
     }
 
     @GetMapping("/portfolios")
@@ -87,11 +115,25 @@ public class BackOfficeEodController {
             HttpServletRequest servletRequest
     ) {
         AuthSession session = currentSession(servletRequest);
-        return PortfolioEodSnapshotResponse.from(service.voidRun(
+        PortfolioEodSnapshotResponse response = PortfolioEodSnapshotResponse.from(service.voidRun(
                 runId,
                 session == null ? null : session.user().id(),
                 request.reason()
         ));
+        auditService.record(AuditEventCommand.of(
+                "EOD_RUN_VOIDED",
+                "BACK_OFFICE",
+                "VOID_EOD_RUN",
+                AuditOutcome.SUCCESS,
+                session,
+                servletRequest,
+                200,
+                "EOD_RUN",
+                runId,
+                "EOD run voided",
+                auditService.metadata(java.util.Map.of("portfolioId", response.portfolioId(), "businessDate", response.businessDate()))
+        ));
+        return response;
     }
 
     @PostMapping("/runs/{runId}/recapture")
@@ -102,11 +144,25 @@ public class BackOfficeEodController {
             HttpServletRequest servletRequest
     ) {
         AuthSession session = currentSession(servletRequest);
-        return PortfolioEodSnapshotResponse.from(service.recapture(
+        PortfolioEodSnapshotResponse response = PortfolioEodSnapshotResponse.from(service.recapture(
                 runId,
                 session == null ? null : session.user().id(),
                 request.reason()
         ));
+        auditService.record(AuditEventCommand.of(
+                "EOD_RUN_RECAPTURED",
+                "BACK_OFFICE",
+                "RECAPTURE_EOD_RUN",
+                AuditOutcome.SUCCESS,
+                session,
+                servletRequest,
+                201,
+                "EOD_RUN",
+                runId,
+                "EOD run recaptured",
+                auditService.metadata(java.util.Map.of("newRunId", response.id(), "portfolioId", response.portfolioId(), "businessDate", response.businessDate()))
+        ));
+        return response;
     }
 
     private AuthSession currentSession(HttpServletRequest request) {

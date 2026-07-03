@@ -120,6 +120,7 @@ class PortfolioDailyPnlServiceTest {
                 "TEST",
                 List.of(new PositionEodSnapshot(
                         EXISTING_POSITION,
+                        "EUROPEAN_OPTION",
                         "AAPL",
                         1.0,
                         100.0,

@@ -2,8 +2,10 @@ package com.nexusxva.tradelifecycle.application;
 
 import com.nexusxva.marketdata.application.MarketDataValidationService;
 import com.nexusxva.notifications.application.NotificationService;
+import com.nexusxva.portfolio.application.AddCashEquityPositionCommand;
 import com.nexusxva.portfolio.application.AddEuropeanOptionPositionCommand;
 import com.nexusxva.portfolio.application.PortfolioStore;
+import com.nexusxva.portfolio.domain.CashEquityPosition;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.portfolio.domain.Portfolio;
 import com.nexusxva.portfolio.domain.PositionLifecycleStatus;
@@ -11,6 +13,7 @@ import com.nexusxva.shared.error.ConflictException;
 import com.nexusxva.shared.error.ResourceNotFoundException;
 import com.nexusxva.tradebooking.domain.BookingActor;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequest;
+import com.nexusxva.tradelifecycle.domain.TradeLifecycleInstrumentType;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequestStatus;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequestType;
 import java.time.Duration;
@@ -52,6 +55,12 @@ public class TradeLifecycleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Position not found"));
     }
 
+    @Transactional(readOnly = true)
+    public CashEquityPosition cashEquityPosition(UUID positionId) {
+        return portfolioStore.findCashEquityPosition(positionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cash equity position not found"));
+    }
+
     @Transactional
     public TradeLifecycleRequest submitAmend(
             UUID positionId,
@@ -72,6 +81,35 @@ public class TradeLifecycleService {
     @Transactional
     public TradeLifecycleRequest submitCancel(UUID positionId, BookingActor submittedBy) {
         EuropeanOptionPosition position = activePosition(positionId);
+        Portfolio portfolio = portfolio(position.portfolioId());
+        if (lifecycleStore.existsPendingForPosition(positionId)) {
+            throw new ConflictException("Position already has a pending lifecycle request");
+        }
+        TradeLifecycleRequest request = lifecycleStore.createCancel(position, portfolio.name(), submittedBy);
+        notificationService.notifyLifecycleSubmitted(request);
+        return request;
+    }
+
+    @Transactional
+    public TradeLifecycleRequest submitCashEquityAmend(
+            UUID positionId,
+            AddCashEquityPositionCommand requestedTerms,
+            BookingActor submittedBy
+    ) {
+        CashEquityPosition position = activeCashEquityPosition(positionId);
+        Portfolio portfolio = portfolio(position.portfolioId());
+        if (lifecycleStore.existsPendingForPosition(positionId)) {
+            throw new ConflictException("Position already has a pending lifecycle request");
+        }
+        marketDataValidationService.validateUnderlyingSymbol(requestedTerms.underlyingSymbol());
+        TradeLifecycleRequest request = lifecycleStore.createAmend(position, portfolio.name(), requestedTerms, submittedBy);
+        notificationService.notifyLifecycleSubmitted(request);
+        return request;
+    }
+
+    @Transactional
+    public TradeLifecycleRequest submitCashEquityCancel(UUID positionId, BookingActor submittedBy) {
+        CashEquityPosition position = activeCashEquityPosition(positionId);
         Portfolio portfolio = portfolio(position.portfolioId());
         if (lifecycleStore.existsPendingForPosition(positionId)) {
             throw new ConflictException("Position already has a pending lifecycle request");
@@ -129,6 +167,10 @@ public class TradeLifecycleService {
     public TradeLifecycleRequest approve(UUID requestId, BookingActor reviewer) {
         TradeLifecycleRequest request = lifecycleStore.findByIdForUpdate(requestId);
         ensurePending(request);
+        if (request.instrumentType() == TradeLifecycleInstrumentType.CASH_EQUITY) {
+            return approveCashEquity(requestId, request, reviewer);
+        }
+
         EuropeanOptionPosition position = activePosition(request.positionId());
 
         if (request.requestType() == TradeLifecycleRequestType.CANCEL) {
@@ -148,6 +190,30 @@ public class TradeLifecycleService {
                         request.requestedMaturityDate(),
                         request.requestedQuantity(),
                         position.executionPrice()
+                )
+        );
+        TradeLifecycleRequest reviewed = lifecycleStore.approve(requestId, reviewer, replacement.id());
+        notificationService.notifyLifecycleReviewed(reviewed);
+        return reviewed;
+    }
+
+    private TradeLifecycleRequest approveCashEquity(UUID requestId, TradeLifecycleRequest request, BookingActor reviewer) {
+        CashEquityPosition position = activeCashEquityPosition(request.positionId());
+
+        if (request.requestType() == TradeLifecycleRequestType.CANCEL) {
+            portfolioStore.markCashEquityPositionCancelled(position.id());
+            TradeLifecycleRequest reviewed = lifecycleStore.approve(requestId, reviewer, null);
+            notificationService.notifyLifecycleReviewed(reviewed);
+            return reviewed;
+        }
+
+        portfolioStore.markCashEquityPositionAmended(position.id());
+        CashEquityPosition replacement = portfolioStore.addCashEquityPosition(
+                position.portfolioId(),
+                new AddCashEquityPositionCommand(
+                        request.requestedUnderlyingSymbol(),
+                        request.requestedQuantity(),
+                        request.requestedExecutionPrice()
                 )
         );
         TradeLifecycleRequest reviewed = lifecycleStore.approve(requestId, reviewer, replacement.id());
@@ -175,6 +241,14 @@ public class TradeLifecycleService {
         EuropeanOptionPosition position = position(positionId);
         if (position.lifecycleStatus() != PositionLifecycleStatus.ACTIVE) {
             throw new ConflictException("Position is not active");
+        }
+        return position;
+    }
+
+    private CashEquityPosition activeCashEquityPosition(UUID positionId) {
+        CashEquityPosition position = cashEquityPosition(positionId);
+        if (position.lifecycleStatus() != PositionLifecycleStatus.ACTIVE) {
+            throw new ConflictException("Cash equity position is not active");
         }
         return position;
     }

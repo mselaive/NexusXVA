@@ -493,9 +493,10 @@ They are a stateless valuation for one date and one set of market inputs.
 
 ---
 
-## 26. Why V1 prices only USD portfolios
+## 26. FX And Portfolio Base Currency
 
-A portfolio can have a `baseCurrency`, but correctly pricing multiple currencies requires **FX conversion**.
+A portfolio has a `baseCurrency`, which is the reporting currency for portfolio totals.
+Market data can arrive in a different currency, so NexusXVA converts monetary values through the `marketdata` FX boundary.
 
 Example:
 
@@ -509,10 +510,9 @@ We cannot directly add:
 ```
 
 To do it correctly we need an FX rate, such as EUR/USD, and a clear conversion policy.
-Because that is not implemented yet, portfolio pricing V1 accepts only `USD` portfolios and `USD` market data.
 
-This avoids returning incorrect totals.
-It does not mean NexusXVA can only store USD portfolios; it means the current portfolio pricing endpoint only calculates USD totals until FX is implemented.
+FX V1 now converts prices, P&L, exposure, and CVA into the portfolio `baseCurrency`.
+The local FX provider is deterministic demo data. A full production model still needs real FX rates from Blemberg or another market-data adapter, persisted FX curves if required, and possibly FX risk analytics.
 
 ---
 
@@ -640,7 +640,7 @@ The first version focuses on:
 * Calculating the theoretical price using Black-Scholes.
 * Calculating the main Greeks.
 * Returning a clear result.
-* Pricing USD portfolios with persisted European option positions using market-data inputs.
+* Pricing portfolios with persisted positions using market-data inputs and FX conversion into the portfolio base currency.
 * Simulating exposure profiles.
 * Calculating simplified CVA from exposure and flat credit assumptions.
 

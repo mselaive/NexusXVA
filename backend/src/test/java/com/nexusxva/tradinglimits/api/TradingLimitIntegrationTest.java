@@ -141,15 +141,22 @@ class TradingLimitIntegrationTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
-    void activeNotionalLimitRejectsNonUsdPortfolio() throws Exception {
+    void activeNotionalLimitConvertsNonUsdPortfolioUsageToUsd() throws Exception {
         AuthClient client = selectGroup(login(), "BO");
         configurePolicy(client, null, null, "1000", "5000", true);
         client = selectGroup(client, "FO");
         String portfolioId = createPortfolio(client, "EUR Limit Book", "EUR");
 
         submitBooking(client, portfolioId, "AAPL", "100", "1")
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").value("Active notional limits support USD portfolios only"));
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.bookingNotional").value(109.0));
+
+        BigDecimal storedNotional = jdbcTemplate.queryForObject(
+                "SELECT booking_notional FROM trade_booking_requests WHERE portfolio_id = ?",
+                BigDecimal.class,
+                UUID.fromString(portfolioId)
+        );
+        assertThat(storedNotional).isEqualByComparingTo("109.0");
     }
 
     @Test

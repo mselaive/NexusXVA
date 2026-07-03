@@ -134,6 +134,7 @@ class TradeBookingEntity {
             UUID portfolioId,
             String portfolioName,
             CreateEuropeanOptionBookingCommand command,
+            BigDecimal bookingNotional,
             BookingActor submittedBy
     ) {
         TradeBookingEntity entity = new TradeBookingEntity();
@@ -148,7 +149,7 @@ class TradeBookingEntity {
         entity.maturityDate = command.maturityDate();
         entity.quantity = command.quantity();
         entity.executionPrice = command.executionPrice();
-        entity.bookingNotional = command.quantity().abs().multiply(command.strike());
+        entity.bookingNotional = bookingNotional;
         entity.status = TradeBookingStatus.PENDING_VALIDATION;
         entity.submittedByUserId = submittedBy.userId();
         entity.submittedByUsername = submittedBy.username();
@@ -161,6 +162,7 @@ class TradeBookingEntity {
             UUID portfolioId,
             String portfolioName,
             CreateCashEquityBookingCommand command,
+            BigDecimal bookingNotional,
             BookingActor submittedBy
     ) {
         TradeBookingEntity entity = new TradeBookingEntity();
@@ -175,7 +177,7 @@ class TradeBookingEntity {
         entity.maturityDate = null;
         entity.quantity = command.quantity();
         entity.executionPrice = command.executionPrice();
-        entity.bookingNotional = command.bookingNotional();
+        entity.bookingNotional = bookingNotional;
         entity.status = TradeBookingStatus.PENDING_VALIDATION;
         entity.submittedByUserId = submittedBy.userId();
         entity.submittedByUsername = submittedBy.username();
@@ -189,6 +191,7 @@ class TradeBookingEntity {
             String portfolioName,
             CreateOptionStrategyBookingCommand command,
             UUID strategyId,
+            BigDecimal bookingNotional,
             BookingActor submittedBy
     ) {
         TradeBookingEntity entity = new TradeBookingEntity();
@@ -207,7 +210,7 @@ class TradeBookingEntity {
         entity.maturityDate = firstLeg.maturityDate();
         entity.quantity = firstLeg.quantity();
         entity.executionPrice = null;
-        entity.bookingNotional = command.bookingNotional();
+        entity.bookingNotional = bookingNotional;
         entity.strategyLegsJson = writeLegs(command);
         entity.status = TradeBookingStatus.PENDING_VALIDATION;
         entity.submittedByUserId = submittedBy.userId();

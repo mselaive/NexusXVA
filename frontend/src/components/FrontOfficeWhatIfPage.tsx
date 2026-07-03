@@ -55,6 +55,7 @@ export function FrontOfficeWhatIfPage() {
   const [tradeForm, setTradeForm] = React.useState(initialTradeFormFromUrl);
   const [result, setResult] = React.useState<FrontOfficeWhatIfResponse | null>(null);
   const [analyzedTrade, setAnalyzedTrade] = React.useState<AddEuropeanOptionPositionRequest | null>(null);
+  const [analyzedValuationDate, setAnalyzedValuationDate] = React.useState<string | null>(null);
   const [activeNotebookId, setActiveNotebookId] = React.useState(() => notebookIdForSymbol("AAPL"));
   const [marketSnapshots, setMarketSnapshots] = React.useState<BlembergMarketSnapshot[]>([]);
   const [missingSymbols, setMissingSymbols] = React.useState<string[]>([]);
@@ -64,6 +65,8 @@ export function FrontOfficeWhatIfPage() {
   const [loading, setLoading] = React.useState(false);
   const marketSnapshotBySymbol = new Map(marketSnapshots.map((snapshot) => [snapshot.symbol.toUpperCase(), snapshot]));
   const selectedSnapshot = marketSnapshotBySymbol.get(tradeForm.underlyingSymbol.toUpperCase());
+  const currentTrade = toTradeRequest(tradeForm);
+  const analysisStale = Boolean(result && analyzedTrade && analyzedValuationDate && tradeKey(currentTrade, valuationDate) !== tradeKey(analyzedTrade, analyzedValuationDate));
 
   React.useEffect(() => {
     void loadMarketSnapshots();
@@ -129,17 +132,12 @@ export function FrontOfficeWhatIfPage() {
       setError("Select a portfolio first.");
       return;
     }
-    const trade: AddEuropeanOptionPositionRequest = {
-      underlyingSymbol: tradeForm.underlyingSymbol.trim().toUpperCase(),
-      optionType: tradeForm.optionType,
-      strike: Number(tradeForm.strike),
-      maturityDate: tradeForm.maturityDate,
-      quantity: Number(tradeForm.quantity),
-    };
+    const trade = toTradeRequest(tradeForm);
     setLoading(true);
     setError(null);
     setResult(null);
     setAnalyzedTrade(null);
+    setAnalyzedValuationDate(null);
     try {
       setResult(await nexusApi.runFrontOfficeWhatIf({
         portfolioId: selectedId,
@@ -147,6 +145,7 @@ export function FrontOfficeWhatIfPage() {
         trade,
       }));
       setAnalyzedTrade(trade);
+      setAnalyzedValuationDate(valuationDate);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -228,7 +227,13 @@ export function FrontOfficeWhatIfPage() {
             </div>
           </div>
           {result && analyzedTrade ? (
-            <WhatIfResult result={result} bookingUrl={upadUrl(result.portfolioId, analyzedTrade)} trade={analyzedTrade} snapshot={selectedSnapshot} />
+            <WhatIfResult
+              result={result}
+              bookingUrl={upadUrl(result.portfolioId, analyzedTrade)}
+              trade={analyzedTrade}
+              snapshot={selectedSnapshot}
+              stale={analysisStale}
+            />
           ) : (
             <EmptyWhatIf />
           )}
@@ -243,14 +248,21 @@ function WhatIfResult({
   bookingUrl,
   trade,
   snapshot,
+  stale,
 }: {
   result: FrontOfficeWhatIfResponse;
   bookingUrl: string;
   trade: AddEuropeanOptionPositionRequest;
   snapshot?: BlembergMarketSnapshot;
+  stale: boolean;
 }) {
   return (
     <div className="whatif-result-stack">
+      {stale ? (
+        <div className="mini-alert">
+          Ticket inputs changed after this run. Run Analysis again before sending to u-Pad.
+        </div>
+      ) : null}
       <StrikeContextCard
         optionType={trade.optionType}
         strike={trade.strike}
@@ -289,10 +301,17 @@ function WhatIfResult({
           <strong>Ready to book?</strong>
           <span>Send the analyzed ticket to u-Pad, review it, then submit it to BO validation.</span>
         </div>
-        <a className="btn" href={bookingUrl}>
-          <Send size={16} />
-          Send to u-Pad
-        </a>
+        {stale ? (
+          <span className="btn disabled" aria-disabled="true">
+            <Send size={16} />
+            Send to u-Pad
+          </span>
+        ) : (
+          <a className="btn" href={bookingUrl}>
+            <Send size={16} />
+            Send to u-Pad
+          </a>
+        )}
       </div>
     </div>
   );
@@ -535,6 +554,27 @@ function initialTradeFormFromUrl() {
     maturityDate: params.get("maturityDate") ?? fallback.maturityDate,
     quantity: params.get("quantity") ?? fallback.quantity,
   };
+}
+
+function toTradeRequest(tradeForm: ReturnType<typeof initialTradeFormFromUrl>): AddEuropeanOptionPositionRequest {
+  return {
+    underlyingSymbol: tradeForm.underlyingSymbol.trim().toUpperCase(),
+    optionType: tradeForm.optionType,
+    strike: Number(tradeForm.strike),
+    maturityDate: tradeForm.maturityDate,
+    quantity: Number(tradeForm.quantity),
+  };
+}
+
+function tradeKey(trade: AddEuropeanOptionPositionRequest, valuationDate: string) {
+  return [
+    valuationDate,
+    trade.underlyingSymbol,
+    trade.optionType,
+    trade.strike,
+    trade.maturityDate,
+    trade.quantity,
+  ].join("|");
 }
 
 function notebookIdForSymbol(symbol: string) {

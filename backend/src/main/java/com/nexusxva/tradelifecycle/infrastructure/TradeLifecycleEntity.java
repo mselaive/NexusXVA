@@ -1,9 +1,12 @@
 package com.nexusxva.tradelifecycle.infrastructure;
 
 import com.nexusxva.instruments.domain.OptionType;
+import com.nexusxva.portfolio.application.AddCashEquityPositionCommand;
 import com.nexusxva.portfolio.application.AddEuropeanOptionPositionCommand;
+import com.nexusxva.portfolio.domain.CashEquityPosition;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.tradebooking.domain.BookingActor;
+import com.nexusxva.tradelifecycle.domain.TradeLifecycleInstrumentType;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequest;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequestStatus;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequestType;
@@ -36,6 +39,10 @@ class TradeLifecycleEntity {
     private UUID positionId;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "instrument_type", nullable = false, length = 32)
+    private TradeLifecycleInstrumentType instrumentType;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "request_type", nullable = false, length = 16)
     private TradeLifecycleRequestType requestType;
 
@@ -59,6 +66,9 @@ class TradeLifecycleEntity {
     @Column(name = "original_quantity", nullable = false, precision = 19, scale = 8)
     private BigDecimal originalQuantity;
 
+    @Column(name = "original_execution_price", precision = 19, scale = 8)
+    private BigDecimal originalExecutionPrice;
+
     @Column(name = "requested_underlying_symbol", length = 32)
     private String requestedUnderlyingSymbol;
 
@@ -74,6 +84,9 @@ class TradeLifecycleEntity {
 
     @Column(name = "requested_quantity", precision = 19, scale = 8)
     private BigDecimal requestedQuantity;
+
+    @Column(name = "requested_execution_price", precision = 19, scale = 8)
+    private BigDecimal requestedExecutionPrice;
 
     @Column(name = "submitted_by_user_id")
     private UUID submittedByUserId;
@@ -117,12 +130,26 @@ class TradeLifecycleEntity {
             AddEuropeanOptionPositionCommand requested,
             BookingActor submittedBy
     ) {
-        TradeLifecycleEntity entity = base(original, portfolioName, TradeLifecycleRequestType.AMEND, submittedBy);
+        TradeLifecycleEntity entity = optionBase(original, portfolioName, TradeLifecycleRequestType.AMEND, submittedBy);
         entity.requestedUnderlyingSymbol = requested.underlyingSymbol();
         entity.requestedOptionType = requested.optionType();
         entity.requestedStrike = requested.strike();
         entity.requestedMaturityDate = requested.maturityDate();
         entity.requestedQuantity = requested.quantity();
+        entity.requestedExecutionPrice = requested.executionPrice();
+        return entity;
+    }
+
+    static TradeLifecycleEntity amend(
+            CashEquityPosition original,
+            String portfolioName,
+            AddCashEquityPositionCommand requested,
+            BookingActor submittedBy
+    ) {
+        TradeLifecycleEntity entity = cashBase(original, portfolioName, TradeLifecycleRequestType.AMEND, submittedBy);
+        entity.requestedUnderlyingSymbol = requested.underlyingSymbol();
+        entity.requestedQuantity = requested.quantity();
+        entity.requestedExecutionPrice = requested.executionPrice();
         return entity;
     }
 
@@ -131,20 +158,24 @@ class TradeLifecycleEntity {
             String portfolioName,
             BookingActor submittedBy
     ) {
-        return base(original, portfolioName, TradeLifecycleRequestType.CANCEL, submittedBy);
+        return optionBase(original, portfolioName, TradeLifecycleRequestType.CANCEL, submittedBy);
     }
 
-    private static TradeLifecycleEntity base(
+    static TradeLifecycleEntity cancel(
+            CashEquityPosition original,
+            String portfolioName,
+            BookingActor submittedBy
+    ) {
+        return cashBase(original, portfolioName, TradeLifecycleRequestType.CANCEL, submittedBy);
+    }
+
+    private static TradeLifecycleEntity optionBase(
             EuropeanOptionPosition original,
             String portfolioName,
             TradeLifecycleRequestType type,
             BookingActor submittedBy
     ) {
-        TradeLifecycleEntity entity = new TradeLifecycleEntity();
-        entity.id = UUID.randomUUID();
-        entity.portfolioId = original.portfolioId();
-        entity.portfolioName = portfolioName;
-        entity.positionId = original.id();
+        TradeLifecycleEntity entity = base(original.portfolioId(), portfolioName, original.id(), TradeLifecycleInstrumentType.EUROPEAN_OPTION, type, submittedBy);
         entity.requestType = type;
         entity.status = TradeLifecycleRequestStatus.PENDING_VALIDATION;
         entity.originalUnderlyingSymbol = original.underlyingSymbol();
@@ -152,6 +183,39 @@ class TradeLifecycleEntity {
         entity.originalStrike = original.strike();
         entity.originalMaturityDate = original.maturityDate();
         entity.originalQuantity = original.quantity();
+        entity.originalExecutionPrice = original.executionPrice();
+        return entity;
+    }
+
+    private static TradeLifecycleEntity cashBase(
+            CashEquityPosition original,
+            String portfolioName,
+            TradeLifecycleRequestType type,
+            BookingActor submittedBy
+    ) {
+        TradeLifecycleEntity entity = base(original.portfolioId(), portfolioName, original.id(), TradeLifecycleInstrumentType.CASH_EQUITY, type, submittedBy);
+        entity.originalUnderlyingSymbol = original.underlyingSymbol();
+        entity.originalQuantity = original.quantity();
+        entity.originalExecutionPrice = original.executionPrice();
+        return entity;
+    }
+
+    private static TradeLifecycleEntity base(
+            UUID portfolioId,
+            String portfolioName,
+            UUID positionId,
+            TradeLifecycleInstrumentType instrumentType,
+            TradeLifecycleRequestType type,
+            BookingActor submittedBy
+    ) {
+        TradeLifecycleEntity entity = new TradeLifecycleEntity();
+        entity.id = UUID.randomUUID();
+        entity.portfolioId = portfolioId;
+        entity.portfolioName = portfolioName;
+        entity.positionId = positionId;
+        entity.instrumentType = instrumentType;
+        entity.requestType = type;
+        entity.status = TradeLifecycleRequestStatus.PENDING_VALIDATION;
         entity.submittedByUserId = submittedBy.userId();
         entity.submittedByUsername = submittedBy.username();
         entity.submittedByDisplayName = submittedBy.displayName();
@@ -185,6 +249,7 @@ class TradeLifecycleEntity {
                 portfolioId,
                 portfolioName,
                 positionId,
+                instrumentType,
                 requestType,
                 status,
                 originalUnderlyingSymbol,
@@ -192,11 +257,13 @@ class TradeLifecycleEntity {
                 originalStrike,
                 originalMaturityDate,
                 originalQuantity,
+                originalExecutionPrice,
                 requestedUnderlyingSymbol,
                 requestedOptionType,
                 requestedStrike,
                 requestedMaturityDate,
                 requestedQuantity,
+                requestedExecutionPrice,
                 actor(submittedByUserId, submittedByUsername, submittedByDisplayName),
                 submittedAt,
                 actor(reviewedByUserId, reviewedByUsername, reviewedByDisplayName),

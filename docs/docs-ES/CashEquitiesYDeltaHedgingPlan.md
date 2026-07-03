@@ -173,7 +173,7 @@ Delta Hedge aparece como herramienta FO:
 - No hacer que una accion tenga `strike` o `maturityDate`.
 - No permitir que pricing de opciones dependa de snapshots crudos de frontend.
 - No convertir delta hedge en auto-booking; siempre debe pasar por FO ticket y BO approval.
-- No introducir FX en este slice. V1 sigue USD-only.
+- Nota historica: este slice se diseño antes de FX V1. El estado actual ya convierte pricing/reporting hacia la moneda base del portfolio mediante `marketdata`.
 
 ## Pendientes Recomendados
 

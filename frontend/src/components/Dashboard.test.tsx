@@ -275,6 +275,35 @@ function mockFetch() {
       });
     }
 
+    if (url === "/nexus-api/front-office/reports/desk-pnl" && !init?.method) {
+      return json({
+        valuationDate: "2026-06-20",
+        generatedAt: "2026-06-20T12:00:00Z",
+        portfolios: [
+          {
+            portfolioId: "portfolio-1",
+            portfolioName: "Demo Book",
+            baseCurrency: "USD",
+            positionCount: 1,
+            latestEodDate: "2026-06-19",
+            status: "OK",
+            currentMarketValue: 123.45,
+            dailyPnl: 10,
+            sinceTradePnl: 23.45,
+            optionDailyPnl: 10,
+            cashEquityDailyPnl: 0,
+            optionSinceTradePnl: 23.45,
+            cashEquitySinceTradePnl: 0,
+            pendingBookings: 1,
+            rejectedBookings: 1,
+            pendingLifecycleRequests: 1,
+            rejectedLifecycleRequests: 0,
+            errorMessage: null,
+          },
+        ],
+      });
+    }
+
     if (url === "/nexus-api/front-office/what-if/european-option" && init?.method === "POST") {
       return json({
         portfolioId: "portfolio-1",

@@ -1606,11 +1606,24 @@ a {
   grid-template-columns: minmax(620px, 1.35fr) minmax(420px, 0.95fr);
 }
 
+.admin-workflow-stack.visual {
+  display: grid;
+  gap: 14px;
+}
+
 .admin-user-list-panel,
 .admin-detail-panel,
 .workflow-map-panel,
 .workflow-detail-panel {
   min-height: 640px;
+}
+
+.admin-workflow-stack.visual .workflow-map-panel {
+  min-height: auto;
+}
+
+.admin-workflow-stack.visual .workflow-detail-panel {
+  min-height: 360px;
 }
 
 .admin-search {
@@ -2119,6 +2132,27 @@ a {
   line-height: 1.45;
 }
 
+.workflow-booking-table table {
+  min-width: 980px;
+}
+
+.workflow-booking-table th:first-child,
+.workflow-booking-table td:first-child {
+  min-width: 220px;
+}
+
+.workflow-booking-table th:nth-child(2),
+.workflow-booking-table td:nth-child(2) {
+  min-width: 240px;
+}
+
+.workflow-booking-table th:nth-child(4),
+.workflow-booking-table td:nth-child(4),
+.workflow-booking-table th:nth-child(5),
+.workflow-booking-table td:nth-child(5) {
+  min-width: 180px;
+}
+
 @keyframes workflowPulse {
   0%,
   100% {
@@ -2337,6 +2371,22 @@ a {
   gap: 14px;
 }
 
+.cva-scope-content {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.cva-netting-selector {
+  max-width: 520px;
+}
+
+.cva-scope-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .curve-editor-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2371,8 +2421,47 @@ a {
   line-height: 1.45;
 }
 
-.compact-curve-table input {
-  min-width: 120px;
+.curve-row-list {
+  display: grid;
+  gap: 8px;
+}
+
+.curve-row {
+  display: grid;
+  grid-template-columns: minmax(148px, 1fr) minmax(150px, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbfb;
+  padding: 9px;
+}
+
+.curve-row-head {
+  min-height: 30px;
+  border: 0;
+  background: transparent;
+  padding: 0 9px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.curve-row label {
+  display: grid;
+  gap: 5px;
+}
+
+.curve-row label span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.curve-row .icon-link {
+  width: auto;
+  padding: 0 10px;
 }
 
 .curve-actions {
@@ -2571,6 +2660,12 @@ a {
 .btn:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.btn.disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .summary-strip {
@@ -2778,6 +2873,10 @@ a {
   padding: 9px;
 }
 
+.muted-text {
+  color: var(--muted);
+}
+
 .status-chip {
   display: inline-flex;
   align-items: center;
@@ -2797,6 +2896,26 @@ a {
 .danger-chip {
   background: #fff0ed;
   color: var(--danger);
+}
+
+.warning-chip {
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.json-box {
+  max-height: 360px;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #102026;
+  color: #e5f2ef;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .json-block {
@@ -2911,6 +3030,19 @@ tr:last-child td {
 
 .table-spacing {
   margin-top: 12px;
+}
+
+.pnl-note {
+  margin-top: 12px;
+}
+
+.delta-hedge-result {
+  display: grid;
+  gap: 16px;
+}
+
+.cva-contribution-note {
+  margin-top: 10px;
 }
 
 .legend {
@@ -4188,6 +4320,10 @@ tr:last-child td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .cva-scope-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .whatif-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4272,6 +4408,15 @@ tr:last-child td {
     grid-template-columns: 1fr;
   }
 
+  .cva-scope-cards,
+  .curve-row {
+    grid-template-columns: 1fr;
+  }
+
+  .curve-row-head {
+    display: none;
+  }
+
   .hero-band {
     align-items: flex-start;
     flex-direction: column;
@@ -4300,6 +4445,7 @@ tr:last-child td {
   .limits-workspace,
   .admin-access-layout,
   .admin-workflow-layout,
+  .admin-workflow-stack,
   .admin-card-grid,
   .usage-grid,
   .portfolio-access-grid,

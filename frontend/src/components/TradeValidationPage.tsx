@@ -426,7 +426,7 @@ function LifecycleValidationView({
                 <span className={`booking-status ${request.status.toLowerCase()}`}>{request.status.replaceAll("_", " ")}</span>
                 <strong>{request.requestType} {request.originalUnderlyingSymbol}</strong>
                 <span>{request.portfolioName}</span>
-                <small>{request.originalOptionType} {formatNumber(request.originalQuantity, 2)} @ {formatNumber(request.originalStrike, 2)}</small>
+                <small>{lifecycleOriginalSummary(request)}</small>
                 <time>{new Date(request.submittedAt).toLocaleString()}</time>
               </button>
             ))}
@@ -446,10 +446,10 @@ function LifecycleValidationView({
               <ShieldCheck size={24} />
             </div>
             <div className="trade-terms-grid">
-              <Detail label="Original" value={`${selected.originalOptionType} ${formatNumber(selected.originalQuantity, 2)} @ ${formatNumber(selected.originalStrike, 2)}`} />
-              <Detail label="Original maturity" value={selected.originalMaturityDate} />
-              <Detail label="Requested" value={selected.requestType === "AMEND" ? `${selected.requestedOptionType} ${selected.requestedUnderlyingSymbol} ${formatNumber(selected.requestedQuantity ?? 0, 2)} @ ${formatNumber(selected.requestedStrike ?? 0, 2)}` : "Full cancellation"} />
-              <Detail label="Requested maturity" value={selected.requestedMaturityDate ?? "Cancel position"} />
+              <Detail label="Original" value={lifecycleOriginalSummary(selected)} />
+              <Detail label="Original maturity" value={selected.originalMaturityDate ?? "Cash equity"} />
+              <Detail label="Requested" value={selected.requestType === "AMEND" ? lifecycleRequestedSummary(selected) : "Full cancellation"} />
+              <Detail label="Requested maturity" value={selected.requestedMaturityDate ?? (selected.instrumentType === "CASH_EQUITY" ? "Cash equity" : "Cancel position")} />
             </div>
             <div className="audit-timeline">
               <AuditPoint title="Submitted by" name={selected.submittedBy.displayName || selected.submittedBy.username} date={selected.submittedAt} complete />
@@ -491,6 +491,22 @@ function filterLifecycleRequests(requests: TradeLifecycleRequest[], query: strin
     || request.portfolioName.toLowerCase().includes(normalized)
     || request.submittedBy.displayName.toLowerCase().includes(normalized)
     || request.submittedBy.username.toLowerCase().includes(normalized));
+}
+
+function lifecycleOriginalSummary(request: TradeLifecycleRequest) {
+  if (request.instrumentType === "CASH_EQUITY") {
+    const execution = request.originalExecutionPrice == null ? "execution unavailable" : `exec ${formatNumber(request.originalExecutionPrice, 4)}`;
+    return `Cash equity ${formatNumber(request.originalQuantity, 2)} shares · ${execution}`;
+  }
+  return `${request.originalOptionType} ${formatNumber(request.originalQuantity, 2)} @ ${formatNumber(request.originalStrike ?? 0, 2)}`;
+}
+
+function lifecycleRequestedSummary(request: TradeLifecycleRequest) {
+  if (request.instrumentType === "CASH_EQUITY") {
+    const execution = request.requestedExecutionPrice == null ? "execution unavailable" : `exec ${formatNumber(request.requestedExecutionPrice, 4)}`;
+    return `Cash equity ${request.requestedUnderlyingSymbol} ${formatNumber(request.requestedQuantity ?? 0, 2)} shares · ${execution}`;
+  }
+  return `${request.requestedOptionType} ${request.requestedUnderlyingSymbol} ${formatNumber(request.requestedQuantity ?? 0, 2)} @ ${formatNumber(request.requestedStrike ?? 0, 2)}`;
 }
 
 function bookingTitle(booking: TradeBooking) {

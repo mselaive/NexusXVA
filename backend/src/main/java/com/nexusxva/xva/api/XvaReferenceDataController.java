@@ -1,5 +1,8 @@
 package com.nexusxva.xva.api;
 
+import com.nexusxva.audit.application.AuditEventCommand;
+import com.nexusxva.audit.application.AuditService;
+import com.nexusxva.audit.domain.AuditOutcome;
 import com.nexusxva.auth.domain.AuthSession;
 import com.nexusxva.auth.infrastructure.AuthSessionFilter;
 import com.nexusxva.shared.error.AccessDeniedException;
@@ -22,9 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class XvaReferenceDataController {
 
     private final XvaReferenceDataService service;
+    private final AuditService auditService;
 
-    public XvaReferenceDataController(XvaReferenceDataService service) {
+    public XvaReferenceDataController(XvaReferenceDataService service, AuditService auditService) {
         this.service = service;
+        this.auditService = auditService;
     }
 
     @GetMapping("/counterparties")
@@ -38,7 +43,21 @@ public class XvaReferenceDataController {
             HttpServletRequest servletRequest
     ) {
         requireAdmin(servletRequest);
-        return CounterpartyResponse.from(service.createCounterparty(request.toCommand()));
+        CounterpartyResponse response = CounterpartyResponse.from(service.createCounterparty(request.toCommand()));
+        auditService.record(AuditEventCommand.of(
+                "XVA_COUNTERPARTY_CREATED",
+                "XVA",
+                "CREATE_COUNTERPARTY",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "COUNTERPARTY",
+                response.id(),
+                "Counterparty created",
+                auditService.metadata(java.util.Map.of("name", response.name(), "active", response.active()))
+        ));
+        return response;
     }
 
     @GetMapping("/netting-sets")
@@ -52,7 +71,21 @@ public class XvaReferenceDataController {
             HttpServletRequest servletRequest
     ) {
         requireAdmin(servletRequest);
-        return NettingSetResponse.from(service.createNettingSet(request.toCommand()));
+        NettingSetResponse response = NettingSetResponse.from(service.createNettingSet(request.toCommand()));
+        auditService.record(AuditEventCommand.of(
+                "XVA_NETTING_SET_CREATED",
+                "XVA",
+                "CREATE_NETTING_SET",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "NETTING_SET",
+                response.id(),
+                "Netting set created",
+                auditService.metadata(java.util.Map.of("name", response.name(), "counterpartyId", response.counterpartyId()))
+        ));
+        return response;
     }
 
     @PostMapping("/netting-sets/{nettingSetId}/portfolios")
@@ -62,7 +95,21 @@ public class XvaReferenceDataController {
             HttpServletRequest servletRequest
     ) {
         requireAdmin(servletRequest);
-        return NettingSetResponse.from(service.assignPortfolio(nettingSetId, request.portfolioId()));
+        NettingSetResponse response = NettingSetResponse.from(service.assignPortfolio(nettingSetId, request.portfolioId()));
+        auditService.record(AuditEventCommand.of(
+                "XVA_NETTING_SET_PORTFOLIO_ASSIGNED",
+                "XVA",
+                "ASSIGN_PORTFOLIO_TO_NETTING_SET",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "NETTING_SET",
+                nettingSetId,
+                "Portfolio assigned to netting set",
+                auditService.metadata(java.util.Map.of("portfolioId", request.portfolioId()))
+        ));
+        return response;
     }
 
     @DeleteMapping("/netting-sets/{nettingSetId}/portfolios/{portfolioId}")
@@ -72,7 +119,21 @@ public class XvaReferenceDataController {
             HttpServletRequest servletRequest
     ) {
         requireAdmin(servletRequest);
-        return NettingSetResponse.from(service.removePortfolio(nettingSetId, portfolioId));
+        NettingSetResponse response = NettingSetResponse.from(service.removePortfolio(nettingSetId, portfolioId));
+        auditService.record(AuditEventCommand.of(
+                "XVA_NETTING_SET_PORTFOLIO_REMOVED",
+                "XVA",
+                "REMOVE_PORTFOLIO_FROM_NETTING_SET",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "NETTING_SET",
+                nettingSetId,
+                "Portfolio removed from netting set",
+                auditService.metadata(java.util.Map.of("portfolioId", portfolioId))
+        ));
+        return response;
     }
 
     @PatchMapping("/netting-sets/{nettingSetId}/collateral")
@@ -82,7 +143,24 @@ public class XvaReferenceDataController {
             HttpServletRequest servletRequest
     ) {
         requireAdmin(servletRequest);
-        return NettingSetResponse.from(service.updateCollateral(nettingSetId, request.toCommand()));
+        NettingSetResponse response = NettingSetResponse.from(service.updateCollateral(nettingSetId, request.toCommand()));
+        auditService.record(AuditEventCommand.of(
+                "XVA_NETTING_SET_COLLATERAL_UPDATED",
+                "XVA",
+                "UPDATE_NETTING_SET_COLLATERAL",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "NETTING_SET",
+                nettingSetId,
+                "Netting set collateral updated",
+                auditService.metadata(java.util.Map.of(
+                        "collateralAmount", response.collateralAmount(),
+                        "collateralCurrency", response.collateralCurrency()
+                ))
+        ));
+        return response;
     }
 
     private void requireAdmin(HttpServletRequest request) {
@@ -90,5 +168,10 @@ public class XvaReferenceDataController {
         if (value instanceof AuthSession session && !"ADMIN".equals(session.activeGroup())) {
             throw new AccessDeniedException("ADMIN group required");
         }
+    }
+
+    private AuthSession currentSession(HttpServletRequest request) {
+        Object value = request.getAttribute(AuthSessionFilter.SESSION_ATTRIBUTE);
+        return value instanceof AuthSession session ? session : null;
     }
 }

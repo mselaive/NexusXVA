@@ -1,6 +1,7 @@
 package com.nexusxva.tradinglimits.application;
 
-import com.nexusxva.shared.error.ConflictException;
+import com.nexusxva.marketdata.application.FxRateService;
+import com.nexusxva.marketdata.domain.FxRate;
 import com.nexusxva.shared.error.ResourceNotFoundException;
 import com.nexusxva.tradebooking.application.CreateEuropeanOptionBookingCommand;
 import com.nexusxva.tradebooking.application.CreateCashEquityBookingCommand;
@@ -13,6 +14,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -22,29 +24,31 @@ import org.springframework.transaction.annotation.Transactional;
 public class TradingLimitService {
 
     private final TradingLimitStore store;
+    private final FxRateService fxRateService;
     private final Clock clock;
 
     @Autowired
-    public TradingLimitService(TradingLimitStore store) {
-        this(store, Clock.systemUTC());
+    public TradingLimitService(TradingLimitStore store, FxRateService fxRateService) {
+        this(store, fxRateService, Clock.systemUTC());
     }
 
-    TradingLimitService(TradingLimitStore store, Clock clock) {
+    TradingLimitService(TradingLimitStore store, FxRateService fxRateService, Clock clock) {
         this.store = store;
+        this.fxRateService = fxRateService;
         this.clock = clock;
     }
 
     @Transactional
-    public void validateBooking(
+    public BigDecimal validateBooking(
             BookingActor actor,
             String portfolioCurrency,
             CreateEuropeanOptionBookingCommand command
     ) {
-        validateBooking(actor, portfolioCurrency, 1, command.quantity().abs().multiply(command.strike()));
+        return validateBooking(actor, portfolioCurrency, 1, command.quantity().abs().multiply(command.strike()));
     }
 
     @Transactional
-    public void validateStrategyBooking(
+    public BigDecimal validateStrategyBooking(
             BookingActor actor,
             String portfolioCurrency,
             List<CreateEuropeanOptionBookingCommand> legs
@@ -52,33 +56,31 @@ public class TradingLimitService {
         BigDecimal requestedNotional = legs.stream()
                 .map(leg -> leg.quantity().abs().multiply(leg.strike()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        validateBooking(actor, portfolioCurrency, 1, requestedNotional);
+        return validateBooking(actor, portfolioCurrency, 1, requestedNotional);
     }
 
     @Transactional
-    public void validateCashEquityBooking(
+    public BigDecimal validateCashEquityBooking(
             BookingActor actor,
             String portfolioCurrency,
             CreateCashEquityBookingCommand command
     ) {
-        validateBooking(actor, portfolioCurrency, 1, command.bookingNotional() == null ? BigDecimal.ZERO : command.bookingNotional());
+        return validateBooking(actor, portfolioCurrency, 1, command.bookingNotional() == null ? BigDecimal.ZERO : command.bookingNotional());
     }
 
-    private void validateBooking(
+    private BigDecimal validateBooking(
             BookingActor actor,
             String portfolioCurrency,
             int requestedTrades,
             BigDecimal requestedNotional
     ) {
+        BigDecimal requestedNotionalUsd = convertToPolicyCurrency(portfolioCurrency, requestedNotional);
         if (actor.userId() == null) {
-            return;
+            return requestedNotionalUsd;
         }
         TradingLimitPolicy policy = store.findPolicyForUpdate(actor.userId()).orElse(null);
         if (policy == null || !policy.active()) {
-            return;
-        }
-        if (policy.hasNotionalLimit() && !"USD".equals(portfolioCurrency)) {
-            throw new ConflictException("Active notional limits support USD portfolios only");
+            return requestedNotionalUsd;
         }
 
         TradingLimitWindows windows = TradingLimitWindows.at(Instant.now(clock));
@@ -102,16 +104,28 @@ public class TradingLimitService {
                 "NOTIONAL_PER_HOUR",
                 policy.maxNotionalPerHour(),
                 usage.notionalThisHour(),
-                requestedNotional,
+                requestedNotionalUsd,
                 windows.hourEndsAt()
         );
         enforce(
                 "NOTIONAL_PER_DAY",
                 policy.maxNotionalPerDay(),
                 usage.notionalToday(),
-                requestedNotional,
+                requestedNotionalUsd,
                 windows.dayEndsAt()
         );
+        return requestedNotionalUsd;
+    }
+
+    private BigDecimal convertToPolicyCurrency(String portfolioCurrency, BigDecimal requestedNotional) {
+        String sourceCurrency = portfolioCurrency == null || portfolioCurrency.isBlank()
+                ? "USD"
+                : portfolioCurrency.trim().toUpperCase(Locale.ROOT);
+        if ("USD".equals(sourceCurrency)) {
+            return requestedNotional;
+        }
+        FxRate rate = fxRateService.rate(sourceCurrency, "USD");
+        return requestedNotional.multiply(BigDecimal.valueOf(rate.rate()));
     }
 
     @Transactional(readOnly = true)

@@ -1,5 +1,8 @@
 package com.nexusxva.portfolio.api;
 
+import com.nexusxva.audit.application.AuditEventCommand;
+import com.nexusxva.audit.application.AuditService;
+import com.nexusxva.audit.domain.AuditOutcome;
 import com.nexusxva.auth.application.FeaturePermissionCode;
 import com.nexusxva.auth.application.UserAccessService;
 import com.nexusxva.auth.domain.AuthSession;
@@ -30,10 +33,16 @@ public class PortfolioController {
 
     private final PortfolioService portfolioService;
     private final UserAccessService userAccessService;
+    private final AuditService auditService;
 
-    public PortfolioController(PortfolioService portfolioService, UserAccessService userAccessService) {
+    public PortfolioController(
+            PortfolioService portfolioService,
+            UserAccessService userAccessService,
+            AuditService auditService
+    ) {
         this.portfolioService = portfolioService;
         this.userAccessService = userAccessService;
+        this.auditService = auditService;
     }
 
     @PostMapping
@@ -44,6 +53,19 @@ public class PortfolioController {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_CREATE_PORTFOLIOS);
         Portfolio portfolio = portfolioService.createPortfolio(request.toCommand());
         userAccessService.grantCreatedPortfolioIfNeeded(servletRequest, portfolio.id());
+        auditService.record(AuditEventCommand.of(
+                "PORTFOLIO_CREATED",
+                "PORTFOLIO",
+                "CREATE_PORTFOLIO",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                201,
+                "PORTFOLIO",
+                portfolio.id(),
+                "Portfolio created",
+                auditService.metadata(java.util.Map.of("name", portfolio.name(), "baseCurrency", portfolio.baseCurrency()))
+        ));
 
         return ResponseEntity
                 .created(URI.create("/api/portfolios/" + portfolio.id()))
@@ -71,7 +93,21 @@ public class PortfolioController {
             HttpServletRequest servletRequest
     ) {
         userAccessService.requirePortfolioAccess(servletRequest, portfolioId);
-        return PortfolioResponse.from(portfolioService.updatePortfolio(portfolioId, request.toCommand()));
+        Portfolio portfolio = portfolioService.updatePortfolio(portfolioId, request.toCommand());
+        auditService.record(AuditEventCommand.of(
+                "PORTFOLIO_UPDATED",
+                "PORTFOLIO",
+                "UPDATE_PORTFOLIO",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "PORTFOLIO",
+                portfolio.id(),
+                "Portfolio updated",
+                auditService.metadata(java.util.Map.of("name", portfolio.name(), "baseCurrency", portfolio.baseCurrency()))
+        ));
+        return PortfolioResponse.from(portfolio);
     }
 
     @DeleteMapping("/{portfolioId}")
@@ -83,6 +119,19 @@ public class PortfolioController {
                 session == null ? null : session.user().id(),
                 "Archived through portfolio endpoint"
         );
+        auditService.record(AuditEventCommand.of(
+                "PORTFOLIO_ARCHIVED",
+                "PORTFOLIO",
+                "ARCHIVE_PORTFOLIO",
+                AuditOutcome.SUCCESS,
+                session,
+                servletRequest,
+                204,
+                "PORTFOLIO",
+                portfolioId,
+                "Portfolio archived",
+                auditService.metadata(java.util.Map.of("source", "portfolio endpoint"))
+        ));
         return ResponseEntity.noContent().build();
     }
 

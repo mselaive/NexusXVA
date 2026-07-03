@@ -155,6 +155,12 @@ class JpaPortfolioStore implements PortfolioStore {
     }
 
     @Override
+    public Optional<CashEquityPosition> findCashEquityPosition(UUID positionId) {
+        return cashEquityPositionJpaRepository.findById(positionId)
+                .map(CashEquityPositionEntity::toDomain);
+    }
+
+    @Override
     public void markPositionCancelled(UUID positionId) {
         EuropeanOptionPositionEntity position = findPositionEntity(positionId);
         position.markCancelled();
@@ -168,6 +174,20 @@ class JpaPortfolioStore implements PortfolioStore {
         positionJpaRepository.save(position);
     }
 
+    @Override
+    public void markCashEquityPositionCancelled(UUID positionId) {
+        CashEquityPositionEntity position = findCashEquityPositionEntity(positionId);
+        position.markCancelled();
+        cashEquityPositionJpaRepository.save(position);
+    }
+
+    @Override
+    public void markCashEquityPositionAmended(UUID positionId) {
+        CashEquityPositionEntity position = findCashEquityPositionEntity(positionId);
+        position.markAmended();
+        cashEquityPositionJpaRepository.save(position);
+    }
+
     private PortfolioEntity findPortfolioEntity(UUID portfolioId) {
         return portfolioJpaRepository.findActiveById(portfolioId)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));
@@ -176,6 +196,11 @@ class JpaPortfolioStore implements PortfolioStore {
     private EuropeanOptionPositionEntity findPositionEntity(UUID positionId) {
         return positionJpaRepository.findById(positionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Position not found"));
+    }
+
+    private CashEquityPositionEntity findCashEquityPositionEntity(UUID positionId) {
+        return cashEquityPositionJpaRepository.findById(positionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cash equity position not found"));
     }
 
 }

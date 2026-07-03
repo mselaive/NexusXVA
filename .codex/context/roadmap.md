@@ -205,7 +205,7 @@ Current notes:
 
 - Dashboard V1 lives in `frontend/`.
 - Dashboard V1 is split into workflow pages: FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA and Run History.
-- FO Desk V1 is the operational FO landing page: it aggregates visible portfolios, personal booking counts, and booking history without new persistence.
+- FO Desk V1 is the operational FO landing page: it aggregates visible portfolios, personal booking counts, booking history and a read-only P&L Snapshot without new persistence.
 - Pre-Trade Analysis V1 lets FO price one hypothetical European option against confirmed positions before preparing the ticket in `u-Pad`; it is stateless and pricing/Greeks-only.
 - Stress Testing V1 lets FO run scenario matrices over confirmed positions, optionally including one hypothetical trade; it is stateless and pricing/Greeks-only.
 - `u-Pad` submits pending bookings; BO Trade Validation decides whether they become confirmed positions.
@@ -219,10 +219,13 @@ Current notes:
 - The frontend consumes NexusXVA backend APIs for calculations. FO market-watch widgets may call `/blemberg-api/*` for cached snapshot display, but pricing, exposure, CVA, and stress calculations stay in NexusXVA backend services.
 - The frontend must not reimplement Black-Scholes, Monte Carlo, exposure aggregation, or CVA.
 - Run History V1 is implemented for pricing, exposure and CVA. It stores input/result/summary JSON plus user/group metadata for audit, not for downstream pricing.
+- Audit Trail V1 is implemented with `audit_events`, ADMIN Audit Logs, correlation ids, and explicit business events for auth, workflow, access-control, EOD, valuation and FO analysis actions.
+- Technical logs are configured through Logback with rotated system, error, auth, market-data and EOD files under `logs/backend/*` or `/app/logs` in Docker.
 - CVA UI supports both flat inputs and request-scoped credit/discount curve inputs. Curves are not persisted as master data.
 - Multi-leg option strategies and Run History V1 are implemented.
 - Lifecycle Reporting V1 is implemented for BO/FO read-only visibility over amendments and cancellations. It derives metrics from `trade_lifecycle_requests`; do not add duplicated counters for this report.
 - Cash Equities and Delta Hedge V1 are implemented. Cash equities use a separate position model, FO/BO booking, and portfolio pricing support; Delta Hedge is stateless analysis and must not auto-book hedges. See `docs/docs-ES/CashEquitiesYDeltaHedgingPlan.md`.
+- Operations Reporting V1 is implemented for BO read-only daily controls over pending bookings, pending lifecycle requests, EOD close coverage and corrected EOD runs. It derives from existing workflow/EOD tables and does not create reporting counters.
 
 ## Milestone 8: Hardening
 

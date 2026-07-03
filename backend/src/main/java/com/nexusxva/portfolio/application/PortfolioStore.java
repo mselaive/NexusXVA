@@ -45,8 +45,14 @@ public interface PortfolioStore {
 
     Optional<EuropeanOptionPosition> findEuropeanOptionPosition(UUID positionId);
 
+    Optional<CashEquityPosition> findCashEquityPosition(UUID positionId);
+
     void markPositionCancelled(UUID positionId);
 
     void markPositionAmended(UUID positionId);
+
+    void markCashEquityPositionCancelled(UUID positionId);
+
+    void markCashEquityPositionAmended(UUID positionId);
 
 }

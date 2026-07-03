@@ -1,7 +1,9 @@
 package com.nexusxva.tradelifecycle.infrastructure;
 
 import com.nexusxva.portfolio.application.AddEuropeanOptionPositionCommand;
+import com.nexusxva.portfolio.application.AddCashEquityPositionCommand;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
+import com.nexusxva.portfolio.domain.CashEquityPosition;
 import com.nexusxva.shared.error.ResourceNotFoundException;
 import com.nexusxva.tradebooking.domain.BookingActor;
 import com.nexusxva.tradelifecycle.application.TradeLifecycleStore;
@@ -39,8 +41,31 @@ class JpaTradeLifecycleStore implements TradeLifecycleStore {
     }
 
     @Override
+    public TradeLifecycleRequest createAmend(
+            CashEquityPosition originalPosition,
+            String portfolioName,
+            AddCashEquityPositionCommand requestedTerms,
+            BookingActor submittedBy
+    ) {
+        return repository.save(
+                TradeLifecycleEntity.amend(originalPosition, portfolioName, requestedTerms, submittedBy)
+        ).toDomain();
+    }
+
+    @Override
     public TradeLifecycleRequest createCancel(
             EuropeanOptionPosition originalPosition,
+            String portfolioName,
+            BookingActor submittedBy
+    ) {
+        return repository.save(
+                TradeLifecycleEntity.cancel(originalPosition, portfolioName, submittedBy)
+        ).toDomain();
+    }
+
+    @Override
+    public TradeLifecycleRequest createCancel(
+            CashEquityPosition originalPosition,
             String portfolioName,
             BookingActor submittedBy
     ) {

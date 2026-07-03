@@ -54,14 +54,15 @@ class JdbcPortfolioEodStore implements PortfolioEodStore {
         snapshot.positions().forEach(position -> jdbcTemplate.update(
                 """
                 INSERT INTO portfolio_position_eod_snapshots (
-                    run_id, position_id, underlying_symbol, quantity,
+                    run_id, position_id, instrument_type, underlying_symbol, quantity,
                     unit_price, market_value, execution_price, trade_value, unrealized_pnl,
                     market_data_as_of, market_data_source, stale
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 snapshot.id(),
                 position.positionId(),
+                position.instrumentType(),
                 position.underlyingSymbol(),
                 position.quantity(),
                 position.unitPrice(),
@@ -233,6 +234,7 @@ class JdbcPortfolioEodStore implements PortfolioEodStore {
     private PositionEodSnapshot mapPosition(ResultSet rs, int rowNum) throws SQLException {
         return new PositionEodSnapshot(
                 rs.getObject("position_id", UUID.class),
+                rs.getString("instrument_type"),
                 rs.getString("underlying_symbol"),
                 rs.getDouble("quantity"),
                 rs.getDouble("unit_price"),

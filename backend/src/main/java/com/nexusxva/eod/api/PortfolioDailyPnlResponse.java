@@ -12,7 +12,13 @@ public record PortfolioDailyPnlResponse(
         String baseCurrency,
         double currentMarketValue,
         double dailyPnl,
+        double sinceTradePnl,
+        double optionDailyPnl,
+        double cashEquityDailyPnl,
+        double optionSinceTradePnl,
+        double cashEquitySinceTradePnl,
         int positionsWithoutReference,
+        int positionsWithoutExecutionPrice,
         List<PositionDailyPnlResponse> positions
 ) {
     static PortfolioDailyPnlResponse from(PortfolioDailyPnl pnl) {
@@ -23,7 +29,13 @@ public record PortfolioDailyPnlResponse(
                 pnl.baseCurrency(),
                 pnl.currentMarketValue(),
                 pnl.dailyPnl(),
+                pnl.sinceTradePnl(),
+                pnl.optionDailyPnl(),
+                pnl.cashEquityDailyPnl(),
+                pnl.optionSinceTradePnl(),
+                pnl.cashEquitySinceTradePnl(),
                 pnl.positionsWithoutReference(),
+                pnl.positionsWithoutExecutionPrice(),
                 pnl.positions().stream().map(PositionDailyPnlResponse::from).toList()
         );
     }

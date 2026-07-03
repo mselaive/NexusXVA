@@ -2,6 +2,7 @@ package com.nexusxva.tradelifecycle.api;
 
 import com.nexusxva.instruments.domain.OptionType;
 import com.nexusxva.tradebooking.api.BookingActorResponse;
+import com.nexusxva.tradelifecycle.domain.TradeLifecycleInstrumentType;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequest;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequestStatus;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequestType;
@@ -15,6 +16,7 @@ public record TradeLifecycleResponse(
         UUID portfolioId,
         String portfolioName,
         UUID positionId,
+        TradeLifecycleInstrumentType instrumentType,
         TradeLifecycleRequestType requestType,
         TradeLifecycleRequestStatus status,
         String originalUnderlyingSymbol,
@@ -22,11 +24,13 @@ public record TradeLifecycleResponse(
         BigDecimal originalStrike,
         LocalDate originalMaturityDate,
         BigDecimal originalQuantity,
+        BigDecimal originalExecutionPrice,
         String requestedUnderlyingSymbol,
         OptionType requestedOptionType,
         BigDecimal requestedStrike,
         LocalDate requestedMaturityDate,
         BigDecimal requestedQuantity,
+        BigDecimal requestedExecutionPrice,
         BookingActorResponse submittedBy,
         Instant submittedAt,
         BookingActorResponse reviewedBy,
@@ -41,6 +45,7 @@ public record TradeLifecycleResponse(
                 request.portfolioId(),
                 request.portfolioName(),
                 request.positionId(),
+                request.instrumentType(),
                 request.requestType(),
                 request.status(),
                 request.originalUnderlyingSymbol(),
@@ -48,11 +53,13 @@ public record TradeLifecycleResponse(
                 request.originalStrike(),
                 request.originalMaturityDate(),
                 request.originalQuantity(),
+                request.originalExecutionPrice(),
                 request.requestedUnderlyingSymbol(),
                 request.requestedOptionType(),
                 request.requestedStrike(),
                 request.requestedMaturityDate(),
                 request.requestedQuantity(),
+                request.requestedExecutionPrice(),
                 BookingActorResponse.from(request.submittedBy()),
                 request.submittedAt(),
                 BookingActorResponse.from(request.reviewedBy()),

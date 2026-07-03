@@ -14,6 +14,10 @@ public record PortfolioEodSnapshotResponse(
         double totalMarketValue,
         double totalTradeValue,
         double totalUnrealizedPnl,
+        double optionMarketValue,
+        double cashEquityMarketValue,
+        double optionUnrealizedPnl,
+        double cashEquityUnrealizedPnl,
         int positionsWithoutExecutionPrice,
         Instant capturedAt,
         String source,
@@ -25,6 +29,22 @@ public record PortfolioEodSnapshotResponse(
         List<PositionEodSnapshotResponse> positions
 ) {
     static PortfolioEodSnapshotResponse from(PortfolioEodSnapshot snapshot) {
+        double optionMarketValue = snapshot.positions().stream()
+                .filter(position -> "EUROPEAN_OPTION".equals(position.instrumentType()))
+                .mapToDouble(position -> position.marketValue())
+                .sum();
+        double cashEquityMarketValue = snapshot.positions().stream()
+                .filter(position -> "CASH_EQUITY".equals(position.instrumentType()))
+                .mapToDouble(position -> position.marketValue())
+                .sum();
+        double optionUnrealizedPnl = snapshot.positions().stream()
+                .filter(position -> "EUROPEAN_OPTION".equals(position.instrumentType()))
+                .mapToDouble(position -> position.unrealizedPnl() == null ? 0.0 : position.unrealizedPnl())
+                .sum();
+        double cashEquityUnrealizedPnl = snapshot.positions().stream()
+                .filter(position -> "CASH_EQUITY".equals(position.instrumentType()))
+                .mapToDouble(position -> position.unrealizedPnl() == null ? 0.0 : position.unrealizedPnl())
+                .sum();
         return new PortfolioEodSnapshotResponse(
                 snapshot.id(),
                 snapshot.portfolioId(),
@@ -33,6 +53,10 @@ public record PortfolioEodSnapshotResponse(
                 snapshot.totalMarketValue(),
                 snapshot.totalTradeValue(),
                 snapshot.totalUnrealizedPnl(),
+                optionMarketValue,
+                cashEquityMarketValue,
+                optionUnrealizedPnl,
+                cashEquityUnrealizedPnl,
                 snapshot.positionsWithoutExecutionPrice(),
                 snapshot.capturedAt(),
                 snapshot.source(),

@@ -2,9 +2,15 @@ package com.nexusxva.frontoffice.api;
 
 import com.nexusxva.auth.application.FeaturePermissionCode;
 import com.nexusxva.auth.application.UserAccessService;
+import com.nexusxva.auth.domain.AuthSession;
+import com.nexusxva.auth.infrastructure.AuthSessionFilter;
+import com.nexusxva.audit.application.AuditEventCommand;
+import com.nexusxva.audit.application.AuditService;
+import com.nexusxva.audit.domain.AuditOutcome;
 import com.nexusxva.frontoffice.application.FrontOfficeStressTestService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.Map;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,13 +22,16 @@ public class FrontOfficeStressTestController {
 
     private final FrontOfficeStressTestService service;
     private final UserAccessService userAccessService;
+    private final AuditService auditService;
 
     public FrontOfficeStressTestController(
             FrontOfficeStressTestService service,
-            UserAccessService userAccessService
+            UserAccessService userAccessService,
+            AuditService auditService
     ) {
         this.service = service;
         this.userAccessService = userAccessService;
+        this.auditService = auditService;
     }
 
     @PostMapping("/european-options")
@@ -32,11 +41,34 @@ public class FrontOfficeStressTestController {
     ) {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_RUN_STRESS_TEST);
         userAccessService.requirePortfolioAccess(servletRequest, request.portfolioId());
-        return FrontOfficeStressTestResponse.from(service.run(
+        FrontOfficeStressTestResponse response = FrontOfficeStressTestResponse.from(service.run(
                 request.portfolioId(),
                 request.valuationDate(),
                 request.hypotheticalTradeCommand(),
                 request.scenarioCommands()
         ));
+        auditService.record(AuditEventCommand.of(
+                "STRESS_TEST_RUN",
+                "FRONT_OFFICE",
+                "RUN_STRESS_TEST",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "PORTFOLIO",
+                request.portfolioId(),
+                "Stress test requested",
+                auditService.metadata(Map.of(
+                        "valuationDate", request.valuationDate(),
+                        "scenarioCount", request.scenarios().size(),
+                        "includesHypotheticalTrade", request.hypotheticalTrade() != null
+                ))
+        ));
+        return response;
+    }
+
+    private AuthSession currentSession(HttpServletRequest request) {
+        Object value = request.getAttribute(AuthSessionFilter.SESSION_ATTRIBUTE);
+        return value instanceof AuthSession session ? session : null;
     }
 }

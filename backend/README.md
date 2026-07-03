@@ -2,7 +2,7 @@
 
 Spring Boot backend for NexusXVA.
 
-The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option and cash equity positions, portfolio-level pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, simplified CVA V1.1, XVA reference data for counterparties/netting sets/collateral, cash-equity delta hedge analysis, and persisted valuation run history for audit.
+The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option and cash equity positions, portfolio-level pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, simplified CVA V1.1, XVA reference data for counterparties/netting sets/collateral, cash-equity delta hedge analysis, persisted valuation run history, Audit Trail V1, and rotated technical logs.
 
 ## Requirements
 
@@ -93,6 +93,22 @@ docker compose exec -T postgres psql -U nexusxva -d nexusxva < backend/src/main/
 
 This creates 5 USD demo portfolios and 72 confirmed European option positions across the supported Blemberg/local watchlist. The seed is idempotent and is not a Flyway migration, so tests and clean environments are not forced to include demo data.
 
+Optional workflow demo data can also be loaded:
+
+```bash
+docker compose exec -T postgres psql -U nexusxva -d nexusxva < backend/src/main/resources/db/demo/demo_workflows.sql
+```
+
+This creates three workflow-focused portfolios plus booking and lifecycle requests in pending, approved/confirmed and rejected states. Open ADMIN -> Workflows to inspect the nodes, or BO -> Trade Validation / Lifecycle Reporting to work the queues.
+
+For heavier local load testing:
+
+```bash
+docker compose exec -T postgres psql -U nexusxva -d nexusxva < backend/src/main/resources/db/demo/demo_heavy_portfolios.sql
+```
+
+This creates three larger synthetic portfolios with roughly 512 option positions, 32 cash equity positions, 99 workflow-visible booking requests and 81 lifecycle requests in pending, approved/confirmed and rejected states. Use it to pressure Pricing, Stress Testing, Exposure, CVA, Delta Hedge, Admin Workflows and large table rendering.
+
 ## Run Backend And Dashboard
 
 The simplest way to run the application is:
@@ -150,8 +166,8 @@ Security model:
 Current group intent:
 
 - `FO`: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad booking submission, portfolios, pricing, exposure, CVA and valuation run history.
-- `BO`: Trade Validation, Lifecycle Reporting, preventive Trading Limits, manual EOD Control, and valuation run history.
-- `ADMIN`: user/group administration, FO feature permissions, portfolio visibility, workflow monitoring, and valuation run history.
+- `BO`: Trade Validation, Lifecycle Reporting, Operations Reporting, preventive Trading Limits, manual EOD Control, and valuation run history.
+- `ADMIN`: user/group administration, FO feature permissions, portfolio visibility, workflow monitoring, Audit Logs, and valuation run history.
 
 The backend enforces the active group. Frontend navigation is not the security boundary.
 
@@ -166,6 +182,8 @@ Admin users can manage access without changing the pricing or booking models:
 - `PUT /api/admin/users/{userId}/portfolio-access`
 - `GET /api/admin/portfolios`
 - `GET /api/admin/workflow-map`
+- `GET /api/admin/audit-events`
+- `GET /api/admin/audit-events/{eventId}`
 
 Group membership decides which area a user can enter. FO feature permissions then refine what a Front Office user can do:
 
@@ -179,6 +197,42 @@ Group membership decides which area a user can enter. FO feature permissions the
 Portfolio visibility supports `ALL` or `SELECTED`. The default is permissive (`ALL` portfolios and enabled FO features) so existing development users keep working until an admin tightens access.
 
 The workflow map is read-only. It visualizes trade booking requests across `Booked`, `Waiting BO`, `Accepted`, and `Rejected`; it does not approve or reject bookings. BO Trade Validation remains the owner of that maker-checker action.
+
+## Audit Trail And Technical Logs
+
+NexusXVA has two separate observability layers:
+
+- **Audit Trail**: user activity stored in PostgreSQL table `audit_events`.
+- **Technical logs**: rotated files for backend debugging and support.
+
+Audit events answer operational questions such as who logged in, who changed active group, who submitted a booking, who approved or rejected a workflow action, who changed limits, who archived a portfolio, who corrected EOD, who requested pricing/exposure/CVA/stress/pre-trade/delta hedge, and who was denied access.
+
+ADMIN can inspect audit events from **Audit Logs** or through:
+
+- `GET /api/admin/audit-events`
+- `GET /api/admin/audit-events/{eventId}`
+
+Supported filters are `userId`, `username`, `module`, `eventType`, `outcome`, `resourceType`, `resourceId`, `from`, `to`, `page`, and `size`.
+
+Audit metadata is sanitized. NexusXVA does not store passwords, raw session tokens, cookies, CSRF values, raw request bodies or full responses in `audit_events`.
+
+Technical logs are written to:
+
+- `logs/backend/system/app.log`
+- `logs/backend/system/error.log`
+- `logs/backend/security/auth.log`
+- `logs/backend/integration/marketdata.log`
+- `logs/backend/jobs/eod.log`
+
+Docker Compose mounts `backend-logs:/app/logs`. Local runs default to `logs/` from the backend working directory unless `NEXUSXVA_LOG_DIR` is overridden.
+
+Relevant environment variables:
+
+- `NEXUSXVA_LOG_FILE_ENABLED=true`
+- `NEXUSXVA_LOG_DIR=/app/logs`
+- `NEXUSXVA_LOG_RETENTION_DAYS=14`
+
+Every API response includes `X-Correlation-Id`. The same `correlationId` is stored in audit events and written into technical logs, alongside user, active group and session when available.
 
 ## Notifications V1
 
@@ -233,6 +287,8 @@ abs(quantity) * strike
 
 This is a preventive approximation in USD, not premium paid, cash movement, P&L, or a market valuation. Every submitted booking consumes capacity even if BO rejects it later. Limit validation and booking creation share one transaction and lock the user policy, preventing concurrent requests from jointly exceeding a configured limit.
 
+If a portfolio is not USD, NexusXVA converts the approximate booking notional from the portfolio `baseCurrency` into USD through `FxRateService` before checking and storing limit usage. The trade terms remain unchanged; only the preventive limit usage is normalized.
+
 Breaches return `409 ApiError` with sanitized metadata containing the limit type, maximum, current usage, requested amount, and UTC period end. No booking row is created for a breached request.
 
 ## Run Tests
@@ -258,6 +314,7 @@ The current test setup covers:
 - simplified CVA V1.1 over the exposure profile
 - Dashboard V1 frontend workflow for FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, portfolios, pricing, exposure and CVA flat/curve modes
 - FO trade lifecycle workflow for amendment and cancellation requests over confirmed positions
+- FO/BO read-only reporting over P&L snapshots, lifecycle queues and EOD coverage
 
 The current suite has more than 150 tests, including one real Blemberg smoke test that is skipped unless explicitly enabled.
 
@@ -413,6 +470,14 @@ POST /api/back-office/lifecycle-requests/{requestId}/reject
 ```
 
 Lifecycle Reporting is read-only. It derives queue metrics from `trade_lifecycle_requests`: pending aging, amendments vs cancellations, average review time, and top portfolios/symbols by lifecycle activity. It does not create a second counter table.
+
+Operations Reporting is also read-only and belongs to BO:
+
+```text
+GET /api/back-office/reports/operations
+```
+
+It derives pending booking count, pending lifecycle count, missing-today EOD portfolios, and corrected EOD runs from existing tables. No extra reporting tables or counters are created.
 
 ### Trade Economics And P&L V1
 
@@ -649,7 +714,8 @@ Response shape:
 V1 simulation rules:
 
 - Supports persisted European option portfolios only.
-- Supports USD portfolios and USD market-data inputs only.
+- Reports exposure values in the portfolio `baseCurrency`.
+- Converts market-data currencies through the `marketdata` FX boundary using valuation-time FX rates.
 - Uses `spot`, `volatility`, `riskFreeRate`, and `dividendYield` from `marketdata`.
 - Uses deterministic seeds so tests and dev runs are repeatable.
 - Excludes positions once `maturityDate <= futureDate`.

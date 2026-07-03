@@ -121,12 +121,12 @@ Blemberg V1 may return clean `501 Not Implemented` for `GET /v3/api-docs`. Nexus
 - If Blemberg has no dividend data for an instrument, return `0.0` rather than omitting the field.
 - Blemberg does not price options; it only provides pricing inputs.
 
-## Current Limitations
+## Current Currency Rule
 
-NexusXVA portfolio pricing V1 is USD-only.
-Until FX conversion exists, Blemberg should return USD instruments and USD pricing inputs for the current watchlist.
+NexusXVA now supports portfolio `baseCurrency` reporting through an FX boundary in `marketdata`.
+Blemberg pricing inputs should keep returning the instrument `currency`; NexusXVA converts market values into the portfolio base currency.
 
-NexusXVA will reject non-USD market data in portfolio pricing V1.
+The current NexusXVA local FX provider is deterministic demo data. Blemberg should eventually expose FX rates so NexusXVA can use real/cache-backed FX data through the same boundary.
 
 ## Local Development Fallback
 
@@ -158,7 +158,7 @@ NexusXVA maps unavailable Blemberg calls to `503 Market data service unavailable
 
 Future NexusXVA milestones will likely require:
 
-- FX rates for multi-currency portfolio totals.
+- FX rates for multi-currency portfolio totals, EOD, exposure, CVA, limits, and reporting.
 - Historical daily bars for volatility calculation and simulation.
 - Risk-free curves by tenor.
 - Clear stale-data policy.

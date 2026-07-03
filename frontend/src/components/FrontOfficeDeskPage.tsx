@@ -17,10 +17,12 @@ import {
   XCircle,
 } from "lucide-react";
 import { nexusApi } from "@/lib/api";
-import { formatNumber } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import type {
   FrontOfficeDeskBooking,
   FrontOfficeDeskResponse,
+  FrontOfficePnlReport,
+  FrontOfficePnlPortfolioRow,
   PortfolioSummary,
   TradeBookingStatus,
   TradeLifecycleReport,
@@ -43,6 +45,7 @@ const tabs: Array<{ id: "ALL" | TradeBookingStatus; label: string }> = [
 
 export function FrontOfficeDeskPage() {
   const [desk, setDesk] = React.useState<FrontOfficeDeskResponse | null>(null);
+  const [pnlReport, setPnlReport] = React.useState<FrontOfficePnlReport | null>(null);
   const [lifecycleReport, setLifecycleReport] = React.useState<TradeLifecycleReport | null>(null);
   const [activeTab, setActiveTab] = React.useState<"ALL" | TradeBookingStatus>("PENDING_VALIDATION");
   const [error, setError] = React.useState<string | null>(null);
@@ -56,12 +59,14 @@ export function FrontOfficeDeskPage() {
     setLoading(true);
     setError(null);
     try {
-      const [nextDesk, nextLifecycleReport] = await Promise.all([
+      const [nextDesk, nextLifecycleReport, nextPnlReport] = await Promise.all([
         nexusApi.getFrontOfficeDesk(),
         nexusApi.getMyLifecycleReport(),
+        nexusApi.getFrontOfficePnlReport(),
       ]);
       setDesk(nextDesk);
       setLifecycleReport(nextLifecycleReport);
+      setPnlReport(nextPnlReport);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load FO Desk");
     } finally {
@@ -113,6 +118,8 @@ export function FrontOfficeDeskPage() {
         </div>
       </section>
 
+      <PnlSnapshot report={pnlReport} />
+
       <div className="fo-desk-layout">
         <section className="panel fo-portfolio-panel">
           <SectionHeader
@@ -149,6 +156,90 @@ export function FrontOfficeDeskPage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function PnlSnapshot({ report }: { report: FrontOfficePnlReport | null }) {
+  const rows = report?.portfolios ?? [];
+  const okRows = rows.filter((row) => row.status === "OK");
+  const totalDaily = okRows.reduce((sum, row) => sum + (row.dailyPnl ?? 0), 0);
+  const totalSinceTrade = okRows.reduce((sum, row) => sum + (row.sinceTradePnl ?? 0), 0);
+  const actionItems = rows.reduce(
+    (sum, row) => sum + row.pendingBookings + row.rejectedBookings + row.pendingLifecycleRequests + row.rejectedLifecycleRequests,
+    0,
+  );
+
+  return (
+    <section className="panel section fo-pnl-snapshot">
+      <SectionHeader
+        title="P&L Snapshot"
+        text="Daily P&L is measured against the latest active EOD close. Since trade P&L is measured against execution values when available."
+      />
+      <div className="summary-strip">
+        <SummaryTile label="Daily P&L" value={formatCurrency(totalDaily)} />
+        <SummaryTile label="Since trade P&L" value={formatCurrency(totalSinceTrade)} />
+        <SummaryTile label="Portfolio rows" value={formatNumber(rows.length, 0)} />
+        <SummaryTile label="Action items" value={formatNumber(actionItems, 0)} />
+      </div>
+      {rows.length === 0 ? <Empty text="No P&L rows available yet. Run EOD after BO confirms positions." /> : (
+        <div className="table-wrap compact-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Portfolio</th>
+                <th>Latest EOD</th>
+                <th>Daily P&L</th>
+                <th>Since trade P&L</th>
+                <th>Options daily</th>
+                <th>Cash daily</th>
+                <th>Open items</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <PnlSnapshotRow key={row.portfolioId} row={row} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PnlSnapshotRow({ row }: { row: FrontOfficePnlPortfolioRow }) {
+  const openItems = row.pendingBookings + row.rejectedBookings + row.pendingLifecycleRequests + row.rejectedLifecycleRequests;
+  return (
+    <tr>
+      <td>
+        <div className="fo-booking-portfolio">
+          <strong>{row.portfolioName}</strong>
+          <small>{row.positionCount} positions · {row.baseCurrency}</small>
+        </div>
+      </td>
+      <td>{row.latestEodDate ?? "No close"}</td>
+      <td>{row.dailyPnl == null ? "Unavailable" : formatCurrency(row.dailyPnl, row.baseCurrency)}</td>
+      <td>{row.sinceTradePnl == null ? "Unavailable" : formatCurrency(row.sinceTradePnl, row.baseCurrency)}</td>
+      <td>{row.optionDailyPnl == null ? "—" : formatCurrency(row.optionDailyPnl, row.baseCurrency)}</td>
+      <td>{row.cashEquityDailyPnl == null ? "—" : formatCurrency(row.cashEquityDailyPnl, row.baseCurrency)}</td>
+      <td>{formatNumber(openItems, 0)}</td>
+      <td>
+        <span className={`booking-status ${row.status === "OK" ? "confirmed" : "rejected"}`}>
+          {row.status === "OK" ? "OK" : row.errorMessage ?? "Unavailable"}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+function SummaryTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="metric-card">
+      <span />
+      <small>{label}</small>
+      <strong>{value}</strong>
+    </div>
   );
 }
 

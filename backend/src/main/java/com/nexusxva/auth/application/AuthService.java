@@ -38,12 +38,14 @@ public class AuthService {
 
         Instant now = Instant.now(clock);
         Instant expiresAt = now.plus(properties.getSessionHours(), ChronoUnit.HOURS);
+        UUID sessionId = UUID.randomUUID();
         String sessionToken = randomToken();
         String csrfToken = randomToken();
-        authStore.createSession(UUID.randomUUID(), user.id(), tokenHasher.hash(sessionToken), csrfToken, now, expiresAt);
+        authStore.createSession(sessionId, user.id(), tokenHasher.hash(sessionToken), csrfToken, now, expiresAt);
 
         return new AuthResult(
                 new AuthenticatedUser(user.id(), user.username(), user.displayName(), user.groups()),
+                sessionId,
                 sessionToken,
                 csrfToken,
                 expiresAt

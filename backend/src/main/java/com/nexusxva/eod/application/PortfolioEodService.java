@@ -12,6 +12,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Value;
@@ -72,12 +73,15 @@ public class PortfolioEodService {
         if (!pricing.unpriceablePositions().isEmpty()) {
             throw new IllegalArgumentException("EOD snapshot requires all active positions to be priceable");
         }
-        if (!allowStaleMarketData && pricing.positions().stream().anyMatch(position -> position.marketData().stale())) {
+        boolean hasStaleMarketData = pricing.positions().stream().anyMatch(position -> position.marketData().stale())
+                || pricing.cashEquityPositions().stream().anyMatch(position -> position.marketData().stale());
+        if (!allowStaleMarketData && hasStaleMarketData) {
             throw new IllegalArgumentException("EOD snapshot cannot use stale market data");
         }
-        List<PositionEodSnapshot> positions = pricing.positions().stream()
+        List<PositionEodSnapshot> optionPositions = pricing.positions().stream()
                 .map(position -> new PositionEodSnapshot(
                         position.positionId(),
+                        "EUROPEAN_OPTION",
                         position.underlyingSymbol(),
                         position.quantity(),
                         position.unitPrice(),
@@ -90,6 +94,23 @@ public class PortfolioEodService {
                         position.marketData().stale()
                 ))
                 .toList();
+        List<PositionEodSnapshot> cashEquityPositions = pricing.cashEquityPositions().stream()
+                .map(position -> new PositionEodSnapshot(
+                        position.positionId(),
+                        "CASH_EQUITY",
+                        position.underlyingSymbol(),
+                        position.quantity(),
+                        position.spot(),
+                        position.marketValue(),
+                        position.executionPrice(),
+                        position.tradeValue(),
+                        position.unrealizedPnl(),
+                        position.marketData().asOf(),
+                        position.marketData().source(),
+                        position.marketData().stale()
+                ))
+                .toList();
+        List<PositionEodSnapshot> positions = Stream.concat(optionPositions.stream(), cashEquityPositions.stream()).toList();
 
         return store.create(new PortfolioEodSnapshot(
                 UUID.randomUUID(),

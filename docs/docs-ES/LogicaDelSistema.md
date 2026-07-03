@@ -266,13 +266,29 @@ request de pricing / exposure / CVA
   -> valuation_runs
 ```
 
-El run guardado contiene input JSON, result JSON, summary compacto, modelo, valuation date, portfolio, usuario, grupo activo y estado. Es historial de auditoria solamente. Pricing, Exposure y CVA no leen runs anteriores para calcular nuevos valores, y Run History no reemplaza EOD ni es un store oficial de market data.
+El run guardado contiene input JSON, result JSON, summary compacto, modelo, valuation date, portfolio, usuario, grupo activo y estado. Es historial de ejecucion de valuaciones solamente. Pricing, Exposure y CVA no leen runs anteriores para calcular nuevos valores, y Run History no reemplaza EOD ni es un store oficial de market data.
+
+## Como fluye Audit Trail
+
+Audit Trail guarda actividad de usuario y eventos relevantes para seguridad:
+
+```text
+accion autenticada de usuario
+  -> controller / auth filter
+  -> audit.application
+  -> audit_events
+  -> ADMIN Audit Logs
+```
+
+`audit_events` es la fuente oficial de actividad de usuario. Guarda event type, modulo, accion, outcome, usuario, grupo activo, sesion, endpoint, recurso, correlation id, IP/user agent, mensaje y metadata saneada. No se guardan passwords, cookies, CSRF tokens, request bodies crudos ni responses completas.
+
+Los logs tecnicos quedan separados y se escriben como archivos rotados bajo `logs/backend/*` o `/app/logs/backend/*` en Docker. El `correlationId` compartido permite unir un audit event con las lineas tecnicas del mismo request.
 
 ## Como fluye el dashboard
 
 Dashboard V1 es un frontend Next.js en `frontend/`.
 No implementa formulas financieras.
-La UI esta separada por grupos. FO usa FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA y Run History. BO usa Trade Validation, Lifecycle Reporting, Trading Limits, EOD Control y Run History. ADMIN usa Administration para membresias, permisos FO y visibilidad de portfolios, mas Workflows y Run History para monitoreo.
+La UI esta separada por grupos. FO usa FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA y Run History. BO usa Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control y Run History. ADMIN usa Administration para membresias, permisos FO y visibilidad de portfolios, mas Workflows, Audit Logs y Run History para monitoreo.
 El header incluye una bandeja persistida de notificaciones. Las notificaciones pertenecen al usuario, no al grupo activo, por lo que usuarios multi-grupo mantienen un solo inbox al cambiar entre FO, BO y ADMIN.
 
 El flujo frontend es:
@@ -289,6 +305,7 @@ El dashboard usa el backend como fuente de verdad para:
 
 - Datos de portfolio.
 - Agregacion FO Desk mediante `/api/front-office/desk`.
+- Snapshot FO de P&L mediante `/api/front-office/reports/desk-pnl`.
 - Envio de bookings pendientes desde `u-Pad`.
 - Pre-Trade Analysis stateless mediante `/api/front-office/what-if/european-option`.
 - Stress Testing stateless mediante `/api/front-office/stress-tests/european-options`.
@@ -296,6 +313,7 @@ El dashboard usa el backend como fuente de verdad para:
 - Validacion BO antes de crear posiciones confirmadas.
 - Aprobacion BO de lifecycle antes de modificar o cancelar posiciones confirmadas.
 - Reporting BO/FO de lifecycle derivado de `trade_lifecycle_requests`.
+- Operations Reporting BO mediante `/api/back-office/reports/operations`.
 - Visibilidad de limites FO en `u-Pad` y administracion de politicas desde BO.
 - Notificaciones de usuario para eventos de review de bookings y lifecycle.
 - Administracion de usuarios/grupos, checks FO, visibilidad de portfolios y mapa de workflow desde ADMIN.
@@ -321,7 +339,7 @@ FO abre FO Desk
   -> conteos, accesos rapidos a portfolios y blotter de bookings
 ```
 
-FO Desk es solo lectura. Muestra bookings pendientes, rechazados y confirmados a traves del historial del usuario. Pending y rejected bookings son visibles para control operativo, pero siguen sin entrar en pricing, exposure o CVA.
+FO Desk es solo lectura. Muestra bookings pendientes, rechazados y confirmados a traves del historial del usuario. Pending y rejected bookings son visibles para control operativo, pero siguen sin entrar en pricing, exposure o CVA. Su P&L Snapshot tambien es read-only: deriva Daily P&L, since-trade P&L y breakdown por producto desde posiciones activas, ultimo EOD activo y economics de ejecucion.
 
 ```text
 FO corre Pre-Trade Analysis
@@ -372,7 +390,7 @@ FO solicita amend/cancel
 
 Las posiciones confirmadas nacen como `ACTIVE`. Los workflows de riesgo usan solo posiciones `ACTIVE`. Una cancelacion aprobada marca la posicion como `CANCELLED`. Un amendment aprobado marca la posicion original como `AMENDED` y crea una posicion reemplazo `ACTIVE`. Las ediciones/borrados directos de posiciones confirmadas siguen fuera de scope.
 
-Lifecycle Reporting es read-only. Calcula totales, pendientes, aprobadas, rechazadas, aging de pendientes, promedio de review y concentracion por portfolio/simbolo desde `trade_lifecycle_requests`. No crea tablas de contadores ni reemplaza Trade Validation: BO sigue aprobando o rechazando desde el workflow maker-checker.
+Lifecycle Reporting es read-only. Calcula totales, pendientes, aprobadas, rechazadas, aging de pendientes, promedio de review y concentracion por portfolio/simbolo desde `trade_lifecycle_requests`. Operations Reporting agrega una vista diaria BO sobre bookings pendientes, lifecycle pendiente, closes EOD faltantes y EOD corregidos. Ningun reporte crea tablas de contadores ni reemplaza Trade Validation: BO sigue aprobando o rechazando desde el workflow maker-checker.
 
 ## Como fluye Trade Validation
 
@@ -405,7 +423,7 @@ FO envia desde u-Pad
 
 Existe una politica opcional por usuario FO activo. Una politica inexistente o desactivada significa `UNLIMITED`; un campo nulo significa que esa medida no tiene limite. El consumo se deriva del historial de bookings en vez de mantener un contador duplicado, por lo que un booking enviado sigue consumiendo aunque BO lo rechace despues.
 
-El nocional V1 esta denominado en USD y es solo una aproximacion preventiva. No representa premium, cash gastado, P&L, valor actual de mercado ni limites de Greeks. Si existe un control nocional activo, portfolios no USD se rechazan hasta implementar FX. El bloqueo de politica y la creacion del booking comparten una transaccion para impedir que requests concurrentes superen juntos la capacidad disponible.
+El nocional V1 esta denominado en USD y es solo una aproximacion preventiva. No representa premium, cash gastado, P&L, valor actual de mercado ni limites de Greeks. Si un portfolio usa otra `baseCurrency`, NexusXVA convierte el nocional aproximado del booking a USD mediante FX en `marketdata` antes de validar y guardar el consumo de limites. El bloqueo de politica y la creacion del booking comparten una transaccion para impedir que requests concurrentes superen juntos la capacidad disponible.
 
 Los endpoints BO viven bajo `/api/back-office/trading-limits/users`; FO solo puede consultar su propio snapshot mediante `/api/trading-limits/me`. Un breach devuelve `409 ApiError.metadata` saneado con limite, consumo, valor solicitado y hora de reset.
 
@@ -717,8 +735,8 @@ Esto nos da:
 
 - Una unidad de negocio persistida.
 - Una forma clara de guardar posiciones de opciones europeas.
-- Pricing a nivel portfolio para posiciones europeas en USD.
-- Perfiles de exposure para portfolios de opciones europeas en USD.
+- Pricing a nivel portfolio para posiciones europeas en la `baseCurrency` del portfolio.
+- Perfiles de exposure para portfolios de opciones europeas en la `baseCurrency` del portfolio.
 - Calculo CVA simplificado sobre perfiles de exposure.
 
 El orden que seguimos fue:

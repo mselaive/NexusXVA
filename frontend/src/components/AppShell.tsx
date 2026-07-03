@@ -17,6 +17,7 @@ import {
   LineChart,
   ListChecks,
   LogOut,
+  ScrollText,
   Settings,
   Shield,
   SlidersHorizontal,
@@ -55,10 +56,12 @@ const navItems = [
   { href: "/valuation-runs", label: "Run History", icon: History },
   { href: "/trade-validation", label: "Trade Validation", icon: ListChecks },
   { href: "/lifecycle-reporting", label: "Lifecycle Reporting", icon: BarChart3 },
+  { href: "/operations-reporting", label: "Operations Reporting", icon: CalendarCheck },
   { href: "/trading-limits", label: "Trading Limits", icon: SlidersHorizontal },
   { href: "/eod-control", label: "EOD Control", icon: CalendarCheck },
   { href: "/admin", label: "Administration", icon: Settings },
   { href: "/workflows", label: "Workflows", icon: GitBranch },
+  { href: "/audit-logs", label: "Audit Logs", icon: ScrollText },
 ];
 
 export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps) {

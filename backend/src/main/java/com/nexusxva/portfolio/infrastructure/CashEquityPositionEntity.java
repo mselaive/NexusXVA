@@ -91,4 +91,14 @@ class CashEquityPositionEntity {
                 updatedAt
         );
     }
+
+    void markCancelled() {
+        lifecycleStatus = PositionLifecycleStatus.CANCELLED;
+        updatedAt = Instant.now();
+    }
+
+    void markAmended() {
+        lifecycleStatus = PositionLifecycleStatus.AMENDED;
+        updatedAt = Instant.now();
+    }
 }

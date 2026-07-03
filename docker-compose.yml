@@ -31,8 +31,13 @@ services:
       NEXUSXVA_BOOTSTRAP_ADMIN_USERNAME: ${NEXUSXVA_BOOTSTRAP_ADMIN_USERNAME:-admin}
       NEXUSXVA_BOOTSTRAP_ADMIN_PASSWORD: ${NEXUSXVA_BOOTSTRAP_ADMIN_PASSWORD:-admin12345}
       NEXUSXVA_BOOTSTRAP_ADMIN_DISPLAY_NAME: ${NEXUSXVA_BOOTSTRAP_ADMIN_DISPLAY_NAME:-NexusXVA Admin}
+      NEXUSXVA_LOG_FILE_ENABLED: ${NEXUSXVA_LOG_FILE_ENABLED:-true}
+      NEXUSXVA_LOG_DIR: ${NEXUSXVA_LOG_DIR:-/app/logs}
+      NEXUSXVA_LOG_RETENTION_DAYS: ${NEXUSXVA_LOG_RETENTION_DAYS:-14}
     ports:
       - "8080:8080"
+    volumes:
+      - backend-logs:/app/logs
 
   frontend:
     build:
@@ -50,3 +55,4 @@ services:
 
 volumes:
   postgres-data:
+  backend-logs:

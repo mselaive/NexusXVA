@@ -875,6 +875,26 @@ a {
   cursor: pointer;
 }
 
+.snapshot-time-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.snapshot-stale-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  border-radius: 999px;
+  background: #fff7e6;
+  color: #9a4b08;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .positive {
   color: #047857;
 }
@@ -1070,6 +1090,10 @@ a {
   align-items: flex-end;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+.picker-row.no-refresh {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .toolbar .picker-row {
@@ -2167,14 +2191,18 @@ a {
 
 .upad-limit-strip {
   display: grid;
-  grid-template-columns: minmax(130px, 1.2fr) repeat(3, minmax(100px, 1fr));
-  gap: 9px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 11px 12px;
   margin: 10px 0 12px;
   border: 1px solid var(--line);
   border-left: 3px solid var(--line-strong);
   border-radius: 7px;
   background: #f8fbfb;
-  padding: 10px;
+  padding: 12px;
+}
+
+.upad-limit-strip > div:first-child {
+  grid-column: 1 / -1;
 }
 
 .upad-limit-strip.active {
@@ -2195,6 +2223,7 @@ a {
 .upad-limit-strip > div:first-child strong,
 .upad-limit-value strong {
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .upad-limit-strip > div:first-child span,
@@ -2203,6 +2232,14 @@ a {
 .upad-limit-value small {
   color: var(--muted);
   font-size: 10px;
+}
+
+.upad-limit-value {
+  min-width: 0;
+}
+
+.upad-limit-value strong small {
+  margin-left: 3px;
 }
 
 .upad-limit-strip > small {
@@ -2674,6 +2711,10 @@ a {
   gap: 10px;
 }
 
+.fo-pnl-snapshot .summary-strip {
+  margin-bottom: 16px;
+}
+
 .metric {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2717,6 +2758,21 @@ a {
   border-radius: 7px;
   background: #e7f5f2;
   color: var(--accent-strong);
+}
+
+.metric-card.positive > span {
+  background: #e7f5f2;
+  color: var(--accent-strong);
+}
+
+.metric-card.negative > span {
+  background: #fff4f2;
+  color: var(--danger);
+}
+
+.metric-card.warning > span {
+  background: #fff7e6;
+  color: #9a4b08;
 }
 
 .metric-card small,
@@ -3622,6 +3678,10 @@ tr:last-child td {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+}
+
+.stress-controls .mini-note {
+  margin-top: 12px;
 }
 
 .stress-metric {

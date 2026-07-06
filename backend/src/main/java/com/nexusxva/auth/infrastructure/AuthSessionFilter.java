@@ -114,6 +114,7 @@ public class AuthSessionFilter extends OncePerRequestFilter {
                     || path.startsWith("/api/trade-bookings/mine")
                     || path.startsWith("/api/valuation-runs")
                     || path.startsWith("/api/notifications")
+                    || path.startsWith("/api/market-data")
                     || path.equals("/api/trading-limits/me")
                     || path.startsWith("/api/pricing")
                     || path.startsWith("/api/simulations")
@@ -127,10 +128,12 @@ public class AuthSessionFilter extends OncePerRequestFilter {
                     || path.startsWith("/api/back-office/eod")
                     || path.startsWith("/api/valuation-runs")
                     || path.startsWith("/api/notifications")
+                    || path.startsWith("/api/market-data")
                     || path.startsWith("/api/xva");
             case "ADMIN" -> path.startsWith("/api/admin")
                     || path.startsWith("/api/valuation-runs")
                     || path.startsWith("/api/notifications")
+                    || path.startsWith("/api/market-data")
                     || path.startsWith("/api/xva");
             default -> false;
         };

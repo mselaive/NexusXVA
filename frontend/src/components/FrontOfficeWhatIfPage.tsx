@@ -345,13 +345,14 @@ function MarketContext({
   const activeNotebook = notebooks.find((notebook) => notebook.id === activeNotebookId) ?? notebooks[0];
   const snapshotBySymbol = new Map(snapshots.map((snapshot) => [snapshot.symbol.toUpperCase(), snapshot]));
   const selectedSnapshot = snapshotBySymbol.get(selectedSymbol.toUpperCase());
+  const staleCount = snapshots.filter((snapshot) => Boolean(snapshot.stale)).length;
 
   return (
     <div className="pretrade-market">
       <div className="pretrade-market-head">
         <div>
           <strong>Market context</strong>
-          <span>{snapshots.length} live snapshots · {missingSymbols.length} missing</span>
+          <span>{snapshots.length} cached snapshots · {staleCount} stale · {missingSymbols.length} missing</span>
         </div>
         <button className="icon-btn" type="button" onClick={onRefresh} disabled={loading} title="Refresh market snapshots" aria-label="Refresh market snapshots">
           {loading ? <Loader2 size={15} /> : <RefreshCw size={15} />}

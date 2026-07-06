@@ -14,12 +14,21 @@ class BlembergClientConfiguration {
 
     @Bean
     RestClient blembergRestClient(BlembergProperties properties) {
+        return restClient(properties.getBaseUrl(), properties.getTimeout());
+    }
+
+    @Bean
+    RestClient blembergRefreshRestClient(BlembergProperties properties) {
+        return restClient(properties.getBaseUrl(), properties.getRefreshTimeout());
+    }
+
+    private RestClient restClient(String baseUrl, java.time.Duration timeout) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(properties.getTimeout());
-        requestFactory.setReadTimeout(properties.getTimeout());
+        requestFactory.setConnectTimeout(timeout);
+        requestFactory.setReadTimeout(timeout);
 
         return RestClient.builder()
-                .baseUrl(properties.getBaseUrl())
+                .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
                 .build();
     }

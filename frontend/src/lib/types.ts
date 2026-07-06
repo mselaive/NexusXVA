@@ -943,6 +943,7 @@ export type BlembergMarketSnapshot = {
   currency?: string | null;
   asOf?: string | null;
   source?: string | null;
+  stale?: boolean | null;
 };
 
 export type BlembergSnapshotsResponse = {
@@ -962,6 +963,14 @@ export type BlembergCoverageItem = {
   riskFreeRateReady?: boolean;
   hasDividendYield?: boolean;
   dividendYieldReady?: boolean;
+  stale?: boolean;
+  snapshotAsOf?: string;
+  snapshotAvailable?: boolean;
+  dailyBarsAvailable?: number;
+  volatilityAvailable?: boolean;
+  riskFreeRateAvailable?: boolean;
+  dividendYieldAvailable?: boolean;
+  missingComponents?: string[];
   missingReasons?: string[];
   reasons?: string[];
   status?: string;

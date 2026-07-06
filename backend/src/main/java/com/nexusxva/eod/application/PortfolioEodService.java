@@ -13,12 +13,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 
 @Service
 public class PortfolioEodService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(PortfolioEodService.class);
 
     private final PortfolioEodStore store;
     private final PortfolioBlackScholesPricingService pricingService;
@@ -62,10 +66,21 @@ public class PortfolioEodService {
             UUID correctionOfRunId
     ) {
         LocalDate resolvedDate = businessDate == null ? LocalDate.now(ZoneOffset.UTC) : businessDate;
+        LOGGER.info(
+                "EOD capture started portfolioId={} businessDate={} source={} correctionOfRunId={}",
+                portfolioId,
+                resolvedDate,
+                source,
+                correctionOfRunId
+        );
         if (resolvedDate.isAfter(LocalDate.now(ZoneOffset.UTC))) {
             throw new IllegalArgumentException("EOD businessDate must not be in the future");
         }
         if (store.exists(portfolioId, resolvedDate)) {
+            LOGGER.info("EOD capture skipped portfolioId={} businessDate={} source={} reason=ACTIVE_RUN_EXISTS",
+                    portfolioId,
+                    resolvedDate,
+                    source);
             throw new ConflictException("EOD snapshot already exists for portfolio and businessDate");
         }
 
@@ -76,6 +91,10 @@ public class PortfolioEodService {
         boolean hasStaleMarketData = pricing.positions().stream().anyMatch(position -> position.marketData().stale())
                 || pricing.cashEquityPositions().stream().anyMatch(position -> position.marketData().stale());
         if (!allowStaleMarketData && hasStaleMarketData) {
+            LOGGER.warn("EOD capture rejected portfolioId={} businessDate={} source={} reason=STALE_MARKET_DATA",
+                    portfolioId,
+                    resolvedDate,
+                    source);
             throw new IllegalArgumentException("EOD snapshot cannot use stale market data");
         }
         List<PositionEodSnapshot> optionPositions = pricing.positions().stream()
@@ -112,7 +131,7 @@ public class PortfolioEodService {
                 .toList();
         List<PositionEodSnapshot> positions = Stream.concat(optionPositions.stream(), cashEquityPositions.stream()).toList();
 
-        return store.create(new PortfolioEodSnapshot(
+        PortfolioEodSnapshot snapshot = store.create(new PortfolioEodSnapshot(
                 UUID.randomUUID(),
                 portfolioId,
                 pricing.valuationDate(),
@@ -130,6 +149,22 @@ public class PortfolioEodService {
                 correctionOfRunId,
                 positions
         ));
+        LOGGER.info(
+                "EOD capture completed portfolioId={} runId={} businessDate={} source={} optionPositions={} cashEquityPositions={} totalPositions={} totalMarketValue={} totalTradeValue={} totalUnrealizedPnl={} positionsWithoutExecutionPrice={} staleMarketData={}",
+                portfolioId,
+                snapshot.id(),
+                snapshot.businessDate(),
+                source,
+                optionPositions.size(),
+                cashEquityPositions.size(),
+                positions.size(),
+                snapshot.totalMarketValue(),
+                snapshot.totalTradeValue(),
+                snapshot.totalUnrealizedPnl(),
+                snapshot.positionsWithoutExecutionPrice(),
+                hasStaleMarketData
+        );
+        return snapshot;
     }
 
     @Transactional(readOnly = true)

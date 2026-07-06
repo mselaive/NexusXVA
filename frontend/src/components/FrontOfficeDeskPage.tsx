@@ -176,10 +176,10 @@ function PnlSnapshot({ report }: { report: FrontOfficePnlReport | null }) {
         text="Daily P&L is measured against the latest active EOD close. Since trade P&L is measured against execution values when available."
       />
       <div className="summary-strip">
-        <SummaryTile label="Daily P&L" value={formatCurrency(totalDaily)} />
-        <SummaryTile label="Since trade P&L" value={formatCurrency(totalSinceTrade)} />
-        <SummaryTile label="Portfolio rows" value={formatNumber(rows.length, 0)} />
-        <SummaryTile label="Action items" value={formatNumber(actionItems, 0)} />
+        <SummaryTile icon={<CircleDollarSign size={18} />} label="Daily P&L" value={formatCurrency(totalDaily)} tone={totalDaily < 0 ? "negative" : "positive"} />
+        <SummaryTile icon={<LineChart size={18} />} label="Since trade P&L" value={formatCurrency(totalSinceTrade)} tone={totalSinceTrade < 0 ? "negative" : "positive"} />
+        <SummaryTile icon={<Wallet size={18} />} label="Portfolio rows" value={formatNumber(rows.length, 0)} />
+        <SummaryTile icon={<AlertCircle size={18} />} label="Action items" value={formatNumber(actionItems, 0)} tone={actionItems > 0 ? "warning" : undefined} />
       </div>
       {rows.length === 0 ? <Empty text="No P&L rows available yet. Run EOD after BO confirms positions." /> : (
         <div className="table-wrap compact-table">
@@ -233,10 +233,10 @@ function PnlSnapshotRow({ row }: { row: FrontOfficePnlPortfolioRow }) {
   );
 }
 
-function SummaryTile({ label, value }: { label: string; value: string }) {
+function SummaryTile({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone?: string }) {
   return (
-    <div className="metric-card">
-      <span />
+    <div className={`metric-card ${tone ?? ""}`}>
+      <span>{icon}</span>
       <small>{label}</small>
       <strong>{value}</strong>
     </div>

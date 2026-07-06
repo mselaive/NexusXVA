@@ -6,11 +6,15 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
 public class PortfolioEodBatchService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(PortfolioEodBatchService.class);
 
     private final PortfolioStore portfolioStore;
     private final PortfolioEodService eodService;
@@ -33,10 +37,16 @@ public class PortfolioEodBatchService {
         int skipped = 0;
         int failed = 0;
 
+        LOGGER.info("EOD batch started businessDate={} source={}", resolvedDate, source);
         for (var portfolio : portfolioStore.listPortfolioSummaries()) {
             try {
                 eodService.capture(portfolio.id(), resolvedDate, source);
                 captured++;
+                LOGGER.info("EOD portfolio captured portfolioId={} portfolioName={} businessDate={} source={}",
+                        portfolio.id(),
+                        portfolio.name(),
+                        resolvedDate,
+                        source);
                 results.add(new EodBatchPortfolioResult(
                         portfolio.id(),
                         portfolio.name(),
@@ -45,6 +55,12 @@ public class PortfolioEodBatchService {
                 ));
             } catch (ConflictException exception) {
                 skipped++;
+                LOGGER.info("EOD portfolio skipped portfolioId={} portfolioName={} businessDate={} source={} reason={}",
+                        portfolio.id(),
+                        portfolio.name(),
+                        resolvedDate,
+                        source,
+                        exception.getMessage());
                 results.add(new EodBatchPortfolioResult(
                         portfolio.id(),
                         portfolio.name(),
@@ -53,6 +69,12 @@ public class PortfolioEodBatchService {
                 ));
             } catch (RuntimeException exception) {
                 failed++;
+                LOGGER.warn("EOD portfolio failed portfolioId={} portfolioName={} businessDate={} source={} reason={}",
+                        portfolio.id(),
+                        portfolio.name(),
+                        resolvedDate,
+                        source,
+                        sanitizedMessage(exception));
                 results.add(new EodBatchPortfolioResult(
                         portfolio.id(),
                         portfolio.name(),
@@ -62,6 +84,15 @@ public class PortfolioEodBatchService {
             }
         }
 
+        LOGGER.info(
+                "EOD batch completed businessDate={} source={} total={} captured={} skipped={} failed={}",
+                resolvedDate,
+                source,
+                results.size(),
+                captured,
+                skipped,
+                failed
+        );
         return new EodBatchResult(
                 resolvedDate,
                 results.size(),

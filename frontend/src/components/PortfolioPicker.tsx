@@ -15,7 +15,7 @@ type PortfolioPickerProps = {
   showRefresh?: boolean;
 };
 
-export function PortfolioPicker({ value, onChange, onError, onRefresh, reloadKey = 0, autoSelectFirst = true, showRefresh = true }: PortfolioPickerProps) {
+export function PortfolioPicker({ value, onChange, onError, onRefresh, reloadKey = 0, autoSelectFirst = true, showRefresh = false }: PortfolioPickerProps) {
   const [portfolios, setPortfolios] = useState<PortfolioSummary[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -41,7 +41,7 @@ export function PortfolioPicker({ value, onChange, onError, onRefresh, reloadKey
   }, [reloadKey]);
 
   return (
-    <div className="picker-row">
+    <div className={`picker-row ${showRefresh ? "" : "no-refresh"}`}>
       <label className="field picker-field">
         <span>Portfolio</span>
         <select className="select" value={value} onChange={(event) => onChange(event.target.value)}>

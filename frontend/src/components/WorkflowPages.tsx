@@ -329,6 +329,10 @@ export function PortfoliosPage() {
     }
   }
 
+  function reloadPortfolioPicker() {
+    setPortfolioPickerReloadKey((current) => current + 1);
+  }
+
   async function createPortfolio() {
     setLoading(true);
     setError(null);
@@ -472,7 +476,16 @@ export function PortfoliosPage() {
         </section>
 
         <section className="panel">
-          <SectionTitle title="Select portfolio" info="Choose a persisted book to inspect its positions." />
+          <div className="section-title">
+            <div>
+              <h2>Select portfolio</h2>
+              <p>Choose a persisted book to inspect its positions.</p>
+            </div>
+            <button className="btn secondary" type="button" onClick={reloadPortfolioPicker} disabled={loading}>
+              <RefreshCw size={16} />
+              Refresh
+            </button>
+          </div>
           <PortfolioPicker value={selectedId} onChange={setSelectedId} onError={setError} onRefresh={refreshSelectedPortfolio} reloadKey={portfolioPickerReloadKey} />
         </section>
       </div>
@@ -1011,9 +1024,11 @@ function NotebookMarketWatch({
       setSnapshots(result.snapshots ?? []);
       onSnapshotsLoaded(result.snapshots ?? []);
       setMissingSymbols(result.missingSymbols ?? []);
-      setStatusMessage(`Loaded ${result.snapshots?.length ?? 0} snapshots, ${result.missingSymbols?.length ?? 0} missing`);
+      const staleCount = (result.snapshots ?? []).filter((snapshot) => Boolean(snapshot.stale)).length;
+      setStatusMessage(`Loaded ${result.snapshots?.length ?? 0} cached snapshots, ${staleCount} stale, ${result.missingSymbols?.length ?? 0} missing`);
       console.info("[u-Pad] Snapshot load completed", {
         snapshots: result.snapshots?.length ?? 0,
+        staleSnapshots: staleCount,
         missingSymbols: result.missingSymbols ?? [],
       });
     } catch (caught) {
@@ -1050,9 +1065,10 @@ function NotebookMarketWatch({
       setSnapshots(snapshotResult.snapshots ?? []);
       onSnapshotsLoaded(snapshotResult.snapshots ?? []);
       setMissingSymbols(snapshotResult.missingSymbols ?? []);
+      const staleCount = (snapshotResult.snapshots ?? []).filter((snapshot) => Boolean(snapshot.stale)).length;
       const summary = summarizeBlembergRefresh(refresh, requestedPriority, coverage);
       setRefreshSummary(summary.message);
-      setStatusMessage(`Loaded ${snapshotResult.snapshots?.length ?? 0} snapshots, ${snapshotResult.missingSymbols?.length ?? 0} missing`);
+      setStatusMessage(`Loaded ${snapshotResult.snapshots?.length ?? 0} cached snapshots, ${staleCount} stale, ${snapshotResult.missingSymbols?.length ?? 0} missing`);
       logBlembergRefreshOutcome("u-Pad refresh", refresh, requestedPriority, coverage);
     } catch (caught) {
       setError(errorMessage(caught));
@@ -1095,7 +1111,8 @@ function NotebookMarketWatch({
       </div>
 
       <div className="watch-summary">
-        <span>{snapshots.length} live snapshots</span>
+        <span>{snapshots.length} cached snapshots</span>
+        <span>{snapshots.filter((snapshot) => Boolean(snapshot.stale)).length} stale</span>
         <span>{missingSymbols.length} missing</span>
         <span>{latestAsOf ? `Last as of ${formatShortDateTime(latestAsOf)}` : "No refresh data"}</span>
         <span>{statusMessage}</span>
@@ -1147,7 +1164,12 @@ function NotebookMarketWatch({
                   <td>{snapshot?.previousClose != null ? formatMarketNumber(snapshot.previousClose) : "-"}</td>
                   <td className={changeClass(snapshot)}>{formatChange(snapshot)}</td>
                   <td>{snapshot?.volume != null ? formatNumber(snapshot.volume, 0) : "-"}</td>
-                  <td>{snapshot?.asOf ? formatShortDateTime(snapshot.asOf) : "-"}</td>
+                  <td>
+                    <span className="snapshot-time-cell">
+                      {snapshot?.asOf ? formatShortDateTime(snapshot.asOf) : "-"}
+                      {snapshot?.stale ? <span className="snapshot-stale-badge">stale</span> : null}
+                    </span>
+                  </td>
                 </tr>
               );
             })}

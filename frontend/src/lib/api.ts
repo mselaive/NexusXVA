@@ -75,12 +75,15 @@ export class NexusApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const method = init?.method?.toUpperCase() ?? "GET";
+  if (requiresCsrf(method, path) && !csrfToken) {
+    await refreshCsrfToken();
+  }
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
-      ...(csrfToken && !["GET", "HEAD", "OPTIONS"].includes(method) ? { "X-CSRF-Token": csrfToken } : {}),
+      ...(csrfToken && requiresCsrf(method, path) ? { "X-CSRF-Token": csrfToken } : {}),
       ...(init?.headers ?? {}),
     },
   });
@@ -99,6 +102,24 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return response.json() as Promise<T>;
+}
+
+function requiresCsrf(method: string, path: string) {
+  return !["GET", "HEAD", "OPTIONS"].includes(method) && path !== "/auth/login";
+}
+
+async function refreshCsrfToken() {
+  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  if (!response.ok) {
+    return;
+  }
+  const body = await response.json() as AuthResponse;
+  csrfToken = body.csrfToken;
 }
 
 async function readErrorBody(response: Response): Promise<ApiError | string | null> {
@@ -484,9 +505,9 @@ export const blembergApi = {
     externalRequest<BlembergCoverageResponse>(`${BLEMBERG_API_BASE_URL}/api/market-data/coverage?symbols=${encodeURIComponent(symbols.join(","))}`),
 
   refreshMarketData: (prioritySymbols?: string[]) =>
-    externalRequest<BlembergRefreshResponse>(`${BLEMBERG_API_BASE_URL}/api/admin/market-data/refresh`, {
+    request<BlembergRefreshResponse>("/market-data/blemberg/refresh", {
       method: "POST",
-      body: prioritySymbols && prioritySymbols.length > 0 ? JSON.stringify({ prioritySymbols }) : undefined,
+      body: JSON.stringify({ prioritySymbols: prioritySymbols ?? [] }),
     }),
 };
 

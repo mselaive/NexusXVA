@@ -49,10 +49,10 @@ export function MarketDataStatus() {
           console.warn("[Blemberg] Post-refresh snapshot reload failed", caught);
           return undefined;
         }),
-        prioritySymbols ? blembergApi.coverage(prioritySymbols).catch((caught) => {
+        blembergApi.coverage(prioritySymbols ?? WATCHLIST_SYMBOLS).catch((caught) => {
           console.warn("[Blemberg] Post-refresh coverage reload failed", caught);
           return undefined;
-        }) : Promise.resolve(undefined),
+        }),
         blembergApi.health(),
       ]);
 
@@ -60,12 +60,25 @@ export function MarketDataStatus() {
       logBlembergRefreshOutcome("Header refresh", refresh, loggedPrioritySymbols, coverage);
       const summary = summarizeBlembergRefresh(refresh, loggedPrioritySymbols, coverage);
       const missingAfterRefresh = snapshots?.missingSymbols ?? [];
+      const staleSnapshotSymbols = normalizeSymbols(snapshots?.snapshots
+        ?.filter((snapshot) => Boolean(snapshot.stale))
+        .map((snapshot) => snapshot.symbol));
+      const latestAsOf = snapshots?.snapshots?.reduce<string | null>((latest, snapshot) => {
+        if (!snapshot.asOf) {
+          return latest;
+        }
+        return !latest || snapshot.asOf > latest ? snapshot.asOf : latest;
+      }, null);
       setStatus(health.status === "UP" ? "online" : "offline");
-      setMessage(health.status === "UP" ? `${summary.message} ${missingAfterRefresh.length} snapshots missing.` : "Refresh sent, health not UP");
+      setMessage(health.status === "UP"
+        ? `${summary.message} ${missingAfterRefresh.length} missing, ${staleSnapshotSymbols.length} stale.`
+        : "Refresh sent, health not UP");
       console.info("[Blemberg] Header refresh completed", {
         health: health.status,
         missingBeforeRefresh,
         missingAfterRefresh,
+        staleSnapshotSymbols,
+        latestAsOf,
       });
       window.dispatchEvent(new CustomEvent("blemberg:refresh-completed", {
         detail: {
@@ -74,10 +87,15 @@ export function MarketDataStatus() {
           missingAfterRefresh,
         },
       }));
-    } catch {
+    } catch (caught) {
       setStatus("offline");
-      setMessage("Refresh unavailable");
-      console.error("[Blemberg] Header refresh failed");
+      const detail = caught instanceof NexusApiError
+        ? `${caught.status} ${caught.message}`
+        : caught instanceof Error
+          ? caught.message
+          : "Unknown error";
+      setMessage(`Refresh failed: ${detail}`);
+      console.error("[Blemberg] Header refresh failed", caught);
     }
   }
 

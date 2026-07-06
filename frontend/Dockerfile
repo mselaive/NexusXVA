@@ -9,7 +9,7 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-ARG NEXUSXVA_API_BASE_URL=http://backend:8080
+ARG NEXUSXVA_API_BASE_URL=http://nexusxva-backend:8080
 ARG BLEMBERG_BASE_URL=http://host.docker.internal:8081
 ENV NEXUSXVA_API_BASE_URL=${NEXUSXVA_API_BASE_URL}
 ENV BLEMBERG_BASE_URL=${BLEMBERG_BASE_URL}
@@ -25,7 +25,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NEXUSXVA_API_BASE_URL=http://backend:8080
+ENV NEXUSXVA_API_BASE_URL=http://nexusxva-backend:8080
 ENV BLEMBERG_BASE_URL=http://host.docker.internal:8081
 
 COPY --from=builder /app/.next ./.next

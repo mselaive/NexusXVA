@@ -10,19 +10,32 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexusxva -d nexusxva"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - nexusxva-network
 
   backend:
     build:
       context: ./backend
     container_name: nexusxva-backend
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/nexusxva
+      SPRING_DATASOURCE_USERNAME: nexusxva
+      SPRING_DATASOURCE_PASSWORD: nexusxva
       NEXUSXVA_MARKET_DATA_PROVIDER: ${NEXUSXVA_MARKET_DATA_PROVIDER:-local}
       NEXUSXVA_MARKET_DATA_VALIDATION_ENABLED: ${NEXUSXVA_MARKET_DATA_VALIDATION_ENABLED:-true}
       BLEMBERG_BASE_URL: ${BLEMBERG_BASE_URL:-http://host.docker.internal:8081}
       BLEMBERG_TIMEOUT: ${BLEMBERG_TIMEOUT:-2s}
+      BLEMBERG_REFRESH_TIMEOUT: ${BLEMBERG_REFRESH_TIMEOUT:-60s}
       NEXUSXVA_AUTH_ENABLED: ${NEXUSXVA_AUTH_ENABLED:-true}
       NEXUSXVA_EOD_ENABLED: ${NEXUSXVA_EOD_ENABLED:-false}
       NEXUSXVA_EOD_CRON: ${NEXUSXVA_EOD_CRON:-0 15 17 * * MON-FRI}
@@ -38,21 +51,42 @@ services:
       - "8080:8080"
     volumes:
       - backend-logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 45s
+    networks:
+      nexusxva-network:
+        aliases:
+          - backend
+          - nexusxva-backend
 
   frontend:
     build:
       context: ./frontend
       args:
-        NEXUSXVA_API_BASE_URL: http://backend:8080
+        NEXUSXVA_API_BASE_URL: http://nexusxva-backend:8080
         BLEMBERG_BASE_URL: ${BLEMBERG_BASE_URL:-http://host.docker.internal:8081}
     container_name: nexusxva-frontend
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     environment:
+      NEXUSXVA_API_BASE_URL: ${NEXUSXVA_API_BASE_URL:-http://nexusxva-backend:8080}
       BLEMBERG_BASE_URL: ${BLEMBERG_BASE_URL:-http://host.docker.internal:8081}
     ports:
       - "3000:3000"
+    networks:
+      nexusxva-network:
+        aliases:
+          - frontend
+          - nexusxva-frontend
 
 volumes:
   postgres-data:
   backend-logs:
+
+networks:
+  nexusxva-network:

@@ -15,6 +15,8 @@ import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,6 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/back-office/eod")
 public class BackOfficeEodController {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(BackOfficeEodController.class);
 
     private final PortfolioEodService service;
     private final PortfolioEodBatchService batchService;
@@ -52,7 +56,16 @@ public class BackOfficeEodController {
             HttpServletRequest servletRequest
     ) {
         LocalDate businessDate = request == null ? null : request.businessDate();
+        LOGGER.info("Manual BO EOD batch requested businessDate={}", businessDate);
         EodBatchResponse response = EodBatchResponse.from(batchService.captureAll(businessDate, "MANUAL_BO_BATCH"));
+        LOGGER.info(
+                "Manual BO EOD batch completed businessDate={} total={} captured={} skipped={} failed={}",
+                response.businessDate(),
+                response.totalPortfolios(),
+                response.captured(),
+                response.skipped(),
+                response.failed()
+        );
         auditService.record(AuditEventCommand.of(
                 "EOD_BATCH_STARTED",
                 "BACK_OFFICE",
@@ -88,7 +101,18 @@ public class BackOfficeEodController {
             @RequestBody(required = false) CapturePortfolioEodRequest request
     ) {
         LocalDate businessDate = request == null ? null : request.businessDate();
-        return PortfolioEodSnapshotResponse.from(service.capture(portfolioId, businessDate, "MANUAL_BO"));
+        LOGGER.info("Manual BO EOD portfolio capture requested portfolioId={} businessDate={}", portfolioId, businessDate);
+        PortfolioEodSnapshotResponse response = PortfolioEodSnapshotResponse.from(service.capture(portfolioId, businessDate, "MANUAL_BO"));
+        LOGGER.info(
+                "Manual BO EOD portfolio capture completed portfolioId={} runId={} businessDate={} positionCount={} totalMarketValue={} totalUnrealizedPnl={}",
+                portfolioId,
+                response.id(),
+                response.businessDate(),
+                response.positions().size(),
+                response.totalMarketValue(),
+                response.totalUnrealizedPnl()
+        );
+        return response;
     }
 
     @GetMapping("/portfolios/{portfolioId}/latest")
@@ -115,11 +139,13 @@ public class BackOfficeEodController {
             HttpServletRequest servletRequest
     ) {
         AuthSession session = currentSession(servletRequest);
+        LOGGER.info("Manual BO EOD void requested runId={} reviewerUserId={}", runId, session == null ? null : session.user().id());
         PortfolioEodSnapshotResponse response = PortfolioEodSnapshotResponse.from(service.voidRun(
                 runId,
                 session == null ? null : session.user().id(),
                 request.reason()
         ));
+        LOGGER.info("Manual BO EOD void completed runId={} portfolioId={} businessDate={}", runId, response.portfolioId(), response.businessDate());
         auditService.record(AuditEventCommand.of(
                 "EOD_RUN_VOIDED",
                 "BACK_OFFICE",
@@ -144,11 +170,20 @@ public class BackOfficeEodController {
             HttpServletRequest servletRequest
     ) {
         AuthSession session = currentSession(servletRequest);
+        LOGGER.info("Manual BO EOD recapture requested runId={} reviewerUserId={}", runId, session == null ? null : session.user().id());
         PortfolioEodSnapshotResponse response = PortfolioEodSnapshotResponse.from(service.recapture(
                 runId,
                 session == null ? null : session.user().id(),
                 request.reason()
         ));
+        LOGGER.info(
+                "Manual BO EOD recapture completed originalRunId={} newRunId={} portfolioId={} businessDate={} positionCount={}",
+                runId,
+                response.id(),
+                response.portfolioId(),
+                response.businessDate(),
+                response.positions().size()
+        );
         auditService.record(AuditEventCommand.of(
                 "EOD_RUN_RECAPTURED",
                 "BACK_OFFICE",

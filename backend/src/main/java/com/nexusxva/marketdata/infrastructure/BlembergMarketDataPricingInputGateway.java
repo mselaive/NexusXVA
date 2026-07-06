@@ -7,6 +7,7 @@ import com.nexusxva.shared.error.ServiceUnavailableException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 import org.springframework.web.client.HttpClientErrorException;
@@ -29,7 +30,7 @@ class BlembergMarketDataPricingInputGateway implements MarketDataPricingInputGat
 
     private final RestClient blembergRestClient;
 
-    BlembergMarketDataPricingInputGateway(RestClient blembergRestClient) {
+    BlembergMarketDataPricingInputGateway(@Qualifier("blembergRestClient") RestClient blembergRestClient) {
         this.blembergRestClient = blembergRestClient;
     }
 
@@ -46,10 +47,29 @@ class BlembergMarketDataPricingInputGateway implements MarketDataPricingInputGat
                     .body(BlembergPricingInputResponse.class);
 
             if (response == null) {
+                LOGGER.info("Blemberg pricing input lookup completed endpoint={} symbol={} maturityDate={} result=EMPTY",
+                        ENDPOINT,
+                        symbol,
+                        maturityDate);
                 return Optional.empty();
             }
 
-            return Optional.of(response.toDomain(symbol));
+            MarketDataPricingInput input = response.toDomain(symbol);
+            LOGGER.info(
+                    "Blemberg pricing input lookup completed endpoint={} symbol={} maturityDate={} result=FOUND spot={} volatility={} riskFreeRate={} dividendYield={} currency={} asOf={} source={} stale={}",
+                    ENDPOINT,
+                    input.symbol(),
+                    maturityDate,
+                    input.spot(),
+                    input.volatility(),
+                    input.riskFreeRate(),
+                    input.dividendYield(),
+                    input.currency(),
+                    input.asOf(),
+                    input.source(),
+                    input.stale()
+            );
+            return Optional.of(input);
         } catch (HttpClientErrorException.NotFound exception) {
             logHttpError(symbol, exception);
             return Optional.empty();

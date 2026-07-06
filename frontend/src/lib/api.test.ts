@@ -50,20 +50,25 @@ describe("blembergApi", () => {
   });
 
   it("sends priority symbols when refreshing market data", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ status: "COMPLETED", requestedSymbols: ["AAPL"] }), {
-        status: 200,
-      }),
-    );
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: "csrf-token" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: "COMPLETED", requestedSymbols: ["AAPL"] }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     await blembergApi.refreshMarketData(["AAPL"]);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/blemberg-api/api/admin/market-data/refresh",
+      "/nexus-api/auth/me",
+      expect.objectContaining({
+        credentials: "same-origin",
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/nexus-api/market-data/blemberg/refresh",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ prioritySymbols: ["AAPL"] }),
+        headers: expect.objectContaining({ "X-CSRF-Token": "csrf-token" }),
       }),
     );
   });

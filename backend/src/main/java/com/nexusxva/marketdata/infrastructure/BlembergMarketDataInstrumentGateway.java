@@ -7,6 +7,7 @@ import com.nexusxva.shared.error.ServiceUnavailableException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 import org.springframework.web.client.HttpClientErrorException;
@@ -27,7 +28,7 @@ class BlembergMarketDataInstrumentGateway implements MarketDataInstrumentGateway
 
     private final RestClient blembergRestClient;
 
-    BlembergMarketDataInstrumentGateway(RestClient blembergRestClient) {
+    BlembergMarketDataInstrumentGateway(@Qualifier("blembergRestClient") RestClient blembergRestClient) {
         this.blembergRestClient = blembergRestClient;
     }
 
@@ -40,9 +41,18 @@ class BlembergMarketDataInstrumentGateway implements MarketDataInstrumentGateway
                     .body(BlembergInstrumentResponse.class);
 
             if (response == null) {
+                LOGGER.info("Blemberg instrument lookup completed endpoint={} symbol={} result=EMPTY", ENDPOINT, symbol);
                 return Optional.empty();
             }
 
+            LOGGER.info(
+                    "Blemberg instrument lookup completed endpoint={} symbol={} result=FOUND active={} assetClass={} currency={}",
+                    ENDPOINT,
+                    symbol,
+                    Boolean.TRUE.equals(response.active()),
+                    response.assetClass(),
+                    response.currency()
+            );
             return Optional.of(response.toDomain(symbol));
         } catch (HttpClientErrorException.NotFound exception) {
             logHttpError(symbol, exception);

@@ -224,6 +224,18 @@ Technical logs are written to:
 - `logs/backend/integration/marketdata.log`
 - `logs/backend/jobs/eod.log`
 
+The logger routing is defined in `src/main/resources/logback-spring.xml`:
+
+- `com.nexusxva.auth` -> `security/auth.log`
+- `com.nexusxva.marketdata` -> `integration/marketdata.log`
+- `com.nexusxva.eod` -> `jobs/eod.log`
+- root logger -> console and `system/app.log`
+- error threshold appender -> `system/error.log`
+
+The dashboard market-data refresh goes through NexusXVA at `POST /api/market-data/blemberg/refresh` before calling Blemberg, so refresh requests and incomplete refresh results are visible in `marketdata.log`. Snapshot and coverage reads remain diagnostic frontend calls.
+
+NexusXVA also runs a Blemberg startup health probe by default, even when pricing uses the local market-data provider, because the dashboard can still use Blemberg for market-watch diagnostics. Disable it with `BLEMBERG_STARTUP_PROBE_ENABLED=false` if a local-only environment should stay quiet.
+
 Docker Compose mounts `backend-logs:/app/logs`. Local runs default to `logs/` from the backend working directory unless `NEXUSXVA_LOG_DIR` is overridden.
 
 Relevant environment variables:
@@ -604,6 +616,7 @@ nexusxva:
     blemberg:
       base-url: http://localhost:8081
       timeout: 2s
+      refresh-timeout: 60s
 ```
 
 Environment overrides:
@@ -613,7 +626,10 @@ NEXUSXVA_MARKET_DATA_PROVIDER=blemberg
 NEXUSXVA_MARKET_DATA_VALIDATION_ENABLED=true
 BLEMBERG_BASE_URL=http://localhost:8081
 BLEMBERG_TIMEOUT=2s
+BLEMBERG_REFRESH_TIMEOUT=60s
 ```
+
+`BLEMBERG_TIMEOUT` is intentionally short for health checks, symbol validation and pricing-input reads. The dashboard refresh button uses `BLEMBERG_REFRESH_TIMEOUT` because `POST /api/admin/market-data/refresh` can legitimately take several seconds while Blemberg updates cached provider data and handles rate limits.
 
 Before using Blemberg locally, start that service, trigger its refresh, and verify health:
 

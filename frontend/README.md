@@ -26,7 +26,7 @@ Open `http://localhost:3000`.
 In Docker, the dashboard proxy is built with:
 
 ```bash
-NEXUSXVA_API_BASE_URL=http://backend:8080
+NEXUSXVA_API_BASE_URL=http://nexusxva-backend:8080
 ```
 
 That means browser calls to `/nexus-api/*` are handled by the frontend container and forwarded to the backend container.

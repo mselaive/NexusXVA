@@ -300,7 +300,7 @@ export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps
                 <span>Log out</span>
               </button>
             ) : null}
-            <MarketDataStatus />
+            {authChecked ? <MarketDataStatus /> : null}
           </div>
         </header>
         {authChecked ? children : null}

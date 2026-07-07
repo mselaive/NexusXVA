@@ -7,6 +7,8 @@ import com.nexusxva.exposure.application.ExposureSimulationService;
 import com.nexusxva.exposure.domain.ExposurePoint;
 import com.nexusxva.xva.application.CreateCounterpartyCommand;
 import com.nexusxva.xva.application.CreateNettingSetCommand;
+import com.nexusxva.xva.application.UpdateCounterpartyCommand;
+import com.nexusxva.xva.application.UpdateNettingSetCommand;
 import com.nexusxva.xva.application.UpdateNettingSetCollateralCommand;
 import com.nexusxva.xva.application.XvaReferenceDataService;
 import com.nexusxva.xva.application.XvaStore;
@@ -36,6 +38,7 @@ class CvaNettingSetCalculationServiceTest {
                 nettingSetId,
                 counterpartyId,
                 "Global Bank",
+                true,
                 "Equity Options CSA",
                 "USD",
                 BigDecimal.valueOf(25),
@@ -106,7 +109,7 @@ class CvaNettingSetCalculationServiceTest {
         }
 
         @Override
-        public NettingSet getNettingSet(UUID nettingSetId) {
+        public NettingSet getOperableNettingSet(UUID nettingSetId) {
             return nettingSet;
         }
     }
@@ -149,7 +152,12 @@ class CvaNettingSetCalculationServiceTest {
         }
 
         @Override
-        public List<Counterparty> listCounterparties() {
+        public Counterparty updateCounterparty(UUID counterpartyId, UpdateCounterpartyCommand command) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<Counterparty> listCounterparties(boolean includeInactive) {
             return List.of();
         }
 
@@ -164,7 +172,12 @@ class CvaNettingSetCalculationServiceTest {
         }
 
         @Override
-        public List<NettingSet> listNettingSets() {
+        public NettingSet updateNettingSet(UUID nettingSetId, UpdateNettingSetCommand command) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<NettingSet> listNettingSets(boolean includeInactive) {
             return List.of();
         }
 

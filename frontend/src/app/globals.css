@@ -1867,6 +1867,227 @@ a {
   gap: 8px;
 }
 
+.xva-summary {
+  margin-bottom: 16px;
+}
+
+.xva-setup-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.75fr) minmax(0, 1.25fr);
+  gap: 14px;
+}
+
+.xva-directory,
+.xva-detail {
+  min-width: 0;
+}
+
+.xva-counterparty-list,
+.xva-netting-list {
+  display: grid;
+  gap: 8px;
+}
+
+.xva-counterparty-row,
+.xva-netting-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 4px 9px;
+  align-items: center;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.xva-counterparty-row:hover,
+.xva-counterparty-row.selected,
+.xva-netting-row:hover,
+.xva-netting-row.selected {
+  border-color: var(--accent);
+  background: #f0faf7;
+  transform: translateY(-1px);
+}
+
+.xva-counterparty-row strong,
+.xva-netting-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xva-counterparty-row small,
+.xva-netting-row small {
+  grid-column: 2;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xva-counterparty-row em,
+.xva-netting-row em {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  text-align: right;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.status-dot.active {
+  background: var(--accent);
+}
+
+.status-dot.inactive {
+  background: var(--danger);
+}
+
+.xva-create-card,
+.xva-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfc;
+  padding: 14px;
+}
+
+.xva-create-card {
+  margin-top: 14px;
+}
+
+.xva-create-card h3,
+.xva-card h3 {
+  margin: 0;
+}
+
+.xva-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+
+.xva-detail-head h2 {
+  margin: 9px 0 3px;
+  font-size: 26px;
+}
+
+.xva-detail-head p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.xva-detail-head > svg {
+  color: var(--accent-strong);
+}
+
+.xva-two-column,
+.xva-netting-workspace {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.xva-netting-workspace {
+  grid-template-columns: minmax(260px, 0.75fr) minmax(0, 1.25fr);
+  margin-bottom: 0;
+}
+
+.xva-card-wide {
+  align-content: start;
+}
+
+.xva-toggle {
+  min-height: 42px;
+  margin-top: 22px;
+}
+
+.xva-readonly-field {
+  display: grid;
+  gap: 5px;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 9px 10px;
+}
+
+.xva-readonly-field span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.xva-assignment {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.xva-portfolio-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.xva-portfolio-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.xva-portfolio-card.assigned {
+  border-color: var(--accent);
+  background: #f0faf7;
+}
+
+.xva-portfolio-card.disabled {
+  opacity: 0.72;
+}
+
+.xva-portfolio-card strong,
+.xva-portfolio-card small {
+  display: block;
+  min-width: 0;
+}
+
+.xva-portfolio-card small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.compact-action {
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
 .workflow-node-map {
   position: relative;
   display: grid;
@@ -4522,6 +4743,12 @@ tr:last-child td {
     grid-template-columns: 1fr;
   }
 
+  .xva-setup-layout,
+  .xva-two-column,
+  .xva-netting-workspace {
+    grid-template-columns: 1fr;
+  }
+
   .admin-workflow-layout.visual {
     grid-template-columns: 1fr;
   }
@@ -4574,6 +4801,9 @@ tr:last-child td {
   .workflow-lanes,
   .dealpad-layout,
   .fo-desk-layout,
+  .xva-setup-layout,
+  .xva-two-column,
+  .xva-netting-workspace,
   .whatif-layout,
   .lifecycle-report-grid,
   .notebook-grid,
@@ -4599,6 +4829,7 @@ tr:last-child td {
   }
 
   .cva-scope-cards,
+  .xva-portfolio-card,
   .curve-row {
     grid-template-columns: 1fr;
   }

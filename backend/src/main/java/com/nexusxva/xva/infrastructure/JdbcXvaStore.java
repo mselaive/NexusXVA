@@ -3,6 +3,8 @@ package com.nexusxva.xva.infrastructure;
 import com.nexusxva.shared.error.ConflictException;
 import com.nexusxva.xva.application.CreateCounterpartyCommand;
 import com.nexusxva.xva.application.CreateNettingSetCommand;
+import com.nexusxva.xva.application.UpdateCounterpartyCommand;
+import com.nexusxva.xva.application.UpdateNettingSetCommand;
 import com.nexusxva.xva.application.UpdateNettingSetCollateralCommand;
 import com.nexusxva.xva.application.XvaStore;
 import com.nexusxva.xva.domain.Counterparty;
@@ -44,12 +46,34 @@ class JdbcXvaStore implements XvaStore {
     }
 
     @Override
-    public List<Counterparty> listCounterparties() {
+    public Counterparty updateCounterparty(UUID counterpartyId, UpdateCounterpartyCommand command) {
+        try {
+            jdbcTemplate.update("""
+                    UPDATE counterparties
+                    SET name = ?, external_id = ?, credit_rating = ?, active = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    command.name(),
+                    command.externalId(),
+                    command.creditRating(),
+                    command.active(),
+                    Instant.now(),
+                    counterpartyId);
+        } catch (DataIntegrityViolationException exception) {
+            throw new ConflictException("Counterparty already exists");
+        }
+        return findCounterparty(counterpartyId).orElseThrow();
+    }
+
+    @Override
+    public List<Counterparty> listCounterparties(boolean includeInactive) {
+        String whereClause = includeInactive ? "" : "WHERE active = TRUE";
         return jdbcTemplate.query("""
                 SELECT id, name, external_id, credit_rating, active, created_at, updated_at
                 FROM counterparties
+                %s
                 ORDER BY name
-                """, this::mapCounterparty);
+                """.formatted(whereClause), this::mapCounterparty);
     }
 
     @Override
@@ -86,8 +110,23 @@ class JdbcXvaStore implements XvaStore {
     }
 
     @Override
-    public List<NettingSet> listNettingSets() {
-        return jdbcTemplate.query(nettingSetSql(""), nettingSetMapper());
+    public NettingSet updateNettingSet(UUID nettingSetId, UpdateNettingSetCommand command) {
+        try {
+            jdbcTemplate.update("""
+                    UPDATE netting_sets
+                    SET name = ?, active = ?, updated_at = ?
+                    WHERE id = ?
+                    """, command.name(), command.active(), Instant.now(), nettingSetId);
+        } catch (DataIntegrityViolationException exception) {
+            throw new ConflictException("Netting set already exists for this counterparty");
+        }
+        return findNettingSet(nettingSetId).orElseThrow();
+    }
+
+    @Override
+    public List<NettingSet> listNettingSets(boolean includeInactive) {
+        String whereClause = includeInactive ? "" : "WHERE ns.active = TRUE AND cp.active = TRUE";
+        return jdbcTemplate.query(nettingSetSql(whereClause), nettingSetMapper());
     }
 
     @Override
@@ -134,6 +173,7 @@ class JdbcXvaStore implements XvaStore {
                 SELECT ns.id,
                        ns.counterparty_id,
                        cp.name AS counterparty_name,
+                       cp.active AS counterparty_active,
                        ns.name,
                        ns.base_currency,
                        ns.collateral_amount,
@@ -155,6 +195,7 @@ class JdbcXvaStore implements XvaStore {
                     id,
                     rs.getObject("counterparty_id", UUID.class),
                     rs.getString("counterparty_name"),
+                    rs.getBoolean("counterparty_active"),
                     rs.getString("name"),
                     rs.getString("base_currency"),
                     rs.getBigDecimal("collateral_amount"),

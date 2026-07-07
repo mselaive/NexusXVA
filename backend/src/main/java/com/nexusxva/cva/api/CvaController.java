@@ -109,7 +109,7 @@ public class CvaController {
             HttpServletRequest servletRequest
     ) {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_RUN_CVA);
-        xvaReferenceDataService.getNettingSet(request.nettingSetId())
+        xvaReferenceDataService.getOperableNettingSet(request.nettingSetId())
                 .portfolios()
                 .forEach(portfolio -> userAccessService.requirePortfolioAccess(servletRequest, portfolio.portfolioId()));
         CvaNettingSetCalculationResult result = cvaNettingSetCalculationService.calculate(request.toCommand());

@@ -171,7 +171,7 @@ Audit metadata is sanitized. Passwords, cookies, CSRF tokens, raw request bodies
 
 ## Counterparties, Netting and Collateral
 
-ADMIN can configure counterparties, netting sets, assign portfolios to a netting set, and set a simple static collateral amount. FO can then run CVA in either single-portfolio mode or netting-set mode.
+ADMIN can configure counterparties, netting sets, assign portfolios to a netting set, activate/deactivate setup records, and set a simple static collateral amount from **XVA Setup**. FO can then run CVA in either single-portfolio mode or active netting-set mode.
 
 Netting-set CVA V1 aggregates the assigned portfolio exposure profiles, subtracts static collateral from positive exposure buckets, and applies the existing CVA formula. This is intentionally an early model: it is not path-level legal netting, CSA margining, collateral calls, or wrong-way risk.
 

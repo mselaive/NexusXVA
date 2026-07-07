@@ -238,14 +238,14 @@ ADMIN setup request
   -> PostgreSQL
 ```
 
-NexusXVA persiste counterparties, netting sets, asignaciones de portfolios y un monto simple de collateral estatico. Esto no es market data y no reemplaza a Blemberg.
+NexusXVA persiste counterparties, netting sets, asignaciones de portfolios y un monto simple de collateral estatico. Esto no es market data y no reemplaza a Blemberg. ADMIN lo mantiene desde XVA Setup; counterparties o netting sets inactivos quedan en historial, pero se ocultan de la seleccion CVA de FO y se bloquean para nuevos runs de CVA por netting set.
 
 El CVA por netting set fluye asi:
 
 ```text
 FO netting-set CVA request
   -> cva.api
-  -> xva.application carga el netting set
+  -> xva.application carga el netting set activo/operable
   -> exposure.application por cada portfolio asignado
   -> netting a nivel perfil y ajuste por collateral estatico
   -> cva.domain formula CVA simplificada

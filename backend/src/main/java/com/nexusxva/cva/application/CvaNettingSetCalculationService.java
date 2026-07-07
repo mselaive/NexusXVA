@@ -38,10 +38,7 @@ public class CvaNettingSetCalculationService {
 
     @Transactional(readOnly = true)
     public CvaNettingSetCalculationResult calculate(CvaNettingSetCalculationCommand command) {
-        NettingSet nettingSet = xvaReferenceDataService.getNettingSet(command.nettingSetId());
-        if (!nettingSet.active()) {
-            throw new IllegalArgumentException("Netting set must be active");
-        }
+        NettingSet nettingSet = xvaReferenceDataService.getOperableNettingSet(command.nettingSetId());
         if (nettingSet.portfolios().isEmpty()) {
             throw new IllegalArgumentException("Netting set must contain at least one active portfolio");
         }

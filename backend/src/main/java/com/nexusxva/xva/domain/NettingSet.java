@@ -9,6 +9,7 @@ public record NettingSet(
         UUID id,
         UUID counterpartyId,
         String counterpartyName,
+        boolean counterpartyActive,
         String name,
         String baseCurrency,
         BigDecimal collateralAmount,

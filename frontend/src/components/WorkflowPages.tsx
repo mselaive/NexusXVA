@@ -1512,21 +1512,27 @@ function CvaScopePanel({
           <label className="field cva-netting-selector">
             <span>Netting set</span>
             <select className="select" value={selectedNettingSetId} onChange={(event) => setSelectedNettingSetId(event.target.value)}>
-              {nettingSets.length === 0 ? <option value="">No netting sets configured</option> : null}
+              {nettingSets.length === 0 ? <option value="">No active netting sets configured</option> : null}
               {nettingSets.map((nettingSet) => (
                 <option key={nettingSet.id} value={nettingSet.id}>
-                  {nettingSet.counterpartyName} / {nettingSet.name}
+                  {nettingSet.counterpartyName} / {nettingSet.name} · {nettingSet.baseCurrency} · {nettingSet.portfolios.length} portfolios
                 </option>
               ))}
             </select>
           </label>
           <div className="cva-scope-cards">
             <Metric label="Counterparty" value={selected?.counterpartyName ?? "-"} />
-            <Metric label="Collateral" value={selected ? `${formatCurrency(selected.collateralAmount)} ${selected.collateralCurrency}` : "-"} />
-            <Metric label="Portfolios" value={selected ? String(selected.portfolios.length) : "0"} />
+            <Metric label="Netting set" value={selected?.name ?? "-"} />
             <Metric label="Base currency" value={selected?.baseCurrency ?? "-"} />
+            <Metric label="Collateral" value={selected ? `${formatCurrency(selected.collateralAmount, selected.collateralCurrency)} ${selected.collateralCurrency}` : "-"} />
+            <Metric label="Portfolios" value={selected ? String(selected.portfolios.length) : "0"} />
+            <Metric label="Status" value={selected ? "Active" : "-"} />
           </div>
-          <p className="mini-note">V1 uses profile-level netting and static collateral. It is useful for early counterparty CVA, but it is not yet path-level CSA margining.</p>
+          {nettingSets.length === 0 ? (
+            <p className="mini-note">No active ADMIN-owned XVA setup is available. ADMIN can configure counterparties, netting sets, portfolio assignment and collateral in XVA Setup.</p>
+          ) : (
+            <p className="mini-note">V1 uses profile-level netting and static collateral. Inactive counterparties or netting sets are hidden from this selector.</p>
+          )}
         </div>
       ) : null}
     </div>

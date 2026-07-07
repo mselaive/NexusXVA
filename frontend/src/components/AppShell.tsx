@@ -14,6 +14,7 @@ import {
   GitBranch,
   HelpCircle,
   History,
+  Landmark,
   LineChart,
   ListChecks,
   LogOut,
@@ -60,6 +61,7 @@ const navItems = [
   { href: "/trading-limits", label: "Trading Limits", icon: SlidersHorizontal },
   { href: "/eod-control", label: "EOD Control", icon: CalendarCheck },
   { href: "/admin", label: "Administration", icon: Settings },
+  { href: "/xva-setup", label: "XVA Setup", icon: Landmark },
   { href: "/workflows", label: "Workflows", icon: GitBranch },
   { href: "/audit-logs", label: "Audit Logs", icon: ScrollText },
 ];

@@ -61,6 +61,7 @@
 - Netting-set CVA V1 is profile-level netting with static collateral. Do not describe it as path-level netting, CSA margining, legal close-out netting, or collateral call simulation.
 - A portfolio can belong to only one netting set in V1.
 - Netting-set setup mutations are ADMIN-owned; FO may consume configured netting sets for CVA when authorized.
+- Inactive counterparties or inactive netting sets are historical reference data only. Hide/block them from FO CVA selection, new portfolio assignment, and netting-set CVA runs.
 
 ## API Design
 

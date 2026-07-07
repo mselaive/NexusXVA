@@ -839,13 +839,15 @@ NexusXVA now has a first XVA reference-data slice:
 
 - `GET /api/xva/counterparties`
 - `POST /api/xva/counterparties`
+- `PATCH /api/xva/counterparties/{counterpartyId}`
 - `GET /api/xva/netting-sets`
 - `POST /api/xva/netting-sets`
+- `PATCH /api/xva/netting-sets/{nettingSetId}`
 - `POST /api/xva/netting-sets/{nettingSetId}/portfolios`
 - `DELETE /api/xva/netting-sets/{nettingSetId}/portfolios/{portfolioId}`
 - `PATCH /api/xva/netting-sets/{nettingSetId}/collateral`
 
-Mutating setup endpoints require an `ADMIN` active group when auth is enabled. Read endpoints are available to authenticated groups so FO can select a netting set in CVA.
+Mutating setup endpoints require an `ADMIN` active group when auth is enabled. Read endpoints default to active/operable records only; ADMIN can pass `includeInactive=true` for setup screens. FO CVA selection consumes only active counterparties and active netting sets.
 
 Netting-set CVA endpoint:
 
@@ -873,6 +875,7 @@ Example request:
 V1 rules:
 
 - A counterparty can own multiple netting sets.
+- Inactive counterparties and inactive netting sets are retained for history but blocked for new netting-set CVA runs and new portfolio assignments.
 - A portfolio can be assigned to only one netting set.
 - Netting set and portfolio currencies must match.
 - Netting-set CVA V1 supports one base currency per netting set and requires collateral currency to match that base currency.

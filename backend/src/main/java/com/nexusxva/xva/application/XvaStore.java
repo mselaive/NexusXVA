@@ -8,10 +8,12 @@ import java.util.UUID;
 
 public interface XvaStore {
     Counterparty createCounterparty(CreateCounterpartyCommand command);
-    List<Counterparty> listCounterparties();
+    Counterparty updateCounterparty(UUID counterpartyId, UpdateCounterpartyCommand command);
+    List<Counterparty> listCounterparties(boolean includeInactive);
     Optional<Counterparty> findCounterparty(UUID counterpartyId);
     NettingSet createNettingSet(CreateNettingSetCommand command);
-    List<NettingSet> listNettingSets();
+    NettingSet updateNettingSet(UUID nettingSetId, UpdateNettingSetCommand command);
+    List<NettingSet> listNettingSets(boolean includeInactive);
     Optional<NettingSet> findNettingSet(UUID nettingSetId);
     NettingSet assignPortfolio(UUID nettingSetId, UUID portfolioId);
     NettingSet removePortfolio(UUID nettingSetId, UUID portfolioId);

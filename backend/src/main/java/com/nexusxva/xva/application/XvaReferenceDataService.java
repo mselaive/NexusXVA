@@ -27,21 +27,37 @@ public class XvaReferenceDataService {
         return store.createCounterparty(command);
     }
 
+    @Transactional
+    public Counterparty updateCounterparty(UUID counterpartyId, UpdateCounterpartyCommand command) {
+        store.findCounterparty(counterpartyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Counterparty not found"));
+        return store.updateCounterparty(counterpartyId, command);
+    }
+
     @Transactional(readOnly = true)
-    public List<Counterparty> listCounterparties() {
-        return store.listCounterparties();
+    public List<Counterparty> listCounterparties(boolean includeInactive) {
+        return store.listCounterparties(includeInactive);
     }
 
     @Transactional
     public NettingSet createNettingSet(CreateNettingSetCommand command) {
-        store.findCounterparty(command.counterpartyId())
+        Counterparty counterparty = store.findCounterparty(command.counterpartyId())
                 .orElseThrow(() -> new ResourceNotFoundException("Counterparty not found"));
+        if (!counterparty.active()) {
+            throw new ConflictException("Counterparty must be active");
+        }
         return store.createNettingSet(command);
     }
 
+    @Transactional
+    public NettingSet updateNettingSet(UUID nettingSetId, UpdateNettingSetCommand command) {
+        getNettingSet(nettingSetId);
+        return store.updateNettingSet(nettingSetId, command);
+    }
+
     @Transactional(readOnly = true)
-    public List<NettingSet> listNettingSets() {
-        return store.listNettingSets();
+    public List<NettingSet> listNettingSets(boolean includeInactive) {
+        return store.listNettingSets(includeInactive);
     }
 
     @Transactional(readOnly = true)
@@ -50,9 +66,21 @@ public class XvaReferenceDataService {
                 .orElseThrow(() -> new ResourceNotFoundException("Netting set not found"));
     }
 
+    @Transactional(readOnly = true)
+    public NettingSet getOperableNettingSet(UUID nettingSetId) {
+        NettingSet nettingSet = getNettingSet(nettingSetId);
+        if (!nettingSet.active() || !nettingSet.counterpartyActive()) {
+            throw new ResourceNotFoundException("Netting set not found");
+        }
+        return nettingSet;
+    }
+
     @Transactional
     public NettingSet assignPortfolio(UUID nettingSetId, UUID portfolioId) {
         NettingSet nettingSet = getNettingSet(nettingSetId);
+        if (!nettingSet.active() || !nettingSet.counterpartyActive()) {
+            throw new ConflictException("Netting set must be active");
+        }
         Portfolio portfolio = portfolioService.getPortfolio(portfolioId);
         if (!portfolio.baseCurrency().equals(nettingSet.baseCurrency())) {
             throw new ConflictException("Portfolio currency must match netting set baseCurrency in V1");

@@ -16,6 +16,8 @@ import type {
   BlembergRefreshResponse,
   BackOfficeOperationsReport,
   CreatePortfolioRequest,
+  CreateCounterpartyRequest,
+  CreateNettingSetRequest,
   CreateOptionStrategyBookingRequest,
   CreateCashEquityBookingRequest,
   CvaCalculationRequest,
@@ -52,6 +54,8 @@ import type {
   TradingLimitSnapshot,
   TradingLimitUserPage,
   UpdateTradingLimitRequest,
+  UpdateCounterpartyRequest,
+  UpdateNettingSetRequest,
   UserNotification,
   ValuationRun,
   ValuationRunStatus,
@@ -360,9 +364,52 @@ export const nexusApi = {
       body: JSON.stringify(body),
     }),
 
-  listCounterparties: () => request<Counterparty[]>("/xva/counterparties"),
+  listCounterparties: (includeInactive = false) =>
+    request<Counterparty[]>(`/xva/counterparties?includeInactive=${includeInactive}`),
 
-  listNettingSets: () => request<NettingSet[]>("/xva/netting-sets"),
+  createCounterparty: (body: CreateCounterpartyRequest) =>
+    request<Counterparty>("/xva/counterparties", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  updateCounterparty: (counterpartyId: string, body: UpdateCounterpartyRequest) =>
+    request<Counterparty>(`/xva/counterparties/${counterpartyId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  listNettingSets: (includeInactive = false) =>
+    request<NettingSet[]>(`/xva/netting-sets?includeInactive=${includeInactive}`),
+
+  createNettingSet: (body: CreateNettingSetRequest) =>
+    request<NettingSet>("/xva/netting-sets", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  updateNettingSet: (nettingSetId: string, body: UpdateNettingSetRequest) =>
+    request<NettingSet>(`/xva/netting-sets/${nettingSetId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  updateNettingSetCollateral: (nettingSetId: string, collateralAmount: number) =>
+    request<NettingSet>(`/xva/netting-sets/${nettingSetId}/collateral`, {
+      method: "PATCH",
+      body: JSON.stringify({ collateralAmount }),
+    }),
+
+  assignNettingSetPortfolio: (nettingSetId: string, portfolioId: string) =>
+    request<NettingSet>(`/xva/netting-sets/${nettingSetId}/portfolios`, {
+      method: "POST",
+      body: JSON.stringify({ portfolioId }),
+    }),
+
+  removeNettingSetPortfolio: (nettingSetId: string, portfolioId: string) =>
+    request<NettingSet>(`/xva/netting-sets/${nettingSetId}/portfolios/${portfolioId}`, {
+      method: "DELETE",
+    }),
 
   listValuationRuns: (filters: {
     runType?: ValuationRunType | "";

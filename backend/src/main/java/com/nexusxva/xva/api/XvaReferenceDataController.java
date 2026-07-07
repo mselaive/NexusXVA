@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -33,8 +34,10 @@ public class XvaReferenceDataController {
     }
 
     @GetMapping("/counterparties")
-    public List<CounterpartyResponse> listCounterparties() {
-        return service.listCounterparties().stream().map(CounterpartyResponse::from).toList();
+    public List<CounterpartyResponse> listCounterparties(
+            @RequestParam(defaultValue = "false") boolean includeInactive
+    ) {
+        return service.listCounterparties(includeInactive).stream().map(CounterpartyResponse::from).toList();
     }
 
     @PostMapping("/counterparties")
@@ -60,9 +63,35 @@ public class XvaReferenceDataController {
         return response;
     }
 
+    @PatchMapping("/counterparties/{counterpartyId}")
+    public CounterpartyResponse updateCounterparty(
+            @PathVariable UUID counterpartyId,
+            @Valid @RequestBody UpdateCounterpartyRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        requireAdmin(servletRequest);
+        CounterpartyResponse response = CounterpartyResponse.from(service.updateCounterparty(counterpartyId, request.toCommand()));
+        auditService.record(AuditEventCommand.of(
+                response.active() ? "XVA_COUNTERPARTY_UPDATED" : "XVA_COUNTERPARTY_DEACTIVATED",
+                "XVA",
+                response.active() ? "UPDATE_COUNTERPARTY" : "DEACTIVATE_COUNTERPARTY",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "COUNTERPARTY",
+                response.id(),
+                "Counterparty updated",
+                auditService.metadata(java.util.Map.of("name", response.name(), "active", response.active()))
+        ));
+        return response;
+    }
+
     @GetMapping("/netting-sets")
-    public List<NettingSetResponse> listNettingSets() {
-        return service.listNettingSets().stream().map(NettingSetResponse::from).toList();
+    public List<NettingSetResponse> listNettingSets(
+            @RequestParam(defaultValue = "false") boolean includeInactive
+    ) {
+        return service.listNettingSets(includeInactive).stream().map(NettingSetResponse::from).toList();
     }
 
     @PostMapping("/netting-sets")
@@ -84,6 +113,30 @@ public class XvaReferenceDataController {
                 response.id(),
                 "Netting set created",
                 auditService.metadata(java.util.Map.of("name", response.name(), "counterpartyId", response.counterpartyId()))
+        ));
+        return response;
+    }
+
+    @PatchMapping("/netting-sets/{nettingSetId}")
+    public NettingSetResponse updateNettingSet(
+            @PathVariable UUID nettingSetId,
+            @Valid @RequestBody UpdateNettingSetRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        requireAdmin(servletRequest);
+        NettingSetResponse response = NettingSetResponse.from(service.updateNettingSet(nettingSetId, request.toCommand()));
+        auditService.record(AuditEventCommand.of(
+                response.active() ? "XVA_NETTING_SET_UPDATED" : "XVA_NETTING_SET_DEACTIVATED",
+                "XVA",
+                response.active() ? "UPDATE_NETTING_SET" : "DEACTIVATE_NETTING_SET",
+                AuditOutcome.SUCCESS,
+                currentSession(servletRequest),
+                servletRequest,
+                200,
+                "NETTING_SET",
+                response.id(),
+                "Netting set updated",
+                auditService.metadata(java.util.Map.of("name", response.name(), "active", response.active()))
         ));
         return response;
     }

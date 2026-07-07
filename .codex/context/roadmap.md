@@ -179,6 +179,7 @@ Current notes:
 - Request-provided curves are interpolated linearly and are not persisted.
 - Single-portfolio CVA API requests/responses are copied into valuation run history for audit.
 - Counterparty and netting-set reference data is implemented in the `xva` module.
+- ADMIN XVA Setup manages counterparties, netting sets, static collateral, active/inactive status, and portfolio assignment.
 - Netting-set CVA V1 aggregates exposure profiles across assigned portfolios and subtracts static collateral before applying CVA.
 - Netting-set CVA is profile-level only; no path-level legal netting, CSA margining, wrong-way risk, persisted credit curves, or persisted CVA result state yet.
 - Netting-set CVA is not copied into valuation run history yet because `valuation_runs` is currently portfolio-scoped.

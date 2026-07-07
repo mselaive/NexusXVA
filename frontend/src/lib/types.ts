@@ -616,6 +616,16 @@ export type Counterparty = {
   updatedAt: string;
 };
 
+export type CreateCounterpartyRequest = {
+  name: string;
+  externalId?: string | null;
+  creditRating?: string | null;
+};
+
+export type UpdateCounterpartyRequest = CreateCounterpartyRequest & {
+  active: boolean;
+};
+
 export type NettingSetPortfolio = {
   portfolioId: string;
   portfolioName: string;
@@ -627,6 +637,7 @@ export type NettingSet = {
   id: string;
   counterpartyId: string;
   counterpartyName: string;
+  counterpartyActive: boolean;
   name: string;
   baseCurrency: string;
   collateralAmount: number;
@@ -635,6 +646,19 @@ export type NettingSet = {
   createdAt: string;
   updatedAt: string;
   portfolios: NettingSetPortfolio[];
+};
+
+export type CreateNettingSetRequest = {
+  counterpartyId: string;
+  name: string;
+  baseCurrency?: string;
+  collateralAmount?: number;
+  collateralCurrency?: string;
+};
+
+export type UpdateNettingSetRequest = {
+  name: string;
+  active: boolean;
 };
 
 export type CvaPoint = {

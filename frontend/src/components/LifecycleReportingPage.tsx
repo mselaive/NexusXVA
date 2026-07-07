@@ -68,6 +68,8 @@ export function LifecycleReportingPage() {
         <MetricCard icon={<Clock3 size={17} />} label="Pending BO" value={formatNumber(report?.pendingValidation ?? 0, 0)} />
         <MetricCard icon={<CheckCircle2 size={17} />} label="Approved" value={formatNumber(report?.approved ?? 0, 0)} />
         <MetricCard icon={<XCircle size={17} />} label="Rejected" value={formatNumber(report?.rejected ?? 0, 0)} />
+        <MetricCard icon={<AlertTriangle size={17} />} label="Oldest pending" value={formatAge(report?.oldestPendingSubmittedAt)} />
+        <MetricCard icon={<Clock3 size={17} />} label="Avg review" value={report?.averageReviewMinutes == null ? "No reviewed" : `${formatNumber(report.averageReviewMinutes, 0)} min`} />
       </div>
 
       <div className="lifecycle-report-grid section">
@@ -94,9 +96,20 @@ export function LifecycleReportingPage() {
             </div>
             <Repeat2 size={19} />
           </div>
-          <div className="lifecycle-mix">
-            <MixCard label="Amendments" value={report?.amendments ?? 0} total={report?.total ?? 0} />
-            <MixCard label="Cancellations" value={report?.cancellations ?? 0} total={report?.total ?? 0} />
+          <div className="table-wrap compact-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Request type</th>
+                  <th>Count</th>
+                  <th>Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                <RequestMixRow label="Amendments" value={report?.amendments ?? 0} total={report?.total ?? 0} />
+                <RequestMixRow label="Cancellations" value={report?.cancellations ?? 0} total={report?.total ?? 0} />
+              </tbody>
+            </table>
           </div>
         </section>
       </div>
@@ -141,14 +154,14 @@ function AgingBars({ buckets, total }: { buckets: LifecycleAgingBucket[]; total:
   );
 }
 
-function MixCard({ label, value, total }: { label: string; value: number; total: number }) {
+function RequestMixRow({ label, value, total }: { label: string; value: number; total: number }) {
   const percentage = total === 0 ? 0 : (value / total) * 100;
   return (
-    <div className="mix-card">
-      <span>{label}</span>
-      <strong>{formatNumber(value, 0)}</strong>
-      <em>{formatNumber(percentage, 1)}%</em>
-    </div>
+    <tr>
+      <td>{label}</td>
+      <td>{formatNumber(value, 0)}</td>
+      <td>{formatNumber(percentage, 1)}%</td>
+    </tr>
   );
 }
 
@@ -210,4 +223,19 @@ function formatDateTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatAge(value: string | null | undefined) {
+  if (!value) {
+    return "No pending";
+  }
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000));
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) {
+    return `${hours}h ${minutes % 60}m`;
+  }
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }

@@ -108,6 +108,9 @@ public class AuthSessionFilter extends OncePerRequestFilter {
         }
 
         String path = request.getRequestURI();
+        if (path.equals("/api/operational-control/status")) {
+            return true;
+        }
         return switch (activeGroup) {
             case "FO" -> path.startsWith("/api/portfolios")
                     || path.startsWith("/api/front-office")

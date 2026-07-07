@@ -37,6 +37,8 @@ import type {
   FrontOfficeWhatIfResponse,
   LoginRequest,
   NotificationPage,
+  OperationalControlSettings,
+  OperationalControlStatus,
   Counterparty,
   NettingSet,
   Portfolio,
@@ -54,6 +56,7 @@ import type {
   TradingLimitSnapshot,
   TradingLimitUserPage,
   UpdateTradingLimitRequest,
+  UpdateOperationalControlRequest,
   UpdateCounterpartyRequest,
   UpdateNettingSetRequest,
   UserNotification,
@@ -152,6 +155,18 @@ export const nexusApi = {
   markAllNotificationsRead: () =>
     request<void>("/notifications/read-all", {
       method: "POST",
+    }),
+
+  getOperationalControlStatus: () =>
+    request<OperationalControlStatus>("/operational-control/status"),
+
+  getOperationalControlSettings: () =>
+    request<OperationalControlSettings>("/admin/operational-control"),
+
+  updateOperationalControlSettings: (body: UpdateOperationalControlRequest) =>
+    request<OperationalControlSettings>("/admin/operational-control", {
+      method: "PUT",
+      body: JSON.stringify(body),
     }),
 
   listPortfolios: () => request<PortfolioSummary[]>("/portfolios"),

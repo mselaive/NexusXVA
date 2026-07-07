@@ -11,6 +11,7 @@ import com.nexusxva.cva.application.CvaCalculationResult;
 import com.nexusxva.cva.application.CvaCalculationService;
 import com.nexusxva.cva.application.CvaNettingSetCalculationResult;
 import com.nexusxva.cva.application.CvaNettingSetCalculationService;
+import com.nexusxva.operationalcontrol.application.OperationalControlService;
 import com.nexusxva.shared.error.ResourceNotFoundException;
 import com.nexusxva.valuationruns.application.ValuationRunService;
 import com.nexusxva.valuationruns.domain.ValuationRunType;
@@ -36,6 +37,7 @@ public class CvaController {
     private final ValuationRunService valuationRunService;
     private final XvaReferenceDataService xvaReferenceDataService;
     private final AuditService auditService;
+    private final OperationalControlService operationalControlService;
 
     public CvaController(
             CvaCalculationService cvaCalculationService,
@@ -43,7 +45,8 @@ public class CvaController {
             UserAccessService userAccessService,
             ValuationRunService valuationRunService,
             XvaReferenceDataService xvaReferenceDataService,
-            AuditService auditService
+            AuditService auditService,
+            OperationalControlService operationalControlService
     ) {
         this.cvaCalculationService = cvaCalculationService;
         this.cvaNettingSetCalculationService = cvaNettingSetCalculationService;
@@ -51,6 +54,7 @@ public class CvaController {
         this.valuationRunService = valuationRunService;
         this.xvaReferenceDataService = xvaReferenceDataService;
         this.auditService = auditService;
+        this.operationalControlService = operationalControlService;
     }
 
     @PostMapping("/cva")
@@ -60,6 +64,7 @@ public class CvaController {
     ) {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_RUN_CVA);
         userAccessService.requirePortfolioAccess(servletRequest, request.portfolioId());
+        operationalControlService.ensureOpen("RUN_CVA", currentSession(servletRequest), servletRequest);
         try {
             CvaCalculationResult result = cvaCalculationService.calculate(request.toCommand());
             CvaCalculationResponse response = CvaCalculationResponse.from(result);
@@ -109,6 +114,7 @@ public class CvaController {
             HttpServletRequest servletRequest
     ) {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_RUN_CVA);
+        operationalControlService.ensureOpen("RUN_NETTING_SET_CVA", currentSession(servletRequest), servletRequest);
         xvaReferenceDataService.getOperableNettingSet(request.nettingSetId())
                 .portfolios()
                 .forEach(portfolio -> userAccessService.requirePortfolioAccess(servletRequest, portfolio.portfolioId()));

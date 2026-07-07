@@ -167,7 +167,7 @@ Current group intent:
 
 - `FO`: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad booking submission, portfolios, pricing, exposure, CVA and valuation run history.
 - `BO`: Trade Validation, Lifecycle Reporting, Operations Reporting, preventive Trading Limits, manual EOD Control, and valuation run history.
-- `ADMIN`: user/group administration, FO feature permissions, portfolio visibility, workflow monitoring, Audit Logs, and valuation run history.
+- `ADMIN`: user/group administration, FO feature permissions, portfolio visibility, Operational Control, workflow monitoring, Audit Logs, and valuation run history.
 
 The backend enforces the active group. Frontend navigation is not the security boundary.
 
@@ -184,6 +184,9 @@ Admin users can manage access without changing the pricing or booking models:
 - `GET /api/admin/workflow-map`
 - `GET /api/admin/audit-events`
 - `GET /api/admin/audit-events/{eventId}`
+- `GET /api/admin/operational-control`
+- `PUT /api/admin/operational-control`
+- `GET /api/operational-control/status`
 
 Group membership decides which area a user can enter. FO feature permissions then refine what a Front Office user can do:
 
@@ -197,6 +200,10 @@ Group membership decides which area a user can enter. FO feature permissions the
 Portfolio visibility supports `ALL` or `SELECTED`. The default is permissive (`ALL` portfolios and enabled FO features) so existing development users keep working until an admin tightens access.
 
 The workflow map is read-only. It visualizes trade booking requests across `Booked`, `Waiting BO`, `Accepted`, and `Rejected`; it does not approve or reject bookings. BO Trade Validation remains the owner of that maker-checker action.
+
+Operational Control is global in V1. ADMIN configures the timezone, business days, trading open/close, automatic EOD enablement, EOD time and stale-market-data policy. When auth is enabled, FO bookings, FO lifecycle requests and risk runs return `409 ApiError` outside the window. BO validation/corrections and ADMIN screens remain available.
+
+Backend enforcement defaults to enabled with `NEXUSXVA_OPERATIONAL_CONTROL_ENFORCEMENT_ENABLED=true`. The flag is intended only as a controlled local/test escape hatch; production-like runs should keep it enabled.
 
 ## Audit Trail And Technical Logs
 
@@ -522,14 +529,9 @@ Existing positions use prior EOD market value as the Daily P&L reference. Positi
 
 The normal BO and scheduler process closes all portfolios. Each portfolio runs independently and is reported as `CAPTURED`, `SKIPPED`, or `FAILED`; a failed portfolio does not roll back successful closes from other books.
 
-Scheduled EOD is disabled by default:
+Scheduled EOD is configured in ADMIN -> Operational Control, not by a fixed cron. The scheduler checks the database every minute and runs once per business date after the configured EOD time. Defaults are New York business days, `09:30` to `16:00` trading, and `17:15` EOD disabled.
 
-```text
-NEXUSXVA_EOD_ENABLED=false
-NEXUSXVA_EOD_CRON=0 15 17 * * MON-FRI
-NEXUSXVA_EOD_ZONE=America/New_York
-NEXUSXVA_EOD_ALLOW_STALE=false
-```
+The scheduler bean is controlled by `NEXUSXVA_EOD_SCHEDULER_ENABLED=true` and the wake-up interval by `NEXUSXVA_EOD_SCHEDULER_TICK=60000`.
 
 The close rejects stale market data and active unpriceable positions. One `ACTIVE` portfolio/date close can exist at a time. Corrections never delete old runs: `VOIDED` and `SUPERSEDED` snapshots remain visible in history, while latest close and Daily P&L use only `ACTIVE` runs.
 

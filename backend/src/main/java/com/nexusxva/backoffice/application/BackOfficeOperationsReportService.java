@@ -1,13 +1,17 @@
 package com.nexusxva.backoffice.application;
 
 import com.nexusxva.eod.application.PortfolioEodService;
+import com.nexusxva.eod.application.PortfolioDailyPnl;
+import com.nexusxva.eod.application.PortfolioDailyPnlService;
 import com.nexusxva.eod.domain.EodRunStatus;
 import com.nexusxva.eod.domain.PortfolioEodSnapshot;
 import com.nexusxva.portfolio.application.PortfolioService;
 import com.nexusxva.portfolio.domain.PortfolioSummary;
 import com.nexusxva.tradebooking.application.TradeBookingService;
+import com.nexusxva.tradebooking.domain.TradeBookingRequest;
 import com.nexusxva.tradebooking.domain.TradeBookingStatus;
 import com.nexusxva.tradelifecycle.application.TradeLifecycleService;
+import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequest;
 import com.nexusxva.tradelifecycle.domain.TradeLifecycleRequestStatus;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -23,17 +27,20 @@ public class BackOfficeOperationsReportService {
 
     private final PortfolioService portfolioService;
     private final PortfolioEodService eodService;
+    private final PortfolioDailyPnlService pnlService;
     private final TradeBookingService tradeBookingService;
     private final TradeLifecycleService lifecycleService;
 
     public BackOfficeOperationsReportService(
             PortfolioService portfolioService,
             PortfolioEodService eodService,
+            PortfolioDailyPnlService pnlService,
             TradeBookingService tradeBookingService,
             TradeLifecycleService lifecycleService
     ) {
         this.portfolioService = portfolioService;
         this.eodService = eodService;
+        this.pnlService = pnlService;
         this.tradeBookingService = tradeBookingService;
         this.lifecycleService = lifecycleService;
     }
@@ -45,12 +52,10 @@ public class BackOfficeOperationsReportService {
         List<BackOfficeEodPortfolioStatus> eodStatuses = portfolios.stream()
                 .map(portfolio -> eodStatus(portfolio, businessDate))
                 .toList();
-        long pendingTradeBookings = tradeBookingService
-                .search(TradeBookingStatus.PENDING_VALIDATION, null, null, 0, 100)
-                .getTotalElements();
-        long pendingLifecycleRequests = lifecycleService
-                .search(TradeLifecycleRequestStatus.PENDING_VALIDATION, null, null, 0, 100)
-                .getTotalElements();
+        var pendingTradeBookingPage = tradeBookingService.search(TradeBookingStatus.PENDING_VALIDATION, null, null, 0, 100);
+        var pendingLifecyclePage = lifecycleService.search(TradeLifecycleRequestStatus.PENDING_VALIDATION, null, null, 0, 100);
+        long pendingTradeBookings = pendingTradeBookingPage.getTotalElements();
+        long pendingLifecycleRequests = pendingLifecyclePage.getTotalElements();
 
         return new BackOfficeOperationsReport(
                 businessDate,
@@ -60,6 +65,11 @@ public class BackOfficeOperationsReportService {
                 pendingLifecycleRequests,
                 eodStatuses.stream().filter(BackOfficeEodPortfolioStatus::missingTodayClose).count(),
                 eodStatuses.stream().mapToInt(BackOfficeEodPortfolioStatus::correctedRuns).sum(),
+                oldestTradeBookingSubmittedAt(pendingTradeBookingPage.getContent()),
+                oldestLifecycleSubmittedAt(pendingLifecyclePage.getContent()),
+                eodStatuses.stream().filter(status -> "FAILED".equals(status.pnlStatus())).count(),
+                eodStatuses.stream().filter(BackOfficeEodPortfolioStatus::latestCloseCorrected).count(),
+                eodStatuses.stream().filter(BackOfficeEodPortfolioStatus::noCloseEver).count(),
                 eodStatuses
         );
     }
@@ -79,6 +89,9 @@ public class BackOfficeOperationsReportService {
         boolean missingTodayClose = latest
                 .map(snapshot -> snapshot.businessDate().isBefore(businessDate))
                 .orElse(true);
+        boolean latestCloseCorrected = latestByDate != null
+                && (latestByDate.status() == EodRunStatus.VOIDED || latestByDate.status() == EodRunStatus.SUPERSEDED);
+        PnlStatus pnlStatus = pnlStatus(portfolio, businessDate);
 
         return new BackOfficeEodPortfolioStatus(
                 portfolio.id().toString(),
@@ -88,8 +101,57 @@ public class BackOfficeOperationsReportService {
                 latestEodDate,
                 latestStatus,
                 missingTodayClose,
-                correctedRuns
+                correctedRuns,
+                latestCloseCorrected,
+                latestByDate == null,
+                pnlStatus.currentMarketValue(),
+                pnlStatus.dailyPnl(),
+                pnlStatus.sinceTradePnl(),
+                pnlStatus.optionDailyPnl(),
+                pnlStatus.cashEquityDailyPnl(),
+                pnlStatus.positionsWithoutReference(),
+                pnlStatus.positionsWithoutExecutionPrice(),
+                pnlStatus.status(),
+                pnlStatus.errorMessage()
         );
+    }
+
+    private PnlStatus pnlStatus(PortfolioSummary portfolio, LocalDate businessDate) {
+        try {
+            PortfolioDailyPnl pnl = pnlService.calculate(portfolio.id(), businessDate);
+            return new PnlStatus(
+                    pnl.currentMarketValue(),
+                    pnl.dailyPnl(),
+                    pnl.sinceTradePnl(),
+                    pnl.optionDailyPnl(),
+                    pnl.cashEquityDailyPnl(),
+                    pnl.positionsWithoutReference(),
+                    pnl.positionsWithoutExecutionPrice(),
+                    "OK",
+                    null
+            );
+        } catch (RuntimeException exception) {
+            return new PnlStatus(null, null, null, null, null, null, null, "FAILED", sanitizedMessage(exception));
+        }
+    }
+
+    private Instant oldestTradeBookingSubmittedAt(List<TradeBookingRequest> requests) {
+        return requests.stream()
+                .map(TradeBookingRequest::submittedAt)
+                .min(Instant::compareTo)
+                .orElse(null);
+    }
+
+    private Instant oldestLifecycleSubmittedAt(List<TradeLifecycleRequest> requests) {
+        return requests.stream()
+                .map(TradeLifecycleRequest::submittedAt)
+                .min(Instant::compareTo)
+                .orElse(null);
+    }
+
+    private String sanitizedMessage(RuntimeException exception) {
+        String message = exception.getMessage();
+        return message == null || message.isBlank() ? "P&L unavailable" : message;
     }
 
     public record BackOfficeOperationsReport(
@@ -100,6 +162,11 @@ public class BackOfficeOperationsReportService {
             long pendingLifecycleRequests,
             long portfoliosWithoutTodayClose,
             long correctedEodRuns,
+            Instant oldestPendingTradeBookingSubmittedAt,
+            Instant oldestPendingLifecycleSubmittedAt,
+            long failedPnlPortfolios,
+            long portfoliosWithCorrectedLatestClose,
+            long portfoliosWithNoCloseEver,
             List<BackOfficeEodPortfolioStatus> eodPortfolios
     ) {
     }
@@ -112,7 +179,31 @@ public class BackOfficeOperationsReportService {
             LocalDate latestEodDate,
             String latestEodStatus,
             boolean missingTodayClose,
-            int correctedRuns
+            int correctedRuns,
+            boolean latestCloseCorrected,
+            boolean noCloseEver,
+            Double currentMarketValue,
+            Double dailyPnl,
+            Double sinceTradePnl,
+            Double optionDailyPnl,
+            Double cashEquityDailyPnl,
+            Integer positionsWithoutReference,
+            Integer positionsWithoutExecutionPrice,
+            String pnlStatus,
+            String pnlErrorMessage
+    ) {
+    }
+
+    private record PnlStatus(
+            Double currentMarketValue,
+            Double dailyPnl,
+            Double sinceTradePnl,
+            Double optionDailyPnl,
+            Double cashEquityDailyPnl,
+            Integer positionsWithoutReference,
+            Integer positionsWithoutExecutionPrice,
+            String status,
+            String errorMessage
     ) {
     }
 }

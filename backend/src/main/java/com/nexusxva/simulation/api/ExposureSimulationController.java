@@ -8,6 +8,7 @@ import com.nexusxva.audit.application.AuditService;
 import com.nexusxva.audit.domain.AuditOutcome;
 import com.nexusxva.exposure.application.ExposureSimulationResult;
 import com.nexusxva.exposure.application.ExposureSimulationService;
+import com.nexusxva.operationalcontrol.application.OperationalControlService;
 import com.nexusxva.shared.error.ResourceNotFoundException;
 import com.nexusxva.valuationruns.application.ValuationRunService;
 import com.nexusxva.valuationruns.domain.ValuationRunType;
@@ -30,17 +31,20 @@ public class ExposureSimulationController {
     private final UserAccessService userAccessService;
     private final ValuationRunService valuationRunService;
     private final AuditService auditService;
+    private final OperationalControlService operationalControlService;
 
     public ExposureSimulationController(
             ExposureSimulationService exposureSimulationService,
             UserAccessService userAccessService,
             ValuationRunService valuationRunService,
-            AuditService auditService
+            AuditService auditService,
+            OperationalControlService operationalControlService
     ) {
         this.exposureSimulationService = exposureSimulationService;
         this.userAccessService = userAccessService;
         this.valuationRunService = valuationRunService;
         this.auditService = auditService;
+        this.operationalControlService = operationalControlService;
     }
 
     @PostMapping("/exposure")
@@ -49,6 +53,7 @@ public class ExposureSimulationController {
             HttpServletRequest servletRequest
     ) {
         userAccessService.requirePortfolioAccess(servletRequest, request.portfolioId());
+        operationalControlService.ensureOpen("RUN_EXPOSURE", currentSession(servletRequest), servletRequest);
         try {
             ExposureSimulationResult result = exposureSimulationService.simulate(request.toCommand());
             ExposureSimulationResponse response = ExposureSimulationResponse.from(result);

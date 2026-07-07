@@ -7,6 +7,7 @@ import {
   BarChart3,
   BriefcaseBusiness,
   CalendarCheck,
+  CalendarClock,
   CircleDollarSign,
   FlaskConical,
   Gauge,
@@ -28,6 +29,7 @@ import {
 } from "lucide-react";
 import { authApi, nexusApi } from "@/lib/api";
 import { groupForCode, isHrefAllowed, type WorkGroup } from "@/lib/authContext";
+import { useOperationalControlStatus } from "@/lib/operationalControl";
 import type { AuthUser, UserNotification } from "@/lib/types";
 import { MarketDataStatus } from "./MarketDataStatus";
 
@@ -61,6 +63,7 @@ const navItems = [
   { href: "/trading-limits", label: "Trading Limits", icon: SlidersHorizontal },
   { href: "/eod-control", label: "EOD Control", icon: CalendarCheck },
   { href: "/admin", label: "Administration", icon: Settings },
+  { href: "/operational-control", label: "Operational Control", icon: CalendarClock },
   { href: "/xva-setup", label: "XVA Setup", icon: Landmark },
   { href: "/workflows", label: "Workflows", icon: GitBranch },
   { href: "/audit-logs", label: "Audit Logs", icon: ScrollText },
@@ -78,6 +81,7 @@ export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps
   const [notificationsError, setNotificationsError] = React.useState<string | null>(null);
   const howToRef = React.useRef<HTMLSpanElement | null>(null);
   const notificationsRef = React.useRef<HTMLSpanElement | null>(null);
+  const { status: operationalStatus } = useOperationalControlStatus(authChecked && Boolean(authUser));
 
   React.useEffect(() => {
     function closeOnOutsideClick(event: MouseEvent) {
@@ -289,6 +293,16 @@ export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps
                   </div>
                 ) : null}
               </span>
+            ) : null}
+            {authUser ? (
+              <button
+                className={`header-action operational-chip ${operationalStatus?.tradingOpen ? "open" : "closed"}`}
+                type="button"
+                title={operationalStatus ? `${operationalStatus.reason.replaceAll("_", " ")} · Next open ${new Date(operationalStatus.nextOpenAt).toLocaleString()}` : "Operational status"}
+              >
+                <span className="status-dot" />
+                <span>{operationalStatus?.tradingOpen ? "Trading Open" : "Trading Closed"}</span>
+              </button>
             ) : null}
             {authUser ? (
               <button className="user-pill" type="button" onClick={() => { window.location.href = "/login"; }} title="Switch active group">

@@ -288,7 +288,7 @@ Los logs tecnicos quedan separados y se escriben como archivos rotados bajo `log
 
 Dashboard V1 es un frontend Next.js en `frontend/`.
 No implementa formulas financieras.
-La UI esta separada por grupos. FO usa FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA y Run History. BO usa Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control y Run History. ADMIN usa Administration para membresias, permisos FO y visibilidad de portfolios, XVA Setup para counterparties/netting/collateral, mas Workflows, Audit Logs y Run History para monitoreo.
+La UI esta separada por grupos. FO usa FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA y Run History. BO usa Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control y Run History. ADMIN usa Administration para membresias, permisos FO y visibilidad de portfolios, Operational Control para horarios/EOD, XVA Setup para counterparties/netting/collateral, mas Workflows, Audit Logs y Run History para monitoreo.
 El header incluye una bandeja persistida de notificaciones. Las notificaciones pertenecen al usuario, no al grupo activo, por lo que usuarios multi-grupo mantienen un solo inbox al cambiar entre FO, BO y ADMIN.
 
 El flujo frontend es:
@@ -317,6 +317,7 @@ El dashboard usa el backend como fuente de verdad para:
 - Visibilidad de limites FO en `u-Pad` y administracion de politicas desde BO.
 - Notificaciones de usuario para eventos de review de bookings y lifecycle.
 - Administracion de usuarios/grupos, checks FO, visibilidad de portfolios y mapa de workflow desde ADMIN.
+- Operational Control de ADMIN para horario operativo global y EOD programado.
 - Pricing Black-Scholes a nivel portfolio.
 - Simulacion de exposure.
 - Calculo CVA.
@@ -326,7 +327,9 @@ Para desarrollo local, el frontend llama `/nexus-api/*`, que Next.js proxya a Ne
 
 `u-Pad` tambien puede capturar `executionPrice`, que representa el premium negociado por unidad. Al aprobar BO se copia a la posicion confirmada. Portfolio pricing compara ese premium con el valor unitario Black-Scholes actual para calcular unrealized P&L. Si una posicion historica no tiene economics, el P&L queda no disponible en vez de asumir costo cero.
 
-EOD es un control auditado separado y pertenece a BO o al scheduler del sistema. FO consume el cierre pero no puede crearlo. El proceso normal recorre portfolios activos y entrega un resultado independiente por libro (`CAPTURED`, `SKIPPED` o `FAILED`). Guarda market values de portfolio y posicion sin cambiar economics de ejecucion. Las correcciones BO usan cierres `VOIDED` y `SUPERSEDED` en vez de borrado fisico; latest close y Daily P&L usan solo cierres `ACTIVE`. El scheduler EOD es configurable y esta apagado por default.
+Operational Control es una politica global de ADMIN. V1 usa calendario de Nueva York lunes-viernes por defecto, bloquea bookings FO, solicitudes FO de lifecycle y risk runs fuera de la ventana configurada, y mantiene disponibles validaciones/correcciones BO y setup ADMIN. El backend es la autoridad; los botones deshabilitados del frontend son solo ayuda visual.
+
+EOD es un control auditado separado y pertenece a BO o al scheduler del sistema. FO consume el cierre pero no puede crearlo. El proceso normal recorre portfolios activos y entrega un resultado independiente por libro (`CAPTURED`, `SKIPPED` o `FAILED`). Guarda market values de portfolio y posicion sin cambiar economics de ejecucion. Las correcciones BO usan cierres `VOIDED` y `SUPERSEDED` en vez de borrado fisico; latest close y Daily P&L usan solo cierres `ACTIVE`. El scheduler EOD se configura desde ADMIN Operational Control y esta apagado por default.
 
 Los portafolios demo grandes viven en `backend/src/main/resources/db/demo/demo_portfolios.sql`. No son migraciones Flyway; los devs los cargan explicitamente cuando quieren libros locales realistas para demos del dashboard, pricing, exposure, CVA, pre-trade analysis y stress testing. Ver `docs/docs-ES/PortafoliosDemo.md`.
 

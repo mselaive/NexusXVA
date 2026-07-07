@@ -108,22 +108,7 @@ Un error no crea un snapshot parcial para ese portfolio. Los demas portfolios co
 
 ## Scheduler
 
-El scheduler esta deshabilitado por defecto:
-
-```text
-NEXUSXVA_EOD_ENABLED=false
-```
-
-Configuracion recomendada:
-
-```text
-NEXUSXVA_EOD_ENABLED=true
-NEXUSXVA_EOD_CRON=0 15 17 * * MON-FRI
-NEXUSXVA_EOD_ZONE=America/New_York
-NEXUSXVA_EOD_ALLOW_STALE=false
-```
-
-Esto ejecuta el cierre a las 17:15, de lunes a viernes, usando la fecha de negocio de Nueva York.
+El scheduler se configura desde ADMIN -> Operational Control. Esta deshabilitado por defecto, despierta cada minuto, lee la politica desde la base de datos y ejecuta una sola vez por business date despues de la hora EOD configurada. Los defaults son `America/New_York`, lunes-viernes, trading `09:30` a `16:00`, EOD `17:15` y market data stale no permitida.
 
 Para desarrollo conviene mantenerlo apagado y usar `EOD Control`.
 

@@ -190,6 +190,17 @@ export type BackOfficeEodPortfolioStatus = {
   latestEodStatus: "ACTIVE" | "VOIDED" | "SUPERSEDED" | "MISSING";
   missingTodayClose: boolean;
   correctedRuns: number;
+  latestCloseCorrected: boolean;
+  noCloseEver: boolean;
+  currentMarketValue: number | null;
+  dailyPnl: number | null;
+  sinceTradePnl: number | null;
+  optionDailyPnl: number | null;
+  cashEquityDailyPnl: number | null;
+  positionsWithoutReference: number | null;
+  positionsWithoutExecutionPrice: number | null;
+  pnlStatus: "OK" | "FAILED";
+  pnlErrorMessage: string | null;
 };
 
 export type BackOfficeOperationsReport = {
@@ -200,7 +211,47 @@ export type BackOfficeOperationsReport = {
   pendingLifecycleRequests: number;
   portfoliosWithoutTodayClose: number;
   correctedEodRuns: number;
+  oldestPendingTradeBookingSubmittedAt: string | null;
+  oldestPendingLifecycleSubmittedAt: string | null;
+  failedPnlPortfolios: number;
+  portfoliosWithCorrectedLatestClose: number;
+  portfoliosWithNoCloseEver: number;
   eodPortfolios: BackOfficeEodPortfolioStatus[];
+};
+
+export type OperationalControlSettings = {
+  timezone: string;
+  businessDays: string[];
+  tradingOpenTime: string;
+  tradingCloseTime: string;
+  eodEnabled: boolean;
+  eodRunTime: string;
+  eodAllowStaleMarketData: boolean;
+  updatedAt: string;
+  updatedByUserId: string | null;
+  version: number;
+};
+
+export type UpdateOperationalControlRequest = {
+  timezone: string;
+  businessDays: string[];
+  tradingOpenTime: string;
+  tradingCloseTime: string;
+  eodEnabled: boolean;
+  eodRunTime: string;
+  eodAllowStaleMarketData: boolean;
+};
+
+export type OperationalControlStatus = {
+  tradingOpen: boolean;
+  reason: "OPEN" | "NON_BUSINESS_DAY" | "BEFORE_OPEN" | "AFTER_CLOSE" | string;
+  timezone: string;
+  currentBusinessTime: string;
+  nextOpenAt: string;
+  tradingOpenTime: string;
+  tradingCloseTime: string;
+  eodEnabled: boolean;
+  nextEodAt: string;
 };
 
 export type TradeBookingPage = {

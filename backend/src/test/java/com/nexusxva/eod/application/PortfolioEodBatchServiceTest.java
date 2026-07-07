@@ -9,9 +9,15 @@ import static org.mockito.Mockito.when;
 
 import com.nexusxva.portfolio.application.PortfolioStore;
 import com.nexusxva.portfolio.domain.PortfolioSummary;
+import com.nexusxva.operationalcontrol.application.OperationalControlStore;
+import com.nexusxva.operationalcontrol.domain.OperationalControlSettings;
 import com.nexusxva.shared.error.ConflictException;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -30,6 +36,9 @@ class PortfolioEodBatchServiceTest {
     @Mock
     private PortfolioEodService eodService;
 
+    @Mock
+    private OperationalControlStore operationalControlStore;
+
     @Test
     void processesEveryPortfolioAndReportsIndependentResults() {
         PortfolioSummary captured = portfolio("Captured Book");
@@ -47,7 +56,7 @@ class PortfolioEodBatchServiceTest {
             return null;
         }).when(eodService).capture(any(UUID.class), eq(BUSINESS_DATE), eq("TEST"));
 
-        EodBatchResult result = new PortfolioEodBatchService(portfolioStore, eodService, "America/New_York")
+        EodBatchResult result = new PortfolioEodBatchService(portfolioStore, eodService, operationalControlStore)
                 .captureAll(BUSINESS_DATE, "TEST");
 
         assertThat(result.portfolios()).extracting(EodBatchPortfolioResult::status)
@@ -64,5 +73,20 @@ class PortfolioEodBatchServiceTest {
     private PortfolioSummary portfolio(String name) {
         Instant now = Instant.parse("2026-06-22T20:00:00Z");
         return new PortfolioSummary(UUID.randomUUID(), name, null, "USD", now, now, 0);
+    }
+
+    private OperationalControlSettings settings() {
+        return new OperationalControlSettings(
+                ZoneId.of("America/New_York"),
+                EnumSet.range(DayOfWeek.MONDAY, DayOfWeek.FRIDAY),
+                LocalTime.of(9, 30),
+                LocalTime.of(16, 0),
+                false,
+                LocalTime.of(17, 15),
+                false,
+                Instant.parse("2026-06-22T20:00:00Z"),
+                null,
+                0
+        );
     }
 }

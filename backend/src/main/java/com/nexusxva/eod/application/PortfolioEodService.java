@@ -3,12 +3,12 @@ package com.nexusxva.eod.application;
 import com.nexusxva.eod.domain.EodRunStatus;
 import com.nexusxva.eod.domain.PortfolioEodSnapshot;
 import com.nexusxva.eod.domain.PositionEodSnapshot;
+import com.nexusxva.operationalcontrol.application.OperationalControlStore;
 import com.nexusxva.portfolio.application.PortfolioBlackScholesPricingResult;
 import com.nexusxva.portfolio.application.PortfolioBlackScholesPricingService;
 import com.nexusxva.shared.error.ConflictException;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,7 +17,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.beans.factory.annotation.Value;
 
 @Service
 public class PortfolioEodService {
@@ -26,16 +25,16 @@ public class PortfolioEodService {
 
     private final PortfolioEodStore store;
     private final PortfolioBlackScholesPricingService pricingService;
-    private final boolean allowStaleMarketData;
+    private final OperationalControlStore operationalControlStore;
 
     public PortfolioEodService(
             PortfolioEodStore store,
             PortfolioBlackScholesPricingService pricingService,
-            @Value("${nexusxva.eod.allow-stale:false}") boolean allowStaleMarketData
+            OperationalControlStore operationalControlStore
     ) {
         this.store = store;
         this.pricingService = pricingService;
-        this.allowStaleMarketData = allowStaleMarketData;
+        this.operationalControlStore = operationalControlStore;
     }
 
     @Transactional
@@ -65,7 +64,9 @@ public class PortfolioEodService {
             String source,
             UUID correctionOfRunId
     ) {
-        LocalDate resolvedDate = businessDate == null ? LocalDate.now(ZoneOffset.UTC) : businessDate;
+        LocalDate resolvedDate = businessDate == null
+                ? LocalDate.now(operationalControlStore.settings().timezone())
+                : businessDate;
         LOGGER.info(
                 "EOD capture started portfolioId={} businessDate={} source={} correctionOfRunId={}",
                 portfolioId,
@@ -73,7 +74,7 @@ public class PortfolioEodService {
                 source,
                 correctionOfRunId
         );
-        if (resolvedDate.isAfter(LocalDate.now(ZoneOffset.UTC))) {
+        if (resolvedDate.isAfter(LocalDate.now(operationalControlStore.settings().timezone()))) {
             throw new IllegalArgumentException("EOD businessDate must not be in the future");
         }
         if (store.exists(portfolioId, resolvedDate)) {
@@ -90,6 +91,7 @@ public class PortfolioEodService {
         }
         boolean hasStaleMarketData = pricing.positions().stream().anyMatch(position -> position.marketData().stale())
                 || pricing.cashEquityPositions().stream().anyMatch(position -> position.marketData().stale());
+        boolean allowStaleMarketData = operationalControlStore.settings().eodAllowStaleMarketData();
         if (!allowStaleMarketData && hasStaleMarketData) {
             LOGGER.warn("EOD capture rejected portfolioId={} businessDate={} source={} reason=STALE_MARKET_DATA",
                     portfolioId,

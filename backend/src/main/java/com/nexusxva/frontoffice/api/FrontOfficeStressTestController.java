@@ -8,6 +8,7 @@ import com.nexusxva.audit.application.AuditEventCommand;
 import com.nexusxva.audit.application.AuditService;
 import com.nexusxva.audit.domain.AuditOutcome;
 import com.nexusxva.frontoffice.application.FrontOfficeStressTestService;
+import com.nexusxva.operationalcontrol.application.OperationalControlService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.Map;
@@ -23,15 +24,18 @@ public class FrontOfficeStressTestController {
     private final FrontOfficeStressTestService service;
     private final UserAccessService userAccessService;
     private final AuditService auditService;
+    private final OperationalControlService operationalControlService;
 
     public FrontOfficeStressTestController(
             FrontOfficeStressTestService service,
             UserAccessService userAccessService,
-            AuditService auditService
+            AuditService auditService,
+            OperationalControlService operationalControlService
     ) {
         this.service = service;
         this.userAccessService = userAccessService;
         this.auditService = auditService;
+        this.operationalControlService = operationalControlService;
     }
 
     @PostMapping("/european-options")
@@ -41,6 +45,7 @@ public class FrontOfficeStressTestController {
     ) {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_RUN_STRESS_TEST);
         userAccessService.requirePortfolioAccess(servletRequest, request.portfolioId());
+        operationalControlService.ensureOpen("RUN_STRESS_TEST", currentSession(servletRequest), servletRequest);
         FrontOfficeStressTestResponse response = FrontOfficeStressTestResponse.from(service.run(
                 request.portfolioId(),
                 request.valuationDate(),

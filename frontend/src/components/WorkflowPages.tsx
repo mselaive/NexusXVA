@@ -22,6 +22,7 @@ import {
 import { blembergApi, nexusApi, NexusApiError } from "@/lib/api";
 import { logBlembergRefreshOutcome, summarizeBlembergRefresh } from "@/lib/blembergRefresh";
 import { formatCurrency, formatNumber, formatPercent, todayIsoDate } from "@/lib/format";
+import { operationalClosedMessage, useOperationalControlStatus } from "@/lib/operationalControl";
 import type {
   AddEuropeanOptionPositionRequest,
   CashEquityPosition,
@@ -539,6 +540,9 @@ export function UPadPage() {
   const [lifecycleRequests, setLifecycleRequests] = useState<TradeLifecycleRequest[]>([]);
   const [myLimits, setMyLimits] = useState<TradingLimitSnapshot | null>(null);
   const [ticketMode, setTicketMode] = useState<"single" | "strategy" | "cash">("single");
+  const { status: operationalStatus } = useOperationalControlStatus();
+  const closedMessage = operationalClosedMessage(operationalStatus);
+  const tradingClosed = Boolean(closedMessage);
 
   const [tradeForm, setTradeForm] = useState(initialTradeFormFromUrl);
   const [strategyForm, setStrategyForm] = useState(initialStrategyForm);
@@ -600,6 +604,10 @@ export function UPadPage() {
   }
 
   async function bookTrade() {
+    if (closedMessage) {
+      setError(closedMessage);
+      return;
+    }
     if (!selectedId) {
       setError("Select a portfolio first. Create portfolios from the Portfolios page.");
       return;
@@ -628,6 +636,10 @@ export function UPadPage() {
   }
 
   async function bookStrategy() {
+    if (closedMessage) {
+      setError(closedMessage);
+      return;
+    }
     if (!selectedId) {
       setError("Select a portfolio first. Create portfolios from the Portfolios page.");
       return;
@@ -654,6 +666,10 @@ export function UPadPage() {
   }
 
   async function bookCashEquity() {
+    if (closedMessage) {
+      setError(closedMessage);
+      return;
+    }
     if (!selectedId) {
       setError("Select a portfolio first. Create portfolios from the Portfolios page.");
       return;
@@ -681,6 +697,7 @@ export function UPadPage() {
   return (
     <AppShell title="u-Pad" eyebrow="Trade capture" howTo={howTo.upad}>
       <Alert message={error} />
+      <OperationalClosedBanner message={closedMessage} />
       {success ? <div className="success">{success}</div> : null}
       <div className="dealpad-layout">
         <section className="ticket-panel trade-ticket">
@@ -739,6 +756,7 @@ export function UPadPage() {
               onChange={setStrategyForm}
               onSubmit={bookStrategy}
               loading={loading === "strategy"}
+              disabled={tradingClosed}
             />
           ) : ticketMode === "cash" ? (
             <div className="form-grid">
@@ -753,7 +771,7 @@ export function UPadPage() {
               </Field>
               <div className="field">
                 <span>&nbsp;</span>
-                <button className="btn trade-submit" type="button" onClick={bookCashEquity} disabled={loading === "cash"}>
+                <button className="btn trade-submit" type="button" onClick={bookCashEquity} disabled={loading === "cash" || tradingClosed}>
                   {loading === "cash" ? <Loader2 size={16} /> : <Send size={16} />}
                   Send to BO
                 </button>
@@ -784,7 +802,7 @@ export function UPadPage() {
             </Field>
             <div className="field">
               <span>&nbsp;</span>
-              <button className="btn trade-submit" type="button" onClick={bookTrade} disabled={loading === "trade"}>
+              <button className="btn trade-submit" type="button" onClick={bookTrade} disabled={loading === "trade" || tradingClosed}>
                 {loading === "trade" ? <Loader2 size={16} /> : <Send size={16} />}
                 Send to BO
               </button>
@@ -896,12 +914,14 @@ function StrategyTicket({
   onChange,
   onSubmit,
   loading,
+  disabled = false,
 }: {
   underlyingSymbol: string;
   form: StrategyTicketForm;
   onChange: (form: StrategyTicketForm) => void;
   onSubmit: () => void;
   loading: boolean;
+  disabled?: boolean;
 }) {
   const preview = buildStrategyLegs(form);
   const totalNotional = preview.reduce((sum, leg) => sum + Math.abs(leg.quantity) * leg.strike, 0);
@@ -964,7 +984,7 @@ function StrategyTicket({
       <div className="strategy-summary">
         <span>{preview.length} legs</span>
         <span>Limit notional {formatCurrency(totalNotional, "USD")}</span>
-        <button className="btn trade-submit" type="button" onClick={onSubmit} disabled={loading}>
+        <button className="btn trade-submit" type="button" onClick={onSubmit} disabled={loading || disabled}>
           {loading ? <Loader2 size={16} /> : <Send size={16} />}
           Send Strategy to BO
         </button>
@@ -1225,8 +1245,15 @@ export function PricingPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { status: operationalStatus } = useOperationalControlStatus();
+  const closedMessage = operationalClosedMessage(operationalStatus);
+  const tradingClosed = Boolean(closedMessage);
 
   async function runPricing(portfolioId = selectedId) {
+    if (closedMessage) {
+      setError(closedMessage);
+      return;
+    }
     if (!portfolioId) {
       setError("Select a portfolio first.");
       return;
@@ -1268,6 +1295,7 @@ export function PricingPage() {
   return (
     <AppShell title="Pricing" eyebrow="Black-Scholes valuation" howTo={howTo.pricing}>
       <Alert message={error} />
+      <OperationalClosedBanner message={closedMessage} />
       {success ? <div className="success">{success}</div> : null}
       <div className="panel section pricing-selector">
         <SectionTitle title="Open portfolio" info="Choose a portfolio and NexusXVA will price it automatically using the selected valuation date." />
@@ -1282,7 +1310,7 @@ export function PricingPage() {
             </span>
             <input className="input" type="date" value={valuationDate} onChange={(event) => setValuationDate(event.target.value)} />
           </label>
-          <button className="btn" type="button" onClick={() => runPricing()} disabled={loading || !selectedId}>
+          <button className="btn" type="button" onClick={() => runPricing()} disabled={loading || !selectedId || tradingClosed}>
             {loading ? <Loader2 size={16} /> : <CircleDollarSign size={16} />}
             Reprice
           </button>
@@ -1358,8 +1386,15 @@ export function ExposurePage() {
   const [exposure, setExposure] = useState<ExposureSimulationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { status: operationalStatus } = useOperationalControlStatus();
+  const closedMessage = operationalClosedMessage(operationalStatus);
+  const tradingClosed = Boolean(closedMessage);
 
   async function runExposure() {
+    if (closedMessage) {
+      setError(closedMessage);
+      return;
+    }
     if (!selectedId) {
       setError("Select a portfolio first.");
       return;
@@ -1378,10 +1413,11 @@ export function ExposurePage() {
   return (
     <AppShell title="Exposure" eyebrow="Monte Carlo analytics" howTo={howTo.exposure}>
       <Alert message={error} />
+      <OperationalClosedBanner message={closedMessage} />
       <RunSetup selectedId={selectedId} setSelectedId={setSelectedId} form={form} setForm={setForm} onError={setError} />
       <div className="panel">
         <SectionTitle title="Exposure profile" info="Exposure V1 simulates GBM spot paths, reprices live positions and aggregates EE, ENE and PFE by bucket." />
-        <button className="btn section-action" type="button" onClick={runExposure} disabled={loading}>
+        <button className="btn section-action" type="button" onClick={runExposure} disabled={loading || tradingClosed}>
           {loading ? <Loader2 size={16} /> : <Activity size={16} />}
           Run Exposure
         </button>
@@ -1404,6 +1440,9 @@ export function CvaPage() {
   const [cva, setCva] = useState<CvaCalculationResponse | CvaNettingSetCalculationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { status: operationalStatus } = useOperationalControlStatus();
+  const closedMessage = operationalClosedMessage(operationalStatus);
+  const tradingClosed = Boolean(closedMessage);
 
   useEffect(() => {
     nexusApi.listNettingSets()
@@ -1417,6 +1456,10 @@ export function CvaPage() {
   }, [selectedNettingSetId]);
 
   async function runCva() {
+    if (closedMessage) {
+      setError(closedMessage);
+      return;
+    }
     if (cvaScope === "portfolio" && !selectedId) {
       setError("Select a portfolio first.");
       return;
@@ -1443,6 +1486,7 @@ export function CvaPage() {
   return (
     <AppShell title="CVA" eyebrow="Credit valuation adjustment" howTo={howTo.cva}>
       <Alert message={error} />
+      <OperationalClosedBanner message={closedMessage} />
       <CvaScopePanel
         scope={cvaScope}
         setScope={(scope) => {
@@ -1476,7 +1520,7 @@ export function CvaPage() {
       />
       <div className="panel">
         <SectionTitle title="CVA contribution" info="Flat mode uses hazard rate and discount rate. Curve mode sends credit and discount curves to the backend and those curves take precedence." />
-        <button className="btn warning section-action" type="button" onClick={runCva} disabled={loading}>
+        <button className="btn warning section-action" type="button" onClick={runCva} disabled={loading || tradingClosed}>
           {loading ? <Loader2 size={16} /> : <Shield size={16} />}
           Run {cvaScope === "nettingSet" ? "Netting Set CVA" : "CVA"}
         </button>
@@ -2249,8 +2293,15 @@ export function DeltaHedgePage() {
   const [result, setResult] = useState<DeltaHedgeAnalysisResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { status: operationalStatus } = useOperationalControlStatus();
+  const closedMessage = operationalClosedMessage(operationalStatus);
+  const tradingClosed = Boolean(closedMessage);
 
   async function runDeltaHedge() {
+    if (closedMessage) {
+      setError(closedMessage);
+      return;
+    }
     if (!selectedId) {
       setError("Select a portfolio first.");
       return;
@@ -2273,6 +2324,7 @@ export function DeltaHedgePage() {
   return (
     <AppShell title="Delta Hedge" eyebrow="Cash equity hedge analysis" howTo={howTo.deltaHedge}>
       <Alert message={error} />
+      <OperationalClosedBanner message={closedMessage} />
       <div className="panel section">
         <SectionTitle title="Hedge setup" info="The backend prices confirmed option positions, adds existing cash equity positions and suggests the stock quantity needed to reach the target delta." />
         <div className="toolbar">
@@ -2285,7 +2337,7 @@ export function DeltaHedgePage() {
             <span>Optional targets</span>
             <input className="input" placeholder="AAPL=0,MSFT=100" value={targetDeltaText} onChange={(event) => setTargetDeltaText(event.target.value)} />
           </label>
-          <button className="btn" type="button" onClick={runDeltaHedge} disabled={loading || !selectedId}>
+          <button className="btn" type="button" onClick={runDeltaHedge} disabled={loading || !selectedId || tradingClosed}>
             {loading ? <Loader2 size={16} /> : <GitCompareArrows size={16} />}
             Run hedge
           </button>
@@ -2485,6 +2537,10 @@ function WorkflowLink({ href, icon, title, text }: { href: string; icon: React.R
 
 function Alert({ message }: { message: string | null }) {
   return message ? <div className="alert">{message}</div> : null;
+}
+
+function OperationalClosedBanner({ message }: { message: string | null }) {
+  return message ? <div className="operational-closed-banner">{message}</div> : null;
 }
 
 function EmptyState({ text }: { text: string }) {

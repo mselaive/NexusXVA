@@ -7,6 +7,7 @@ import com.nexusxva.auth.application.FeaturePermissionCode;
 import com.nexusxva.auth.application.UserAccessService;
 import com.nexusxva.auth.domain.AuthSession;
 import com.nexusxva.auth.infrastructure.AuthSessionFilter;
+import com.nexusxva.operationalcontrol.application.OperationalControlService;
 import com.nexusxva.portfolio.domain.CashEquityPosition;
 import com.nexusxva.portfolio.domain.EuropeanOptionPosition;
 import com.nexusxva.tradebooking.api.TradeBookingActorResolver;
@@ -31,15 +32,18 @@ public class FrontOfficeLifecycleController {
     private final TradeLifecycleService service;
     private final UserAccessService userAccessService;
     private final AuditService auditService;
+    private final OperationalControlService operationalControlService;
 
     public FrontOfficeLifecycleController(
             TradeLifecycleService service,
             UserAccessService userAccessService,
-            AuditService auditService
+            AuditService auditService,
+            OperationalControlService operationalControlService
     ) {
         this.service = service;
         this.userAccessService = userAccessService;
         this.auditService = auditService;
+        this.operationalControlService = operationalControlService;
     }
 
     @PostMapping("/positions/{positionId}/amend")
@@ -51,6 +55,7 @@ public class FrontOfficeLifecycleController {
         userAccessService.requireFeature(request, FeaturePermissionCode.FO_REQUEST_LIFECYCLE);
         EuropeanOptionPosition position = service.position(positionId);
         userAccessService.requirePortfolioAccess(request, position.portfolioId());
+        operationalControlService.ensureOpen("REQUEST_OPTION_AMEND", currentSession(request), request);
         TradeLifecycleRequest lifecycleRequest = service.submitAmend(positionId, body.toCommand(), TradeBookingActorResolver.resolve(request));
         auditLifecycleSubmitted(request, lifecycleRequest, "LIFECYCLE_AMEND_REQUESTED", "REQUEST_AMEND");
         return TradeLifecycleResponse.from(lifecycleRequest);
@@ -61,6 +66,7 @@ public class FrontOfficeLifecycleController {
         userAccessService.requireFeature(request, FeaturePermissionCode.FO_REQUEST_LIFECYCLE);
         EuropeanOptionPosition position = service.position(positionId);
         userAccessService.requirePortfolioAccess(request, position.portfolioId());
+        operationalControlService.ensureOpen("REQUEST_OPTION_CANCEL", currentSession(request), request);
         TradeLifecycleRequest lifecycleRequest = service.submitCancel(positionId, TradeBookingActorResolver.resolve(request));
         auditLifecycleSubmitted(request, lifecycleRequest, "LIFECYCLE_CANCEL_REQUESTED", "REQUEST_CANCEL");
         return TradeLifecycleResponse.from(lifecycleRequest);
@@ -75,6 +81,7 @@ public class FrontOfficeLifecycleController {
         userAccessService.requireFeature(request, FeaturePermissionCode.FO_REQUEST_LIFECYCLE);
         CashEquityPosition position = service.cashEquityPosition(positionId);
         userAccessService.requirePortfolioAccess(request, position.portfolioId());
+        operationalControlService.ensureOpen("REQUEST_CASH_EQUITY_AMEND", currentSession(request), request);
         TradeLifecycleRequest lifecycleRequest = service.submitCashEquityAmend(positionId, body.toCommand(), TradeBookingActorResolver.resolve(request));
         auditLifecycleSubmitted(request, lifecycleRequest, "LIFECYCLE_AMEND_REQUESTED", "REQUEST_AMEND");
         return TradeLifecycleResponse.from(lifecycleRequest);
@@ -85,6 +92,7 @@ public class FrontOfficeLifecycleController {
         userAccessService.requireFeature(request, FeaturePermissionCode.FO_REQUEST_LIFECYCLE);
         CashEquityPosition position = service.cashEquityPosition(positionId);
         userAccessService.requirePortfolioAccess(request, position.portfolioId());
+        operationalControlService.ensureOpen("REQUEST_CASH_EQUITY_CANCEL", currentSession(request), request);
         TradeLifecycleRequest lifecycleRequest = service.submitCashEquityCancel(positionId, TradeBookingActorResolver.resolve(request));
         auditLifecycleSubmitted(request, lifecycleRequest, "LIFECYCLE_CANCEL_REQUESTED", "REQUEST_CANCEL");
         return TradeLifecycleResponse.from(lifecycleRequest);

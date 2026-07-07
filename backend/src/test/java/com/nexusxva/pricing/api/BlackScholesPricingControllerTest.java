@@ -4,10 +4,12 @@ import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.nexusxva.operationalcontrol.application.OperationalControlService;
 import com.nexusxva.pricing.application.EuropeanOptionPricingService;
 import com.nexusxva.shared.error.GlobalExceptionHandler;
 
@@ -23,7 +25,10 @@ class BlackScholesPricingControllerTest {
 
     @BeforeEach
     void setUp() {
-        BlackScholesPricingController controller = new BlackScholesPricingController(new EuropeanOptionPricingService());
+        BlackScholesPricingController controller = new BlackScholesPricingController(
+                new EuropeanOptionPricingService(),
+                mock(OperationalControlService.class)
+        );
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();

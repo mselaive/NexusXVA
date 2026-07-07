@@ -8,6 +8,7 @@ import com.nexusxva.audit.application.AuditEventCommand;
 import com.nexusxva.audit.application.AuditService;
 import com.nexusxva.audit.domain.AuditOutcome;
 import com.nexusxva.frontoffice.application.FrontOfficeWhatIfService;
+import com.nexusxva.operationalcontrol.application.OperationalControlService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.Map;
@@ -23,15 +24,18 @@ public class FrontOfficeWhatIfController {
     private final FrontOfficeWhatIfService service;
     private final UserAccessService userAccessService;
     private final AuditService auditService;
+    private final OperationalControlService operationalControlService;
 
     public FrontOfficeWhatIfController(
             FrontOfficeWhatIfService service,
             UserAccessService userAccessService,
-            AuditService auditService
+            AuditService auditService,
+            OperationalControlService operationalControlService
     ) {
         this.service = service;
         this.userAccessService = userAccessService;
         this.auditService = auditService;
+        this.operationalControlService = operationalControlService;
     }
 
     @PostMapping("/european-option")
@@ -41,6 +45,7 @@ public class FrontOfficeWhatIfController {
     ) {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_RUN_WHAT_IF);
         userAccessService.requirePortfolioAccess(servletRequest, request.portfolioId());
+        operationalControlService.ensureOpen("RUN_PRE_TRADE_ANALYSIS", currentSession(servletRequest), servletRequest);
         FrontOfficeWhatIfResponse response = FrontOfficeWhatIfResponse.from(
                 service.run(request.portfolioId(), request.valuationDate(), request.trade().toCommand())
         );

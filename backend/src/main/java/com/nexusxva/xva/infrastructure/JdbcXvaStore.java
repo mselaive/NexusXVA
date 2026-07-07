@@ -12,6 +12,7 @@ import com.nexusxva.xva.domain.NettingSet;
 import com.nexusxva.xva.domain.NettingSetPortfolio;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -34,11 +35,12 @@ class JdbcXvaStore implements XvaStore {
     public Counterparty createCounterparty(CreateCounterpartyCommand command) {
         UUID id = UUID.randomUUID();
         Instant now = Instant.now();
+        Timestamp timestamp = Timestamp.from(now);
         try {
             jdbcTemplate.update("""
                     INSERT INTO counterparties (id, name, external_id, credit_rating, active, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, TRUE, ?, ?)
-                    """, id, command.name(), command.externalId(), command.creditRating(), now, now);
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, id, command.name(), command.externalId(), command.creditRating(), true, timestamp, timestamp);
         } catch (DataIntegrityViolationException exception) {
             throw new ConflictException("Counterparty already exists");
         }
@@ -57,7 +59,7 @@ class JdbcXvaStore implements XvaStore {
                     command.externalId(),
                     command.creditRating(),
                     command.active(),
-                    Instant.now(),
+                    Timestamp.from(Instant.now()),
                     counterpartyId);
         } catch (DataIntegrityViolationException exception) {
             throw new ConflictException("Counterparty already exists");
@@ -89,11 +91,12 @@ class JdbcXvaStore implements XvaStore {
     public NettingSet createNettingSet(CreateNettingSetCommand command) {
         UUID id = UUID.randomUUID();
         Instant now = Instant.now();
+        Timestamp timestamp = Timestamp.from(now);
         try {
             jdbcTemplate.update("""
                     INSERT INTO netting_sets
                         (id, counterparty_id, name, base_currency, collateral_amount, collateral_currency, active, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, TRUE, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     id,
                     command.counterpartyId(),
@@ -101,8 +104,9 @@ class JdbcXvaStore implements XvaStore {
                     command.baseCurrency(),
                     command.collateralAmount(),
                     command.collateralCurrency(),
-                    now,
-                    now);
+                    true,
+                    timestamp,
+                    timestamp);
         } catch (DataIntegrityViolationException exception) {
             throw new ConflictException("Netting set already exists for this counterparty");
         }
@@ -116,7 +120,7 @@ class JdbcXvaStore implements XvaStore {
                     UPDATE netting_sets
                     SET name = ?, active = ?, updated_at = ?
                     WHERE id = ?
-                    """, command.name(), command.active(), Instant.now(), nettingSetId);
+                    """, command.name(), command.active(), Timestamp.from(Instant.now()), nettingSetId);
         } catch (DataIntegrityViolationException exception) {
             throw new ConflictException("Netting set already exists for this counterparty");
         }
@@ -142,7 +146,7 @@ class JdbcXvaStore implements XvaStore {
             jdbcTemplate.update("""
                     INSERT INTO netting_set_portfolios (netting_set_id, portfolio_id, assigned_at)
                     VALUES (?, ?, ?)
-                    """, nettingSetId, portfolioId, Instant.now());
+                    """, nettingSetId, portfolioId, Timestamp.from(Instant.now()));
         } catch (DataIntegrityViolationException exception) {
             throw new ConflictException("Portfolio is already assigned to a netting set");
         }
@@ -164,7 +168,7 @@ class JdbcXvaStore implements XvaStore {
                 UPDATE netting_sets
                 SET collateral_amount = ?, updated_at = ?
                 WHERE id = ?
-                """, command.collateralAmount(), Instant.now(), nettingSetId);
+                """, command.collateralAmount(), Timestamp.from(Instant.now()), nettingSetId);
         return findNettingSet(nettingSetId).orElseThrow();
     }
 
@@ -201,8 +205,8 @@ class JdbcXvaStore implements XvaStore {
                     rs.getBigDecimal("collateral_amount"),
                     rs.getString("collateral_currency"),
                     rs.getBoolean("active"),
-                    rs.getObject("created_at", Instant.class),
-                    rs.getObject("updated_at", Instant.class),
+                    instant(rs, "created_at"),
+                    instant(rs, "updated_at"),
                     portfolios(id)
             );
         };
@@ -229,8 +233,8 @@ class JdbcXvaStore implements XvaStore {
                 rs.getString("external_id"),
                 rs.getString("credit_rating"),
                 rs.getBoolean("active"),
-                rs.getObject("created_at", Instant.class),
-                rs.getObject("updated_at", Instant.class)
+                instant(rs, "created_at"),
+                instant(rs, "updated_at")
         );
     }
 
@@ -239,7 +243,12 @@ class JdbcXvaStore implements XvaStore {
                 rs.getObject("portfolio_id", UUID.class),
                 rs.getString("portfolio_name"),
                 rs.getString("base_currency"),
-                rs.getObject("assigned_at", Instant.class)
+                instant(rs, "assigned_at")
         );
+    }
+
+    private Instant instant(ResultSet rs, String column) throws SQLException {
+        Timestamp timestamp = rs.getTimestamp(column);
+        return timestamp == null ? null : timestamp.toInstant();
     }
 }

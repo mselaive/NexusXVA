@@ -83,9 +83,24 @@ flowchart TD
 
 * **FO**: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, Portfolios, Pricing, Exposure, CVA, and Run History.
 * **BO**: Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control, and Run History.
-* **ADMIN**: users, groups, FO permissions, portfolio visibility, workflow map, XVA Setup, Audit Logs, and Run History.
+* **ADMIN**: users, groups, FO permissions, portfolio visibility, Operational Control, workflow map, XVA Setup, Audit Logs, and Run History.
 
 A user can belong to multiple groups. After login, the user chooses the active group for the session.
+
+## Operational Control
+
+ADMIN owns the global operating calendar from **Operational Control**:
+
+* timezone: default `America/New_York`
+* business days: default Monday to Friday
+* trading window: default `09:30` to `16:00`
+* scheduled EOD time: default `17:15`
+
+When authentication is enabled, NexusXVA blocks FO trade submission, FO lifecycle requests, and risk runs outside the trading window. BO validation, BO EOD corrections, read-only reporting, login, notifications, and ADMIN configuration remain available.
+
+The header shows `Trading Open` or `Trading Closed`. FO/risk screens disable their main action buttons when the window is closed; the backend still enforces the rule with `409 Operational window is closed`.
+
+`NEXUSXVA_OPERATIONAL_CONTROL_ENFORCEMENT_ENABLED` defaults to `true`. It exists only as a controlled local/test escape hatch; production-like environments should keep backend enforcement enabled.
 
 ## Positions and Lifecycle
 
@@ -140,13 +155,9 @@ From `EOD Control`, BO runs a global close across all portfolios. Each portfolio
 
 If the close was incorrect, BO does not delete the EOD. Instead, BO uses `Void` to cancel it with a reason, or `Recapture` to mark the previous close as `SUPERSEDED` and create a new `ACTIVE` close for the same portfolio/date. Daily P&L only uses `ACTIVE` closes.
 
-The scheduler is disabled by default. It can be enabled with:
+Scheduled EOD is configured from ADMIN -> Operational Control. The scheduler wakes once per minute, reads the database setting, and runs once per business date after the configured EOD time. EOD rejects stale market data unless ADMIN explicitly enables stale market data for close.
 
-```bash
-NEXUSXVA_EOD_ENABLED=true docker compose up --build
-```
-
-By default, it runs at `17:15` from Monday to Friday in `America/New_York`. EOD rejects stale market data and portfolios with active positions that cannot be valued.
+The scheduler bean is enabled by default with `NEXUSXVA_EOD_SCHEDULER_ENABLED=true`; tests disable it to avoid background jobs against temporary databases.
 
 ## Run History
 

@@ -1,14 +1,13 @@
 package com.nexusxva.eod.application;
 
 import com.nexusxva.portfolio.application.PortfolioStore;
+import com.nexusxva.operationalcontrol.application.OperationalControlStore;
 import com.nexusxva.shared.error.ConflictException;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -18,20 +17,22 @@ public class PortfolioEodBatchService {
 
     private final PortfolioStore portfolioStore;
     private final PortfolioEodService eodService;
-    private final ZoneId businessZone;
+    private final OperationalControlStore operationalControlStore;
 
     public PortfolioEodBatchService(
             PortfolioStore portfolioStore,
             PortfolioEodService eodService,
-            @Value("${nexusxva.eod.zone:America/New_York}") String businessZone
+            OperationalControlStore operationalControlStore
     ) {
         this.portfolioStore = portfolioStore;
         this.eodService = eodService;
-        this.businessZone = ZoneId.of(businessZone);
+        this.operationalControlStore = operationalControlStore;
     }
 
     public EodBatchResult captureAll(LocalDate businessDate, String source) {
-        LocalDate resolvedDate = businessDate == null ? LocalDate.now(businessZone) : businessDate;
+        LocalDate resolvedDate = businessDate == null
+                ? LocalDate.now(operationalControlStore.settings().timezone())
+                : businessDate;
         ArrayList<EodBatchPortfolioResult> results = new ArrayList<>();
         int captured = 0;
         int skipped = 0;

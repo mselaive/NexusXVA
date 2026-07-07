@@ -21,6 +21,8 @@ export function EodControlPage() {
   const [latest, setLatest] = React.useState<PortfolioEodSnapshot | null>(null);
   const [history, setHistory] = React.useState<PortfolioEodSnapshot[]>([]);
   const [batchResult, setBatchResult] = React.useState<EodBatchResult | null>(null);
+  const [correctionDialog, setCorrectionDialog] = React.useState<{ action: "VOID" | "RECAPTURE"; snapshot: PortfolioEodSnapshot } | null>(null);
+  const [correctionReason, setCorrectionReason] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [capturing, setCapturing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -85,45 +87,37 @@ export function EodControlPage() {
     }
   }
 
-  async function voidRun(snapshot: PortfolioEodSnapshot) {
-    const reason = window.prompt(`Why should EOD ${snapshot.businessDate} be voided?`);
-    if (reason == null) {
-      return;
-    }
-    if (!reason.trim()) {
-      setError("Void reason is required.");
-      return;
-    }
-    setCapturing(true);
+  function openCorrection(action: "VOID" | "RECAPTURE", snapshot: PortfolioEodSnapshot) {
+    setCorrectionDialog({ action, snapshot });
+    setCorrectionReason("");
     setError(null);
-    setSuccess(null);
-    try {
-      await nexusApi.voidBackOfficeEodRun(snapshot.id, reason.trim());
-      setSuccess(`EOD ${snapshot.businessDate} voided.`);
-      await loadEod(snapshot.portfolioId);
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setCapturing(false);
-    }
   }
 
-  async function recaptureRun(snapshot: PortfolioEodSnapshot) {
-    const reason = window.prompt(`Why should EOD ${snapshot.businessDate} be recaptured?`);
-    if (reason == null) {
+  async function confirmCorrection() {
+    if (!correctionDialog) {
       return;
     }
-    if (!reason.trim()) {
-      setError("Recapture reason is required.");
+    const reason = correctionReason.trim();
+    if (!reason) {
+      setError(`${correctionDialog.action === "VOID" ? "Void" : "Recapture"} reason is required.`);
       return;
     }
+
     setCapturing(true);
     setError(null);
     setSuccess(null);
     try {
-      await nexusApi.recaptureBackOfficeEodRun(snapshot.id, reason.trim());
-      setSuccess(`EOD ${snapshot.businessDate} recaptured with a new active snapshot.`);
-      await loadEod(snapshot.portfolioId);
+      if (correctionDialog.action === "VOID") {
+        await nexusApi.voidBackOfficeEodRun(correctionDialog.snapshot.id, reason);
+        setSuccess(`EOD ${correctionDialog.snapshot.businessDate} voided.`);
+      } else {
+        await nexusApi.recaptureBackOfficeEodRun(correctionDialog.snapshot.id, reason);
+        setSuccess(`EOD ${correctionDialog.snapshot.businessDate} recaptured with a new active snapshot.`);
+      }
+      const portfolioId = correctionDialog.snapshot.portfolioId;
+      setCorrectionDialog(null);
+      setCorrectionReason("");
+      await loadEod(portfolioId);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -273,10 +267,10 @@ export function EodControlPage() {
                     <td>
                       {snapshot.status === "ACTIVE" ? (
                         <div className="table-actions">
-                          <button className="icon-btn" type="button" onClick={() => voidRun(snapshot)} disabled={capturing} title="Void EOD">
+                          <button className="icon-btn" type="button" onClick={() => openCorrection("VOID", snapshot)} disabled={capturing} title="Void EOD">
                             <XCircle size={15} />
                           </button>
-                          <button className="icon-btn" type="button" onClick={() => recaptureRun(snapshot)} disabled={capturing} title="Recapture EOD">
+                          <button className="icon-btn" type="button" onClick={() => openCorrection("RECAPTURE", snapshot)} disabled={capturing} title="Recapture EOD">
                             <RotateCcw size={15} />
                           </button>
                         </div>
@@ -291,6 +285,55 @@ export function EodControlPage() {
           </div>
         )}
       </section>
+
+      {correctionDialog ? (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !capturing) {
+            setCorrectionDialog(null);
+            setCorrectionReason("");
+          }
+        }}>
+          <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="eod-correction-title">
+            <div>
+              <span className="page-eyebrow">EOD correction</span>
+              <h2 id="eod-correction-title">
+                {correctionDialog.action === "VOID" ? "Void close" : "Recapture close"}
+              </h2>
+              <p>
+                {correctionDialog.action === "VOID"
+                  ? "Void keeps the close in history but removes it from active Daily P&L references."
+                  : "Recapture supersedes the selected close and creates a new active snapshot for the same portfolio/date."}
+              </p>
+            </div>
+            <div className="detail-grid">
+              <div className="detail-item">
+                <span>Portfolio</span>
+                <strong>{selected?.name ?? correctionDialog.snapshot.portfolioId}</strong>
+              </div>
+              <div className="detail-item">
+                <span>Business date</span>
+                <strong>{correctionDialog.snapshot.businessDate}</strong>
+              </div>
+            </div>
+            <label className="field span-12">
+              <span>Correction reason</span>
+              <textarea
+                className="textarea rejection-input"
+                value={correctionReason}
+                onChange={(event) => setCorrectionReason(event.target.value)}
+                placeholder="Explain why this EOD close needs correction"
+              />
+            </label>
+            <div className="modal-actions">
+              <button className="btn secondary" type="button" onClick={() => setCorrectionDialog(null)} disabled={capturing}>Cancel</button>
+              <button className="btn" type="button" onClick={confirmCorrection} disabled={capturing}>
+                {capturing ? <Loader2 size={16} className="spin" /> : correctionDialog.action === "VOID" ? <XCircle size={16} /> : <RotateCcw size={16} />}
+                {correctionDialog.action === "VOID" ? "Void close" : "Recapture close"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AppShell>
   );
 }

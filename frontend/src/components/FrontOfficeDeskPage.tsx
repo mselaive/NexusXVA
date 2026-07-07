@@ -43,11 +43,14 @@ const tabs: Array<{ id: "ALL" | TradeBookingStatus; label: string }> = [
   { id: "ALL", label: "All" },
 ];
 
+type PnlFilter = "ALL" | "ACTION_ITEMS" | "PNL_UNAVAILABLE" | "NEGATIVE_DAILY" | "OK";
+
 export function FrontOfficeDeskPage() {
   const [desk, setDesk] = React.useState<FrontOfficeDeskResponse | null>(null);
   const [pnlReport, setPnlReport] = React.useState<FrontOfficePnlReport | null>(null);
   const [lifecycleReport, setLifecycleReport] = React.useState<TradeLifecycleReport | null>(null);
   const [activeTab, setActiveTab] = React.useState<"ALL" | TradeBookingStatus>("PENDING_VALIDATION");
+  const [pnlFilter, setPnlFilter] = React.useState<PnlFilter>("ALL");
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
 
@@ -101,7 +104,9 @@ export function FrontOfficeDeskPage() {
         <DeskMetric icon={<Wallet size={18} />} label="Visible portfolios" value={desk?.portfolios.length ?? 0} tone="portfolio" />
       </div>
 
-      <section className="panel section fo-lifecycle-summary">
+      <FoAttentionQueue desk={desk} pnlReport={pnlReport} lifecycleReport={lifecycleReport} />
+
+      <section className="panel section fo-lifecycle-summary" id="lifecycle-summary">
         <SectionHeader
           title="My lifecycle activity"
           text="Amendment and cancellation requests submitted by you. Pending lifecycle requests do not change confirmed positions until BO approves them."
@@ -118,7 +123,7 @@ export function FrontOfficeDeskPage() {
         </div>
       </section>
 
-      <PnlSnapshot report={pnlReport} />
+      <PnlSnapshot report={pnlReport} activeFilter={pnlFilter} onFilterChange={setPnlFilter} />
 
       <div className="fo-desk-layout">
         <section className="panel fo-portfolio-panel">
@@ -135,7 +140,7 @@ export function FrontOfficeDeskPage() {
           </div>
         </section>
 
-        <section className="panel fo-blotter-panel">
+        <section className="panel fo-blotter-panel" id="booking-blotter">
           <SectionHeader
             title="My booking blotter"
             text="Your immutable booking requests across visible and historical portfolios."
@@ -159,7 +164,99 @@ export function FrontOfficeDeskPage() {
   );
 }
 
-function PnlSnapshot({ report }: { report: FrontOfficePnlReport | null }) {
+function FoAttentionQueue({
+  desk,
+  pnlReport,
+  lifecycleReport,
+}: {
+  desk: FrontOfficeDeskResponse | null;
+  pnlReport: FrontOfficePnlReport | null;
+  lifecycleReport: TradeLifecycleReport | null;
+}) {
+  const rejectedBookings = (desk?.bookings ?? []).filter((booking) => booking.status === "REJECTED");
+  const pendingBookings = (desk?.bookings ?? []).filter((booking) => booking.status === "PENDING_VALIDATION");
+  const pnlUnavailable = (pnlReport?.portfolios ?? []).filter((row) => row.status !== "OK");
+  const lifecyclePending = lifecycleReport?.pendingValidation ?? 0;
+  const lifecycleRejected = lifecycleReport?.rejected ?? 0;
+  const hasItems = rejectedBookings.length > 0 || pendingBookings.length > 0 || pnlUnavailable.length > 0 || lifecyclePending > 0 || lifecycleRejected > 0;
+
+  return (
+    <section className="panel section fo-attention-panel">
+      <SectionHeader
+        title="My attention queue"
+        text="Items here either need a trader decision or are excluded from risk until BO finishes the workflow."
+      />
+      {!hasItems ? (
+        <div className="empty-state">No open FO action items right now.</div>
+      ) : (
+        <div className="fo-attention-grid">
+          <AttentionCard
+            tone="rejected"
+            title="Rejected bookings"
+            count={rejectedBookings.length}
+            text={rejectedBookings.length === 0 ? "No rejected bookings." : rejectedBookings.slice(0, 3).map((booking) => `${booking.underlyingSymbol} in ${booking.portfolioName}`).join(", ")}
+            href="/upad"
+          />
+          <AttentionCard
+            tone="pending"
+            title="Pending validation"
+            count={pendingBookings.length}
+            text={pendingBookings.length === 0 ? "No booking requests waiting for BO." : "These trades do not affect Pricing, Exposure or CVA yet."}
+            href="#booking-blotter"
+          />
+          <AttentionCard
+            tone="warning"
+            title="Lifecycle"
+            count={lifecyclePending + lifecycleRejected}
+            text={`${formatNumber(lifecyclePending, 0)} pending · ${formatNumber(lifecycleRejected, 0)} rejected amendments/cancellations`}
+            href="#lifecycle-summary"
+          />
+          <AttentionCard
+            tone="rejected"
+            title="P&L unavailable"
+            count={pnlUnavailable.length}
+            text={pnlUnavailable.length === 0 ? "All visible P&L rows are available." : pnlUnavailable.slice(0, 3).map((row) => row.portfolioName).join(", ")}
+            href="#pnl-snapshot"
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AttentionCard({
+  tone,
+  title,
+  count,
+  text,
+  href,
+}: {
+  tone: "pending" | "rejected" | "warning";
+  title: string;
+  count: number;
+  text: string;
+  href: string;
+}) {
+  return (
+    <a className={`fo-attention-card ${tone}`} href={href}>
+      <div>
+        <span>{title}</span>
+        <strong>{formatNumber(count, 0)}</strong>
+      </div>
+      <p>{text}</p>
+    </a>
+  );
+}
+
+function PnlSnapshot({
+  report,
+  activeFilter,
+  onFilterChange,
+}: {
+  report: FrontOfficePnlReport | null;
+  activeFilter: PnlFilter;
+  onFilterChange: (filter: PnlFilter) => void;
+}) {
   const rows = report?.portfolios ?? [];
   const okRows = rows.filter((row) => row.status === "OK");
   const totalDaily = okRows.reduce((sum, row) => sum + (row.dailyPnl ?? 0), 0);
@@ -168,9 +265,10 @@ function PnlSnapshot({ report }: { report: FrontOfficePnlReport | null }) {
     (sum, row) => sum + row.pendingBookings + row.rejectedBookings + row.pendingLifecycleRequests + row.rejectedLifecycleRequests,
     0,
   );
+  const filteredRows = rows.filter((row) => matchesPnlFilter(row, activeFilter));
 
   return (
-    <section className="panel section fo-pnl-snapshot">
+    <section className="panel section fo-pnl-snapshot" id="pnl-snapshot">
       <SectionHeader
         title="P&L Snapshot"
         text="Daily P&L is measured against the latest active EOD close. Since trade P&L is measured against execution values when available."
@@ -180,6 +278,24 @@ function PnlSnapshot({ report }: { report: FrontOfficePnlReport | null }) {
         <SummaryTile icon={<LineChart size={18} />} label="Since trade P&L" value={formatCurrency(totalSinceTrade)} tone={totalSinceTrade < 0 ? "negative" : "positive"} />
         <SummaryTile icon={<Wallet size={18} />} label="Portfolio rows" value={formatNumber(rows.length, 0)} />
         <SummaryTile icon={<AlertCircle size={18} />} label="Action items" value={formatNumber(actionItems, 0)} tone={actionItems > 0 ? "warning" : undefined} />
+      </div>
+      <div className="fo-tabs fo-pnl-filters" role="tablist" aria-label="P&L snapshot filters">
+        {[
+          ["ALL", "All"],
+          ["ACTION_ITEMS", "Action items"],
+          ["PNL_UNAVAILABLE", "P&L unavailable"],
+          ["NEGATIVE_DAILY", "Negative daily"],
+          ["OK", "OK"],
+        ].map(([id, label]) => (
+          <button
+            className={activeFilter === id ? "active" : ""}
+            key={id}
+            type="button"
+            onClick={() => onFilterChange(id as PnlFilter)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
       {rows.length === 0 ? <Empty text="No P&L rows available yet. Run EOD after BO confirms positions." /> : (
         <div className="table-wrap compact-table">
@@ -197,15 +313,37 @@ function PnlSnapshot({ report }: { report: FrontOfficePnlReport | null }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {filteredRows.map((row) => (
                 <PnlSnapshotRow key={row.portfolioId} row={row} />
               ))}
+              {filteredRows.length === 0 ? (
+                <tr>
+                  <td colSpan={8}>No P&L rows match this filter.</td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
       )}
     </section>
   );
+}
+
+function matchesPnlFilter(row: FrontOfficePnlPortfolioRow, filter: PnlFilter) {
+  const openItems = row.pendingBookings + row.rejectedBookings + row.pendingLifecycleRequests + row.rejectedLifecycleRequests;
+  if (filter === "ACTION_ITEMS") {
+    return openItems > 0;
+  }
+  if (filter === "PNL_UNAVAILABLE") {
+    return row.status !== "OK";
+  }
+  if (filter === "NEGATIVE_DAILY") {
+    return row.dailyPnl != null && row.dailyPnl < 0;
+  }
+  if (filter === "OK") {
+    return row.status === "OK" && openItems === 0;
+  }
+  return true;
 }
 
 function PnlSnapshotRow({ row }: { row: FrontOfficePnlPortfolioRow }) {
@@ -216,6 +354,7 @@ function PnlSnapshotRow({ row }: { row: FrontOfficePnlPortfolioRow }) {
         <div className="fo-booking-portfolio">
           <strong>{row.portfolioName}</strong>
           <small>{row.positionCount} positions · {row.baseCurrency}</small>
+          {row.status !== "OK" ? <span className="booking-status rejected">P&L unavailable</span> : null}
         </div>
       </td>
       <td>{row.latestEodDate ?? "No close"}</td>

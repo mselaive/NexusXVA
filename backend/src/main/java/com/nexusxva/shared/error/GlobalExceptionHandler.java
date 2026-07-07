@@ -3,6 +3,7 @@ package com.nexusxva.shared.error;
 import java.util.List;
 
 import com.nexusxva.auth.application.InvalidCredentialsException;
+import com.nexusxva.operationalcontrol.application.OperationalWindowClosedException;
 import com.nexusxva.tradinglimits.application.TradingLimitExceededException;
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -94,6 +95,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(TradingLimitExceededException.class)
     public ResponseEntity<ApiError> handleTradingLimitExceeded(
             TradingLimitExceededException exception,
+            HttpServletRequest request
+    ) {
+        ApiError error = ApiError.withMetadata(
+                HttpStatus.CONFLICT.value(),
+                HttpStatus.CONFLICT.getReasonPhrase(),
+                exception.getMessage(),
+                request.getRequestURI(),
+                exception.metadata()
+        );
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
+    @ExceptionHandler(OperationalWindowClosedException.class)
+    public ResponseEntity<ApiError> handleOperationalWindowClosed(
+            OperationalWindowClosedException exception,
             HttpServletRequest request
     ) {
         ApiError error = ApiError.withMetadata(

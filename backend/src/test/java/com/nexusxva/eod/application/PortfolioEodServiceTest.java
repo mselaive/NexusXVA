@@ -3,16 +3,23 @@ package com.nexusxva.eod.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.nexusxva.eod.domain.EodRunStatus;
 import com.nexusxva.eod.domain.PortfolioEodSnapshot;
+import com.nexusxva.operationalcontrol.application.OperationalControlStore;
+import com.nexusxva.operationalcontrol.domain.OperationalControlSettings;
 import com.nexusxva.portfolio.application.PortfolioBlackScholesPricingResult;
 import com.nexusxva.portfolio.application.PortfolioBlackScholesPricingService;
 import com.nexusxva.portfolio.application.PortfolioGreeks;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,6 +42,9 @@ class PortfolioEodServiceTest {
 
     @Mock
     private PortfolioBlackScholesPricingService pricingService;
+
+    @Mock
+    private OperationalControlStore operationalControlStore;
 
     @Test
     void voidRunRequiresActiveSnapshotAndStoresReason() {
@@ -110,7 +120,23 @@ class PortfolioEodServiceTest {
     }
 
     private PortfolioEodService service() {
-        return new PortfolioEodService(store, pricingService, false);
+        lenient().when(operationalControlStore.settings()).thenReturn(settings());
+        return new PortfolioEodService(store, pricingService, operationalControlStore);
+    }
+
+    private OperationalControlSettings settings() {
+        return new OperationalControlSettings(
+                ZoneId.of("America/New_York"),
+                EnumSet.range(DayOfWeek.MONDAY, DayOfWeek.FRIDAY),
+                LocalTime.of(9, 30),
+                LocalTime.of(16, 0),
+                false,
+                LocalTime.of(17, 15),
+                false,
+                Instant.parse("2026-06-22T20:00:00Z"),
+                null,
+                0
+        );
     }
 
     private PortfolioEodSnapshot activeRun() {

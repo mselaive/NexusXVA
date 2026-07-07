@@ -40,13 +40,6 @@ Portfolios are archived instead of hard-deleted. Archived portfolios disappear f
 
 Daily P&L uses prior EOD value for existing positions and execution trade value for positions created after the close. Missing references remain unavailable. Reporting separates option Daily P&L from cash-equity Daily P&L by using the persisted `instrumentType` on each EOD position snapshot.
 
-The scheduler is disabled by default:
-
-```text
-NEXUSXVA_EOD_ENABLED=true
-NEXUSXVA_EOD_CRON=0 15 17 * * MON-FRI
-NEXUSXVA_EOD_ZONE=America/New_York
-NEXUSXVA_EOD_ALLOW_STALE=false
-```
+The scheduler is configured from ADMIN -> Operational Control. It is disabled by default, wakes every minute, reads the database policy, and runs once per business date after the configured EOD time. Defaults are `America/New_York`, Monday-Friday, trading `09:30` to `16:00`, EOD `17:15`, and stale market data disallowed.
 
 Expected failures include duplicate close dates, stale market data, unpriceable active positions, unavailable Blemberg, and missing or invalid FX conversion into the portfolio base currency.

@@ -30,7 +30,7 @@ export const WORK_GROUPS: Record<WorkGroupCode, WorkGroup> = {
     name: "Admin",
     description: "Manage users, access controls and workflow monitoring.",
     landingHref: "/admin",
-    allowedHrefs: ["/admin", "/xva-setup", "/workflows", "/audit-logs", "/valuation-runs"],
+    allowedHrefs: ["/admin", "/operational-control", "/xva-setup", "/workflows", "/audit-logs", "/valuation-runs"],
   },
 };
 

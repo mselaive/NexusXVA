@@ -6,6 +6,7 @@ import com.nexusxva.auth.infrastructure.AuthSessionFilter;
 import com.nexusxva.audit.application.AuditEventCommand;
 import com.nexusxva.audit.application.AuditService;
 import com.nexusxva.audit.domain.AuditOutcome;
+import com.nexusxva.operationalcontrol.application.OperationalControlService;
 import com.nexusxva.portfolio.application.PortfolioBlackScholesPricingResult;
 import com.nexusxva.portfolio.application.PortfolioBlackScholesPricingService;
 import com.nexusxva.shared.error.ResourceNotFoundException;
@@ -32,17 +33,20 @@ public class PortfolioPricingController {
     private final UserAccessService userAccessService;
     private final ValuationRunService valuationRunService;
     private final AuditService auditService;
+    private final OperationalControlService operationalControlService;
 
     public PortfolioPricingController(
             PortfolioBlackScholesPricingService pricingService,
             UserAccessService userAccessService,
             ValuationRunService valuationRunService,
-            AuditService auditService
+            AuditService auditService,
+            OperationalControlService operationalControlService
     ) {
         this.pricingService = pricingService;
         this.userAccessService = userAccessService;
         this.valuationRunService = valuationRunService;
         this.auditService = auditService;
+        this.operationalControlService = operationalControlService;
     }
 
     @PostMapping("/{portfolioId}/pricing/black-scholes")
@@ -52,6 +56,7 @@ public class PortfolioPricingController {
             HttpServletRequest servletRequest
     ) {
         userAccessService.requirePortfolioAccess(servletRequest, portfolioId);
+        operationalControlService.ensureOpen("RUN_PORTFOLIO_PRICING", currentSession(servletRequest), servletRequest);
         LocalDate valuationDate = request == null ? null : request.valuationDate();
         Map<String, Object> input = pricingInput(portfolioId, valuationDate);
         try {

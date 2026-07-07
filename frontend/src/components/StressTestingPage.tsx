@@ -4,6 +4,7 @@ import React from "react";
 import { FlaskConical, Loader2, Send, Waves } from "lucide-react";
 import { nexusApi, NexusApiError } from "@/lib/api";
 import { formatCurrency, formatNumber, formatPercent, todayIsoDate } from "@/lib/format";
+import { operationalClosedMessage, useOperationalControlStatus } from "@/lib/operationalControl";
 import type {
   AddEuropeanOptionPositionRequest,
   FrontOfficeStressTestResponse,
@@ -55,8 +56,15 @@ export function StressTestingPage() {
   const [result, setResult] = React.useState<FrontOfficeStressTestResponse | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const { status: operationalStatus } = useOperationalControlStatus();
+  const closedMessage = operationalClosedMessage(operationalStatus);
+  const tradingClosed = Boolean(closedMessage);
 
   async function runStressTest() {
+    if (closedMessage) {
+      setError(closedMessage);
+      return;
+    }
     if (!selectedId) {
       setError("Select a portfolio first.");
       return;
@@ -95,6 +103,7 @@ export function StressTestingPage() {
   return (
     <AppShell title="Stress Testing" eyebrow="Front Office scenarios" howTo={howTo}>
       {error ? <div className="alert">{error}</div> : null}
+      {closedMessage ? <div className="operational-closed-banner">{closedMessage}</div> : null}
       <div className="stress-layout">
         <section className="panel stress-controls">
           <div className="section-title">
@@ -137,7 +146,7 @@ export function StressTestingPage() {
             </button>
           </div>
           <ScenarioMatrix scenarios={scenarios} onChange={updateScenario} onRemove={removeScenario} />
-          <button className="btn stress-run" type="button" onClick={runStressTest} disabled={loading}>
+          <button className="btn stress-run" type="button" onClick={runStressTest} disabled={loading || tradingClosed}>
             {loading ? <Loader2 size={16} /> : <Waves size={16} />}
             Run Stress Test
           </button>

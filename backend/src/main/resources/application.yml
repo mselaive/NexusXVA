@@ -29,6 +29,12 @@ nexusxva:
     cron: ${NEXUSXVA_EOD_CRON:0 15 17 * * MON-FRI}
     zone: ${NEXUSXVA_EOD_ZONE:America/New_York}
     allow-stale: ${NEXUSXVA_EOD_ALLOW_STALE:false}
+    scheduler:
+      enabled: ${NEXUSXVA_EOD_SCHEDULER_ENABLED:true}
+      tick: ${NEXUSXVA_EOD_SCHEDULER_TICK:60000}
+  operational-control:
+    enforcement:
+      enabled: ${NEXUSXVA_OPERATIONAL_CONTROL_ENFORCEMENT_ENABLED:true}
   auth:
     enabled: ${NEXUSXVA_AUTH_ENABLED:false}
     session-hours: ${NEXUSXVA_AUTH_SESSION_HOURS:8}

@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Save,
   Search,
-  ShieldOff,
   Wallet,
   X,
 } from "lucide-react";
@@ -67,6 +66,7 @@ export function XvaSetupPage() {
   const [newCounterpartyForm, setNewCounterpartyForm] = React.useState<CounterpartyForm>(emptyCounterpartyForm);
   const [nettingSetForm, setNettingSetForm] = React.useState<NettingSetForm>(emptyNettingSetForm);
   const [newNettingSetForm, setNewNettingSetForm] = React.useState<NettingSetForm>(emptyNettingSetForm);
+  const [createCounterpartyOpen, setCreateCounterpartyOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -137,6 +137,7 @@ export function XvaSetupPage() {
     await withSave("create-counterparty", async () => {
       const created = await nexusApi.createCounterparty(counterpartyRequest(newCounterpartyForm));
       setNewCounterpartyForm(emptyCounterpartyForm);
+      setCreateCounterpartyOpen(false);
       setSuccess(`Counterparty "${created.name}" created.`);
       await load(created.id, "");
     });
@@ -226,6 +227,36 @@ export function XvaSetupPage() {
         <MetricCard icon={<CircleDollarSign size={18} />} label="Static collateral" value={formatCurrency(totalCollateral)} />
       </div>
 
+      <section className="panel xva-create-counterparty-panel">
+        <div className="section-head">
+          <div>
+            <h2>Counterparty setup</h2>
+            <p>Create a legal/reference counterparty, then assign netting sets and portfolios below.</p>
+          </div>
+          <div className="xva-top-actions">
+            <button className="btn secondary" type="button" onClick={() => load()} disabled={loading}>
+              {loading ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
+              Refresh
+            </button>
+            <button className="btn" type="button" onClick={() => setCreateCounterpartyOpen((current) => !current)}>
+              <Plus size={16} />
+              New counterparty
+            </button>
+          </div>
+        </div>
+        {createCounterpartyOpen ? (
+          <div className="xva-create-inline">
+            <TextInput label="Name" value={newCounterpartyForm.name} onChange={(name) => setNewCounterpartyForm({ ...newCounterpartyForm, name })} />
+            <TextInput label="External id" value={newCounterpartyForm.externalId} onChange={(externalId) => setNewCounterpartyForm({ ...newCounterpartyForm, externalId })} />
+            <TextInput label="Credit rating" value={newCounterpartyForm.creditRating} onChange={(creditRating) => setNewCounterpartyForm({ ...newCounterpartyForm, creditRating })} />
+            <button className="btn xva-create-submit" type="button" onClick={createCounterparty} disabled={saving === "create-counterparty" || !newCounterpartyForm.name.trim()}>
+              {saving === "create-counterparty" ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
+              Create
+            </button>
+          </div>
+        ) : null}
+      </section>
+
       <div className="xva-setup-layout">
         <section className="panel xva-directory">
           <div className="section-head">
@@ -233,9 +264,6 @@ export function XvaSetupPage() {
               <h2>Counterparties</h2>
               <p>Reference data kept by ADMIN for netting-set CVA.</p>
             </div>
-            <button className="icon-button" type="button" onClick={() => load()} disabled={loading} title="Refresh XVA setup">
-              {loading ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
-            </button>
           </div>
           <label className="bo-search admin-search">
             <Search size={16} />
@@ -260,16 +288,6 @@ export function XvaSetupPage() {
             ))}
             {loading ? <div className="empty"><Loader2 className="spin" size={18} /> Loading XVA setup</div> : null}
             {!loading && filteredCounterparties.length === 0 ? <div className="empty">No counterparties match this search.</div> : null}
-          </div>
-          <div className="xva-create-card">
-            <h3>Create counterparty</h3>
-            <TextInput label="Name" value={newCounterpartyForm.name} onChange={(name) => setNewCounterpartyForm({ ...newCounterpartyForm, name })} />
-            <TextInput label="External id" value={newCounterpartyForm.externalId} onChange={(externalId) => setNewCounterpartyForm({ ...newCounterpartyForm, externalId })} />
-            <TextInput label="Credit rating" value={newCounterpartyForm.creditRating} onChange={(creditRating) => setNewCounterpartyForm({ ...newCounterpartyForm, creditRating })} />
-            <button className="btn" type="button" onClick={createCounterparty} disabled={saving === "create-counterparty" || !newCounterpartyForm.name.trim()}>
-              {saving === "create-counterparty" ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
-              Create counterparty
-            </button>
           </div>
         </section>
 
@@ -299,10 +317,7 @@ export function XvaSetupPage() {
                     <TextInput label="Name" value={counterpartyForm.name} onChange={(name) => setCounterpartyForm({ ...counterpartyForm, name })} />
                     <TextInput label="External id" value={counterpartyForm.externalId} onChange={(externalId) => setCounterpartyForm({ ...counterpartyForm, externalId })} />
                     <TextInput label="Credit rating" value={counterpartyForm.creditRating} onChange={(creditRating) => setCounterpartyForm({ ...counterpartyForm, creditRating })} />
-                    <label className="admin-check xva-toggle">
-                      <input type="checkbox" checked={counterpartyForm.active} onChange={(event) => setCounterpartyForm({ ...counterpartyForm, active: event.target.checked })} />
-                      <span>Active</span>
-                    </label>
+                    <ToggleField label="Active" checked={counterpartyForm.active} onChange={(active) => setCounterpartyForm({ ...counterpartyForm, active })} />
                   </div>
                   <button className="btn" type="button" onClick={saveCounterparty} disabled={saving === "counterparty" || !counterpartyForm.name.trim()}>
                     {saving === "counterparty" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
@@ -337,7 +352,7 @@ export function XvaSetupPage() {
                       <p>Select a set to edit collateral and portfolio assignment.</p>
                     </div>
                   </div>
-                  <div className="xva-netting-list">
+                  <div className="xva-netting-list xva-netting-selector">
                     {selectedNettingSets.map((nettingSet) => (
                       <button
                         className={`xva-netting-row ${selectedNettingSetId === nettingSet.id ? "selected" : ""}`}
@@ -370,14 +385,11 @@ export function XvaSetupPage() {
                       <div className="form-grid">
                         <TextInput label="Name" value={nettingSetForm.name} onChange={(name) => setNettingSetForm({ ...nettingSetForm, name })} />
                         <TextInput label="Collateral amount" value={nettingSetForm.collateralAmount} type="number" onChange={(collateralAmount) => setNettingSetForm({ ...nettingSetForm, collateralAmount })} />
-                        <label className="admin-check xva-toggle">
-                          <input type="checkbox" checked={nettingSetForm.active} onChange={(event) => setNettingSetForm({ ...nettingSetForm, active: event.target.checked })} />
-                          <span>Active</span>
-                        </label>
-                        <div className="xva-readonly-field">
+                        <label className="field xva-readonly-field">
                           <span>Currency</span>
                           <strong>{selectedNettingSet.baseCurrency}</strong>
-                        </div>
+                        </label>
+                        <ToggleField label="Active" checked={nettingSetForm.active} onChange={(active) => setNettingSetForm({ ...nettingSetForm, active })} />
                       </div>
                       <button className="btn" type="button" onClick={saveNettingSet} disabled={saving === "netting-set" || !nettingSetForm.name.trim()}>
                         {saving === "netting-set" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
@@ -495,6 +507,24 @@ function TextInput({
     <label className="field">
       <span>{label}</span>
       <input className="input" type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function ToggleField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className={`field xva-switch-field ${checked ? "active" : ""}`}>
+      <span>{label}</span>
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <i aria-hidden="true" />
     </label>
   );
 }

@@ -286,7 +286,7 @@ Technical logs remain separate and are written to rotated files under `logs/back
 
 Dashboard V1 is a Next.js frontend in `frontend/`.
 It does not implement financial formulas.
-The UI is split by active group. FO uses FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA and Run History. BO uses Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control and Run History. ADMIN uses Administration for memberships, FO feature permissions and portfolio visibility, XVA Setup for counterparties/netting/collateral, plus Workflows, Audit Logs and Run History for monitoring.
+The UI is split by active group. FO uses FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA and Run History. BO uses Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control and Run History. ADMIN uses Administration for memberships, FO feature permissions and portfolio visibility, Operational Control for trading hours/EOD scheduling, XVA Setup for counterparties/netting/collateral, plus Workflows, Audit Logs and Run History for monitoring.
 The header includes a persisted notification inbox. Notifications belong to the user, not to the active group, so multi-group users keep one inbox while switching between FO, BO and ADMIN.
 
 The frontend flow is:
@@ -314,6 +314,7 @@ The dashboard uses the backend as the source of truth for:
 - FO limit visibility in `u-Pad` and BO policy management.
 - User notifications for booking and lifecycle review events.
 - ADMIN user/group access, FO feature checks, portfolio visibility, and read-only workflow map.
+- ADMIN Operational Control for global trading hours and scheduled EOD.
 - Portfolio-level Black-Scholes pricing.
 - Exposure simulation.
 - CVA calculation.
@@ -323,7 +324,9 @@ For local development, the frontend calls `/nexus-api/*`, which Next.js proxies 
 
 `u-Pad` may also capture the option `executionPrice`, meaning premium per unit. On BO approval it is copied into the confirmed position. Portfolio pricing compares this execution premium with the current Black-Scholes unit value to produce unrealized P&L. Missing legacy economics remain unavailable rather than being treated as zero.
 
-EOD is a separate audited control owned by BO or the system scheduler. FO consumes the close but cannot create it. The normal process closes active portfolios and reports an independent `CAPTURED`, `SKIPPED`, or `FAILED` result for each book. It snapshots portfolio and position market values without changing execution economics. BO corrections use `VOIDED` and `SUPERSEDED` runs rather than physical deletion; latest close and Daily P&L use only `ACTIVE` runs. Scheduled EOD is configurable and disabled by default.
+Operational Control is a global ADMIN policy. V1 uses a New York Monday-Friday calendar by default, blocks FO bookings, FO lifecycle requests and risk runs outside the configured trading window, and keeps BO validation/corrections plus ADMIN setup available. The backend is the source of authority; frontend disabled buttons are only a convenience.
+
+EOD is a separate audited control owned by BO or the system scheduler. FO consumes the close but cannot create it. The normal process closes active portfolios and reports an independent `CAPTURED`, `SKIPPED`, or `FAILED` result for each book. It snapshots portfolio and position market values without changing execution economics. BO corrections use `VOIDED` and `SUPERSEDED` runs rather than physical deletion; latest close and Daily P&L use only `ACTIVE` runs. Scheduled EOD is configured from ADMIN Operational Control and is disabled by default.
 
 Optional large demo portfolios live in `backend/src/main/resources/db/demo/demo_portfolios.sql`. They are not Flyway migrations; developers load them explicitly when they want realistic local books for dashboard demos, pricing, exposure, CVA, pre-trade analysis and stress testing. See `docs/docs-EN/DemoPortfolios.md`.
 

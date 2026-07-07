@@ -5,6 +5,7 @@ import { Activity, CircleDollarSign, FlaskConical, Loader2, RefreshCw, Send } fr
 import { blembergApi, nexusApi, NexusApiError } from "@/lib/api";
 import { logBlembergRefreshOutcome, summarizeBlembergRefresh } from "@/lib/blembergRefresh";
 import { formatCurrency, formatNumber, formatPercent, todayIsoDate } from "@/lib/format";
+import { operationalClosedMessage, useOperationalControlStatus } from "@/lib/operationalControl";
 import type {
   AddEuropeanOptionPositionRequest,
   BlembergMarketSnapshot,
@@ -63,6 +64,9 @@ export function FrontOfficeWhatIfPage() {
   const [marketError, setMarketError] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const { status: operationalStatus } = useOperationalControlStatus();
+  const closedMessage = operationalClosedMessage(operationalStatus);
+  const tradingClosed = Boolean(closedMessage);
   const marketSnapshotBySymbol = new Map(marketSnapshots.map((snapshot) => [snapshot.symbol.toUpperCase(), snapshot]));
   const selectedSnapshot = marketSnapshotBySymbol.get(tradeForm.underlyingSymbol.toUpperCase());
   const currentTrade = toTradeRequest(tradeForm);
@@ -128,6 +132,10 @@ export function FrontOfficeWhatIfPage() {
   }
 
   async function runWhatIf() {
+    if (closedMessage) {
+      setError(closedMessage);
+      return;
+    }
     if (!selectedId) {
       setError("Select a portfolio first.");
       return;
@@ -156,6 +164,7 @@ export function FrontOfficeWhatIfPage() {
   return (
     <AppShell title="Pre-Trade Analysis" eyebrow="Front Office analytics" howTo={howTo}>
       {error ? <div className="alert">{error}</div> : null}
+      {closedMessage ? <div className="operational-closed-banner">{closedMessage}</div> : null}
       <div className="whatif-layout">
         <section className="panel whatif-ticket">
           <div className="section-title">
@@ -208,7 +217,7 @@ export function FrontOfficeWhatIfPage() {
             </label>
             <div className="field">
               <span>&nbsp;</span>
-              <button className="btn" type="button" onClick={runWhatIf} disabled={loading}>
+              <button className="btn" type="button" onClick={runWhatIf} disabled={loading || tradingClosed}>
                 {loading ? <Loader2 size={16} /> : <FlaskConical size={16} />}
                 Run Analysis
               </button>

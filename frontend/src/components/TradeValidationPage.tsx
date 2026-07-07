@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import {
   Check,
   CheckCircle2,
@@ -248,6 +249,24 @@ export function TradeValidationPage() {
                 <Detail label="Limit notional" value={selected.bookingNotional == null ? "Unavailable" : formatNumber(selected.bookingNotional, 2)} />
               </div>
 
+              {selected.status === "PENDING_VALIDATION" ? (
+                <div className="bo-decision-strip">
+                  <div>
+                    <span className="page-eyebrow">BO decision</span>
+                    <strong>Approve creates the confirmed position. Reject sends it back to FO with a reason.</strong>
+                  </div>
+                  <div className="bo-actions">
+                    <button className="btn secondary danger-action" type="button" onClick={() => setRejecting(selected)}>
+                      <X size={16} /> Reject
+                    </button>
+                    <button className="btn" disabled={actionId === selected.id} type="button" onClick={() => approve(selected)}>
+                      {actionId === selected.id ? <Loader2 className="spin" size={16} /> : <Check size={16} />}
+                      Approve position
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
               {selected.legs.length > 0 ? <BookingLegTable booking={selected} /> : null}
 
               <div className="audit-timeline">
@@ -264,18 +283,6 @@ export function TradeValidationPage() {
                   complete={selected.status !== "PENDING_VALIDATION"}
                 />
               </div>
-
-              {selected.status === "PENDING_VALIDATION" ? (
-                <div className="bo-actions">
-                  <button className="btn secondary danger-action" type="button" onClick={() => setRejecting(selected)}>
-                    <X size={16} /> Reject
-                  </button>
-                  <button className="btn" disabled={actionId === selected.id} type="button" onClick={() => approve(selected)}>
-                    {actionId === selected.id ? <Loader2 className="spin" size={16} /> : <Check size={16} />}
-                    Approve position
-                  </button>
-                </div>
-              ) : null}
             </>
           ) : (
             <div className="empty">Select a booking to inspect its terms and audit trail.</div>
@@ -285,39 +292,42 @@ export function TradeValidationPage() {
       )}
 
       {rejecting ? (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) {
-            setRejecting(null);
-            setRejectionReason("");
-          }
-        }}>
-          <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="reject-title">
-            <div>
-              <span className="page-eyebrow">Back Office decision</span>
-                  <h2 id="reject-title">Reject {bookingTitle(rejecting)}</h2>
-              <p>The reason will be visible to Front Office and retained in history.</p>
-            </div>
-            <label className="field full">
-              <span>Rejection reason</span>
-              <textarea
-                className="input rejection-input"
-                maxLength={500}
-                value={rejectionReason}
-                onChange={(event) => setRejectionReason(event.target.value)}
-                placeholder="Describe what FO needs to correct"
-              />
-            </label>
-            <div className="modal-actions">
-              <button className="btn secondary" type="button" onClick={() => { setRejecting(null); setRejectionReason(""); }}>
-                Cancel
-              </button>
-              <button className="btn danger-button" disabled={!rejectionReason.trim() || actionId === rejecting.id} type="button" onClick={reject}>
-                {actionId === rejecting.id ? <Loader2 className="spin" size={16} /> : <XCircle size={16} />}
-                Reject booking
-              </button>
+        <ModalPortal>
+          <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setRejecting(null);
+              setRejectionReason("");
+            }
+          }}>
+            <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="reject-title">
+              <div>
+                <span className="page-eyebrow">Back Office decision</span>
+                <h2 id="reject-title">Reject {bookingTitle(rejecting)}</h2>
+                <p>The reason will be visible to Front Office and retained in history.</p>
+              </div>
+              <label className="field full">
+                <span>Rejection reason</span>
+                <textarea
+                  className="input rejection-input"
+                  maxLength={500}
+                  value={rejectionReason}
+                  onChange={(event) => setRejectionReason(event.target.value)}
+                  placeholder="Describe what FO needs to correct"
+                  autoFocus
+                />
+              </label>
+              <div className="modal-actions">
+                <button className="btn secondary" type="button" onClick={() => { setRejecting(null); setRejectionReason(""); }}>
+                  Cancel
+                </button>
+                <button className="btn danger-button" disabled={!rejectionReason.trim() || actionId === rejecting.id} type="button" onClick={reject}>
+                  {actionId === rejecting.id ? <Loader2 className="spin" size={16} /> : <XCircle size={16} />}
+                  Reject booking
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       ) : null}
       {rejectingLifecycle ? (
         <RejectLifecycleModal
@@ -451,6 +461,23 @@ function LifecycleValidationView({
               <Detail label="Requested" value={selected.requestType === "AMEND" ? lifecycleRequestedSummary(selected) : "Full cancellation"} />
               <Detail label="Requested maturity" value={selected.requestedMaturityDate ?? (selected.instrumentType === "CASH_EQUITY" ? "Cash equity" : "Cancel position")} />
             </div>
+            {selected.status === "PENDING_VALIDATION" ? (
+              <div className="bo-decision-strip">
+                <div>
+                  <span className="page-eyebrow">BO decision</span>
+                  <strong>Approve applies the amendment or cancellation. Reject keeps the current position unchanged.</strong>
+                </div>
+                <div className="bo-actions">
+                  <button className="btn secondary danger-action" type="button" onClick={() => onReject(selected)}>
+                    <X size={16} /> Reject
+                  </button>
+                  <button className="btn" disabled={actionId === selected.id} type="button" onClick={() => onApprove(selected)}>
+                    {actionId === selected.id ? <Loader2 className="spin" size={16} /> : <Check size={16} />}
+                    Approve lifecycle
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <div className="audit-timeline">
               <AuditPoint title="Submitted by" name={selected.submittedBy.displayName || selected.submittedBy.username} date={selected.submittedAt} complete />
               <AuditPoint
@@ -460,17 +487,6 @@ function LifecycleValidationView({
                 complete={selected.status !== "PENDING_VALIDATION"}
               />
             </div>
-            {selected.status === "PENDING_VALIDATION" ? (
-              <div className="bo-actions">
-                <button className="btn secondary danger-action" type="button" onClick={() => onReject(selected)}>
-                  <X size={16} /> Reject
-                </button>
-                <button className="btn" disabled={actionId === selected.id} type="button" onClick={() => onApprove(selected)}>
-                  {actionId === selected.id ? <Loader2 className="spin" size={16} /> : <Check size={16} />}
-                  Approve lifecycle
-                </button>
-              </div>
-            ) : null}
           </>
         ) : (
           <div className="empty">Select a lifecycle request to inspect its terms and audit trail.</div>
@@ -555,37 +571,54 @@ function RejectLifecycleModal({
   onReject: () => void;
 }) {
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) {
-        onClose();
-      }
-    }}>
-      <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="reject-lifecycle-title">
-        <div>
-          <span className="page-eyebrow">Back Office decision</span>
-          <h2 id="reject-lifecycle-title">Reject {request.requestType} {request.originalUnderlyingSymbol}</h2>
-          <p>The reason will be visible to Front Office and retained in lifecycle history.</p>
-        </div>
-        <label className="field full">
-          <span>Rejection reason</span>
-          <textarea
-            className="input rejection-input"
-            maxLength={500}
-            value={rejectionReason}
-            onChange={(event) => onReasonChange(event.target.value)}
-            placeholder="Describe what FO needs to correct"
-          />
-        </label>
-        <div className="modal-actions">
-          <button className="btn secondary" type="button" onClick={onClose}>Cancel</button>
-          <button className="btn danger-button" disabled={!rejectionReason.trim() || actionId === request.id} type="button" onClick={onReject}>
-            {actionId === request.id ? <Loader2 className="spin" size={16} /> : <XCircle size={16} />}
-            Reject request
-          </button>
+    <ModalPortal>
+      <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}>
+        <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="reject-lifecycle-title">
+          <div>
+            <span className="page-eyebrow">Back Office decision</span>
+            <h2 id="reject-lifecycle-title">Reject {request.requestType} {request.originalUnderlyingSymbol}</h2>
+            <p>The reason will be visible to Front Office and retained in lifecycle history.</p>
+          </div>
+          <label className="field full">
+            <span>Rejection reason</span>
+            <textarea
+              className="input rejection-input"
+              maxLength={500}
+              value={rejectionReason}
+              onChange={(event) => onReasonChange(event.target.value)}
+              placeholder="Describe what FO needs to correct"
+              autoFocus
+            />
+          </label>
+          <div className="modal-actions">
+            <button className="btn secondary" type="button" onClick={onClose}>Cancel</button>
+            <button className="btn danger-button" disabled={!rejectionReason.trim() || actionId === request.id} type="button" onClick={onReject}>
+              {actionId === request.id ? <Loader2 className="spin" size={16} /> : <XCircle size={16} />}
+              Reject request
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
+}
+
+function ModalPortal({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null;
+  }
+
+  return createPortal(children, document.body);
 }
 
 function statusLabel(status: TradeBooking["status"]) {

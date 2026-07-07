@@ -216,13 +216,13 @@ Supported filters are `userId`, `username`, `module`, `eventType`, `outcome`, `r
 
 Audit metadata is sanitized. NexusXVA does not store passwords, raw session tokens, cookies, CSRF values, raw request bodies or full responses in `audit_events`.
 
-Technical logs are written to:
+Technical logs are written under `backend/logs/` when running with Docker Compose:
 
-- `logs/backend/system/app.log`
-- `logs/backend/system/error.log`
-- `logs/backend/security/auth.log`
-- `logs/backend/integration/marketdata.log`
-- `logs/backend/jobs/eod.log`
+- `backend/logs/backend/system/app.log`
+- `backend/logs/backend/system/error.log`
+- `backend/logs/backend/security/auth.log`
+- `backend/logs/backend/integration/marketdata.log`
+- `backend/logs/backend/jobs/eod.log`
 
 The logger routing is defined in `src/main/resources/logback-spring.xml`:
 
@@ -236,7 +236,7 @@ The dashboard market-data refresh goes through NexusXVA at `POST /api/market-dat
 
 NexusXVA also runs a Blemberg startup health probe by default, even when pricing uses the local market-data provider, because the dashboard can still use Blemberg for market-watch diagnostics. Disable it with `BLEMBERG_STARTUP_PROBE_ENABLED=false` if a local-only environment should stay quiet.
 
-Docker Compose mounts `backend-logs:/app/logs`. Local runs default to `logs/` from the backend working directory unless `NEXUSXVA_LOG_DIR` is overridden.
+Docker Compose bind-mounts `./backend/logs:/app/logs`, so backend logs are easy to inspect from the repo and still write to `/app/logs` inside the container. Local non-Docker runs default to `logs/` from the backend working directory unless `NEXUSXVA_LOG_DIR` is overridden.
 
 Relevant environment variables:
 

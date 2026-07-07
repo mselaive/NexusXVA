@@ -2344,6 +2344,31 @@ a {
   margin-bottom: 0;
 }
 
+.pricing-selector .pricing-toolbar {
+  align-items: flex-end;
+  justify-content: flex-start;
+}
+
+.date-field-with-help {
+  align-self: flex-end;
+}
+
+.field-label-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.field > .field-label-inline {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.run-field .field-label-inline {
+  justify-content: flex-start;
+}
+
 .target-delta-field {
   min-width: 240px;
 }
@@ -2631,6 +2656,11 @@ a {
   margin-top: -2px;
 }
 
+.field-label-inline .field-help {
+  display: inline-flex;
+  margin-top: 0;
+}
+
 .field-help .icon-btn {
   width: 24px;
   height: 24px;
@@ -2713,6 +2743,34 @@ a {
 
 .fo-pnl-snapshot .summary-strip {
   margin-bottom: 16px;
+}
+
+.fo-pnl-snapshot .metric-card {
+  min-height: 92px;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 12px;
+  padding: 14px;
+}
+
+.fo-pnl-snapshot .metric-card > span {
+  width: 42px;
+  height: 42px;
+  border-radius: 9px;
+}
+
+.fo-pnl-snapshot .metric-card small {
+  align-self: end;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.fo-pnl-snapshot .metric-card strong {
+  align-self: start;
+  font-size: clamp(18px, 1.7vw, 24px);
+  line-height: 1.15;
 }
 
 .metric {
@@ -2815,6 +2873,14 @@ a {
   gap: 14px;
 }
 
+.valuation-runs-layout > .panel {
+  min-width: 0;
+}
+
+.audit-logs-layout {
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+}
+
 .lifecycle-report-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2912,6 +2978,33 @@ a {
   align-self: start;
   display: grid;
   gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.audit-detail .valuation-detail-head {
+  min-width: 0;
+}
+
+.audit-detail .valuation-detail-head > div {
+  min-width: 0;
+}
+
+.audit-detail .valuation-detail-head h2 {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.audit-detail .status-chip {
+  flex: 0 0 auto;
+}
+
+.audit-detail .detail-item,
+.audit-detail .muted-text,
+.audit-detail .json-box {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .detail-grid {
@@ -3157,14 +3250,14 @@ tr:last-child td {
 
 .fo-metric {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 46px minmax(0, 1fr);
   align-items: center;
-  gap: 7px 10px;
-  min-height: 82px;
+  gap: 6px 12px;
+  min-height: 96px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
-  padding: 12px;
+  padding: 14px;
   box-shadow: var(--shadow);
   animation: fadeUp 320ms ease-out both;
 }
@@ -3174,9 +3267,9 @@ tr:last-child td {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 7px;
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
   background: #e7f5f2;
   color: var(--accent-strong);
 }
@@ -3202,11 +3295,18 @@ tr:last-child td {
 }
 
 .fo-metric small {
+  align-self: end;
   color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.15;
+  text-transform: uppercase;
 }
 
 .fo-metric strong {
-  font-size: 24px;
+  align-self: start;
+  font-size: 28px;
+  line-height: 1;
 }
 
 .fo-lifecycle-summary {
@@ -4232,6 +4332,36 @@ tr:last-child td {
   border-top: 1px solid var(--line);
 }
 
+.bo-decision-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: -4px 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbfb;
+  padding: 12px 14px;
+}
+
+.bo-decision-strip strong {
+  display: block;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.bo-decision-strip .bo-actions {
+  flex: 0 0 auto;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.bo-decision-strip .btn {
+  white-space: nowrap;
+}
+
 .danger-action {
   color: var(--danger) !important;
 }
@@ -4298,7 +4428,7 @@ tr:last-child td {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 1000;
   display: grid;
   place-items: center;
   background: rgba(29, 39, 44, 0.42);

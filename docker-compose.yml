@@ -50,7 +50,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - backend-logs:/app/logs
+      - ./backend/logs:/app/logs
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null"]
       interval: 10s
@@ -86,7 +86,6 @@ services:
 
 volumes:
   postgres-data:
-  backend-logs:
 
 networks:
   nexusxva-network:

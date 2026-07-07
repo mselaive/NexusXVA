@@ -1271,12 +1271,14 @@ export function PricingPage() {
       {success ? <div className="success">{success}</div> : null}
       <div className="panel section pricing-selector">
         <SectionTitle title="Open portfolio" info="Choose a portfolio and NexusXVA will price it automatically using the selected valuation date." />
-        <div className="toolbar">
+        <div className="toolbar pricing-toolbar">
           <PortfolioPicker value={selectedId} onChange={setSelectedId} onError={setError} />
-          <label className="field compact-field">
-            <span>Valuation date</span>
-            <span className="field-help">
-              <InfoButton title="Valuation date" body="Date used to compute each option's time to maturity for Black-Scholes pricing." />
+          <label className="field compact-field date-field-with-help">
+            <span className="field-label-inline">
+              <span>Valuation date</span>
+              <span className="field-help">
+                <InfoButton title="Valuation date" body="Date used to compute each option's time to maturity for Black-Scholes pricing." />
+              </span>
             </span>
             <input className="input" type="date" value={valuationDate} onChange={(event) => setValuationDate(event.target.value)} />
           </label>
@@ -1893,12 +1895,15 @@ function RunField({
   step?: string;
 }) {
   return (
-    <Field label={label} className="third">
-      <span className="field-help">
-        <InfoButton title={label} body={runFieldHelp[label] ?? "This value is sent to the backend run request."} />
+    <label className="field third run-field">
+      <span className="field-label-inline">
+        <span>{label}</span>
+        <span className="field-help">
+          <InfoButton title={label} body={runFieldHelp[label] ?? "This value is sent to the backend run request."} />
+        </span>
       </span>
       <input className="input" type={type} step={step} value={value} onChange={(event) => onChange(event.target.value)} />
-    </Field>
+    </label>
   );
 }
 

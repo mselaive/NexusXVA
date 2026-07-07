@@ -129,7 +129,7 @@ export function AuditLogsPage() {
         <MetricCard icon={<AlertTriangle size={17} />} label="Failure" value={formatNumber(failureCount, 0)} />
       </div>
 
-      <div className="valuation-runs-layout">
+      <div className="valuation-runs-layout audit-logs-layout">
         <div className="panel">
           <div className="table-wrap">
             <table>
@@ -168,7 +168,7 @@ export function AuditLogsPage() {
           </div>
         </div>
 
-        <div className="panel valuation-detail">
+        <div className="panel valuation-detail audit-detail">
           {selected ? (
             <>
               <div className="valuation-detail-head">

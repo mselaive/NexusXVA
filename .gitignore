@@ -20,6 +20,8 @@ Thumbs.db
 
 # Logs
 *.log
+backend/logs/*
+!backend/logs/.gitkeep
 
 # Environment overrides
 .env

@@ -164,7 +164,7 @@ NexusXVA separates user audit from technical logging:
 
 * `audit_events` in PostgreSQL is the official activity trail. It records auth events, denied access, workflow approvals/rejections, portfolio changes, EOD corrections and valuation requests with user, active group, session, endpoint, resource and correlation id.
 * ADMIN can inspect it from **Audit Logs** using filters by user, module, outcome, resource and date.
-* Backend log files are for debugging and support. Docker persists them in the `backend-logs` volume under `/app/logs`.
+* Backend log files are for debugging and support. Docker writes them to `backend/logs/` through a bind mount to `/app/logs`.
 * Logs include `correlationId`, user and active group when available, so an audit event can be linked back to technical errors.
 
 Audit metadata is sanitized. Passwords, cookies, CSRF tokens, raw request bodies and full responses are not stored.

@@ -288,7 +288,7 @@ Los logs tecnicos quedan separados y se escriben como archivos rotados bajo `log
 
 Dashboard V1 es un frontend Next.js en `frontend/`.
 No implementa formulas financieras.
-La UI esta separada por grupos. FO usa FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA y Run History. BO usa Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control y Run History. ADMIN usa Administration para membresias, permisos FO y visibilidad de portfolios, mas Workflows, Audit Logs y Run History para monitoreo.
+La UI esta separada por grupos. FO usa FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA y Run History. BO usa Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control y Run History. ADMIN usa Administration para membresias, permisos FO y visibilidad de portfolios, XVA Setup para counterparties/netting/collateral, mas Workflows, Audit Logs y Run History para monitoreo.
 El header incluye una bandeja persistida de notificaciones. Las notificaciones pertenecen al usuario, no al grupo activo, por lo que usuarios multi-grupo mantienen un solo inbox al cambiar entre FO, BO y ADMIN.
 
 El flujo frontend es:
@@ -663,11 +663,12 @@ Para CVA V1 decidimos:
 - Soportar un discount rate anual continuamente compuesto o discount curves enviadas en el request.
 - Interpolar linealmente valores de curva para fechas de exposure dentro del rango de la curva.
 - Usar `lossGivenDefault` directamente, con valores entre `0.0` y `1.0`.
-- Mantener CVA sincrono; persistir solo snapshots auditados de Run History, no counterparties ni curvas como master data.
+- Mantener CVA sincrono; persistir snapshots auditados de Run History para CVA de portfolio, mientras el setup XVA vive separado en el modulo `xva`.
+- Mantener curvas de credito y descuento dentro del request hasta implementar curvas persistidas como master data.
 - Reportar CVA single-portfolio en la `baseCurrency` del portfolio y mantener opciones europeas solamente a traves del flujo de exposure reutilizado.
 
 Esto es intencionalmente simplificado.
-Es suficiente para probar el camino XVA desde portfolio a exposure y luego a ajuste de credito sin introducir todavia counterparties persistidas, curvas de credito persistidas, collateral ni netting sets.
+Es suficiente para probar el camino XVA desde portfolio a exposure y luego a ajuste de credito manteniendo el CVA por netting set como netting a nivel perfil y collateral estatico. Counterparties y netting sets persistidos ya existen, pero curvas de credito persistidas, netting legal path-level, CSA margining, wrong-way risk y resultados CVA persistidos siguen siendo trabajo futuro.
 
 ## Politica de errores
 
@@ -769,16 +770,15 @@ Siguiente version sugerida:
 - Aceptar `501` de Blemberg V1 para `/v3/api-docs` como esperado porque la integracion runtime no depende de OpenAPI.
 - Mantener el smoke real opcional deshabilitado por defecto y activarlo con `RUN_REAL_BLEMBERG_SMOKE=true`.
 - Run History persistido ya existe para snapshots auditados de pricing, exposure y CVA.
-- Agregar FX solo cuando queramos soportar totales multi-currency.
-- Agregar counterparties reales, curvas persistidas como master data, netting y collateral solo despues de que los workflows actuales del dashboard sigan estables.
+- Endurecer reporting FO/BO alrededor de lifecycle, EOD, P&L y closes corregidos.
+- Extender Run History a CVA por netting set, que hoy queda fuera del historial atado a portfolio.
+- Agregar curvas de credito y descuento persistidas como master data cuando el contrato de curvas inline este estable.
 
 Fuera de scope inicial:
 
-- Crear usuarios nuevos desde ADMIN.
-- Agregar auditoria mas rica para cambios de permisos.
-- Agregar permisos por producto, workflow o desk cuando el modelo de negocio lo necesite.
-- Multi-currency sin FX.
-- Netting/collateral.
+- Netting legal path-level, CSA margining y simulacion de margin calls.
+- Wrong-way risk, DVA, FVA, KVA y modelos de capital.
+- Bonds, swaps u opciones exoticas antes de endurecer completamente lifecycle/P&L de cash equities.
 
 ## Como mantener este documento
 

@@ -186,7 +186,7 @@ Current notes:
 
 ## Milestone 7: Dashboard
 
-Status: in progress for Dashboard V1.
+Status: in progress for Dashboard V1, with FO/BO/ADMIN workstations and ADMIN XVA Setup implemented.
 
 Goals:
 

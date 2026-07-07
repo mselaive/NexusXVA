@@ -36,7 +36,8 @@ FO analyzes and books
 * Individual and portfolio-level Black-Scholes pricing.
 * Monte Carlo Exposure V1.
 * CVA V1.1 with flat mode and simple curves.
-* Counterparties, netting sets, static collateral and netting-set CVA V1.
+* ADMIN XVA Setup for counterparties, netting sets, portfolio assignments, active/inactive controls and static collateral.
+* Netting-set CVA V1 using active XVA setup records.
 * Market data integration through the `marketdata` boundary, using either Blemberg or a local provider.
 
 ## Architecture
@@ -82,7 +83,7 @@ flowchart TD
 
 * **FO**: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, Portfolios, Pricing, Exposure, CVA, and Run History.
 * **BO**: Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control, and Run History.
-* **ADMIN**: users, groups, FO permissions, portfolio visibility, workflow map, Audit Logs, and Run History.
+* **ADMIN**: users, groups, FO permissions, portfolio visibility, workflow map, XVA Setup, Audit Logs, and Run History.
 
 A user can belong to multiple groups. After login, the user chooses the active group for the session.
 
@@ -253,7 +254,8 @@ Common URLs:
 
 Natural next candidates are:
 
-* Admin UI polish for counterparty/netting-set setup.
+* FO/BO reporting polish around lifecycle, EOD, P&L and corrected closes.
+* Netting-set CVA valuation run history, so netting-set runs are audited like portfolio runs.
 * Persisted credit curve master data for richer CVA.
 * Persisted valuation/EOD reporting history if FO/BO need saved report views.
 * Cash equity lots/executions for average cost and realized P&L.

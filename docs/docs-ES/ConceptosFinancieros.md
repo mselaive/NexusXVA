@@ -535,13 +535,13 @@ Esto evita mezclar Black-Scholes con payoff exacto al vencimiento antes de tener
 
 La version actual evita algunos casos a proposito:
 
-* FX y portfolios multi-currency.
+* FX avanzado, paths estocasticos de FX y collateral multi-currency.
 * Volatilidad implicita real y volatility surfaces.
 * Options chains reales.
 * Payoff exacto en vencimiento.
-* Persistir resultados de valoracion.
+* Persistir resultados de valoracion como estado reutilizable de riesgo; Run History hoy es auditoria/reporting.
 * Usar market data real dentro de NexusXVA.
-* Curvas de credito reales, counterparties, netting sets, collateral y wrong-way risk.
+* Curvas de credito persistidas como master data, netting legal path-level, collateral/margining dinamico y wrong-way risk.
 
 Estos casos no estan olvidados.
 Estan fuera de scope para que el slice actual sea pequeno, correcto y testeable.

@@ -849,6 +849,31 @@ NexusXVA now has a first XVA reference-data slice:
 
 Mutating setup endpoints require an `ADMIN` active group when auth is enabled. Read endpoints default to active/operable records only; ADMIN can pass `includeInactive=true` for setup screens. FO CVA selection consumes only active counterparties and active netting sets.
 
+Admin setup examples:
+
+```text
+GET /api/xva/counterparties?includeInactive=true
+GET /api/xva/netting-sets?includeInactive=true
+```
+
+```json
+PATCH /api/xva/counterparties/{counterpartyId}
+{
+  "name": "Example Bank",
+  "externalId": "EXBANK",
+  "creditRating": "A",
+  "active": true
+}
+```
+
+```json
+PATCH /api/xva/netting-sets/{nettingSetId}
+{
+  "name": "Example Bank USD CSA",
+  "active": false
+}
+```
+
 Netting-set CVA endpoint:
 
 ```text

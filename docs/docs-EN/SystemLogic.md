@@ -286,7 +286,7 @@ Technical logs remain separate and are written to rotated files under `logs/back
 
 Dashboard V1 is a Next.js frontend in `frontend/`.
 It does not implement financial formulas.
-The UI is split by active group. FO uses FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA and Run History. BO uses Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control and Run History. ADMIN uses Administration for memberships, FO feature permissions and portfolio visibility, plus Workflows, Audit Logs and Run History for monitoring.
+The UI is split by active group. FO uses FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA and Run History. BO uses Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control and Run History. ADMIN uses Administration for memberships, FO feature permissions and portfolio visibility, XVA Setup for counterparties/netting/collateral, plus Workflows, Audit Logs and Run History for monitoring.
 The header includes a persisted notification inbox. Notifications belong to the user, not to the active group, so multi-group users keep one inbox while switching between FO, BO and ADMIN.
 
 The frontend flow is:
@@ -668,11 +668,12 @@ For CVA V1 we decided to:
 - Support either a flat continuously compounded discount rate or request-provided discount curves.
 - Linearly interpolate curve values for exposure dates inside the curve range.
 - Use `lossGivenDefault` directly, with values between `0.0` and `1.0`.
-- Keep CVA synchronous; persist only valuation run audit snapshots, not counterparty or curve master data.
+- Keep CVA synchronous; persist valuation run audit snapshots for portfolio CVA, while XVA setup data lives separately in the `xva` module.
+- Keep credit and discount curves request-scoped until persisted curve master data is implemented.
 - Report single-portfolio CVA in the portfolio `baseCurrency`; keep European-options-only through the reused exposure flow.
 
 This is intentionally simplified.
-It is enough to prove the XVA path from portfolio to exposure to credit adjustment without introducing persisted counterparties, persisted credit curves, collateral, or netting sets yet.
+It is enough to prove the XVA path from portfolio to exposure to credit adjustment while keeping netting-set CVA profile-level and static-collateral-only. Persisted counterparties and netting sets now exist, but persisted credit curves, path-level legal netting, CSA margining, wrong-way risk and persisted CVA result state are still future work.
 
 ## Error Policy
 
@@ -777,14 +778,15 @@ Suggested next version:
 - Accept Blemberg V1 `501` for `/v3/api-docs` as expected because runtime integration does not depend on OpenAPI.
 - Keep the optional real Blemberg smoke test disabled by default and enable it with `RUN_REAL_BLEMBERG_SMOKE=true`.
 - Persisted valuation run history now exists for pricing, exposure and CVA audit snapshots.
-- Add FX only when we want to support multi-currency totals.
-- Add real counterparties, persisted curve master data, netting, and collateral only after the current dashboard workflows remain stable.
+- Harden FO/BO reporting around lifecycle, EOD, P&L and corrected closes.
+- Extend valuation run history to netting-set CVA, which is currently outside the portfolio-scoped run history.
+- Add persisted credit and discount curve master data when the inline curve contract is stable.
 
 Out of initial scope:
 
-- ADMIN user-management screens.
-- Multi-currency without FX.
-- Netting/collateral.
+- Path-level legal netting, CSA margining and collateral call simulation.
+- Wrong-way risk, DVA, FVA, KVA and capital models.
+- Bonds, swaps or exotic options before cash-equity lifecycle/P&L is fully hardened.
 
 ## How to Maintain This Document
 

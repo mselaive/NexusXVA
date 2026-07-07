@@ -535,13 +535,13 @@ This avoids mixing Black-Scholes with exact expiry payoff before we have fuller 
 
 The current version avoids some cases on purpose:
 
-* FX and multi-currency portfolios.
+* Advanced FX risk, stochastic FX paths, and multi-currency collateral.
 * Real implied volatility and volatility surfaces.
 * Real options chains.
 * Exact payoff at expiration.
-* Persisted valuation results.
+* Persisted valuation results as reusable risk state; current run history is audit/reporting only.
 * Real market data storage inside NexusXVA.
-* Real credit curves, counterparties, netting sets, collateral, and wrong-way risk.
+* Persisted credit curve master data, path-level legal netting, dynamic collateral/margining, and wrong-way risk.
 
 These cases are not forgotten.
 They are out of scope so the current slice stays small, correct, and testable.

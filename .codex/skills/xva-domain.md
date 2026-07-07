@@ -32,7 +32,9 @@ Project assumptions for MVP:
 - Use fixed or simple discount factors.
 - Use fixed LGD.
 - Ignore wrong-way risk initially.
-- Ignore collateral and netting initially unless explicitly planned.
+- Netting-set CVA V1 may use persisted counterparties/netting sets from the `xva` module.
+- Treat current netting as profile-level aggregation with static collateral only, not path-level legal netting or CSA margining.
+- Keep credit/discount curves request-scoped until persisted curve master data is explicitly planned.
 
 ## DVA
 
@@ -98,4 +100,3 @@ For the MVP:
 - `ExposureProfile` contains time-bucketed EE and PFE.
 - `CvaCalculator` consumes exposure, default probabilities, discount factors, and LGD.
 - Tests verify monotonicity and zero cases.
-

@@ -1,6 +1,7 @@
 package com.nexusxva.cva.api;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -9,6 +10,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexusxva.AbstractPostgresIntegrationTest;
 
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -131,6 +136,34 @@ class CvaControllerIntegrationTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
+    void nettingSetCvaStoresValuationRunHistory() throws Exception {
+        String portfolioId = createdPortfolioId("Netting Set Run History CVA Book", "USD");
+        createdPosition(portfolioId, "AAPL", "CALL", "190.0", "2027-06-05", "2.0");
+        UUID nettingSetId = createNettingSet(UUID.fromString(portfolioId));
+
+        mockMvc.perform(post("/api/risk/cva/netting-set")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(nettingSetRequestBody(nettingSetId.toString())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nettingSetId").value(nettingSetId.toString()))
+                .andExpect(jsonPath("$.model").value("SIMPLIFIED_CVA_NETTING_SET_V1"))
+                .andExpect(jsonPath("$.cva").isNumber());
+
+        mockMvc.perform(get("/api/valuation-runs")
+                        .param("scopeType", "NETTING_SET")
+                        .param("scopeId", nettingSetId.toString())
+                        .param("runType", "CVA"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].scopeType").value("NETTING_SET"))
+                .andExpect(jsonPath("$[0].scopeId").value(nettingSetId.toString()))
+                .andExpect(jsonPath("$[0].scopeName").value("Run History Netting Set"))
+                .andExpect(jsonPath("$[0].portfolioId").doesNotExist())
+                .andExpect(jsonPath("$[0].runType").value("CVA"))
+                .andExpect(jsonPath("$[0].status").value("SUCCESS"))
+                .andExpect(jsonPath("$[0].summary.portfolioCount").value(1));
+    }
+
+    @Test
     void invalidCreditParametersReturnValidationError() throws Exception {
         String portfolioId = createdPortfolioId("Invalid CVA Book", "USD");
 
@@ -185,6 +218,48 @@ class CvaControllerIntegrationTest extends AbstractPostgresIntegrationTest {
         );
     }
 
+    private UUID createNettingSet(UUID portfolioId) {
+        UUID counterpartyId = UUID.randomUUID();
+        UUID nettingSetId = UUID.randomUUID();
+        Instant now = Instant.now();
+        jdbcTemplate.update(
+                """
+                INSERT INTO counterparties (id, name, external_id, credit_rating, active, created_at, updated_at)
+                VALUES (?, ?, ?, 'A', TRUE, ?, ?)
+                """,
+                counterpartyId,
+                "Run History Prime Broker",
+                "RHPB-" + counterpartyId.toString().substring(0, 8),
+                Timestamp.from(now),
+                Timestamp.from(now)
+        );
+        jdbcTemplate.update(
+                """
+                INSERT INTO netting_sets (
+                    id, counterparty_id, name, base_currency, collateral_amount,
+                    collateral_currency, active, created_at, updated_at
+                )
+                VALUES (?, ?, ?, 'USD', ?, 'USD', TRUE, ?, ?)
+                """,
+                nettingSetId,
+                counterpartyId,
+                "Run History Netting Set",
+                BigDecimal.ZERO,
+                Timestamp.from(now),
+                Timestamp.from(now)
+        );
+        jdbcTemplate.update(
+                """
+                INSERT INTO netting_set_portfolios (netting_set_id, portfolio_id, assigned_at)
+                VALUES (?, ?, ?)
+                """,
+                nettingSetId,
+                portfolioId,
+                Timestamp.from(now)
+        );
+        return nettingSetId;
+    }
+
     private String requestBody(String portfolioId, String lossGivenDefault, String counterpartyHazardRate) {
         return """
                 {
@@ -200,6 +275,23 @@ class CvaControllerIntegrationTest extends AbstractPostgresIntegrationTest {
                   "discountRate": 0.05
                 }
                 """.formatted(portfolioId, lossGivenDefault, counterpartyHazardRate);
+    }
+
+    private String nettingSetRequestBody(String nettingSetId) {
+        return """
+                {
+                  "nettingSetId": "%s",
+                  "valuationDate": "2026-06-05",
+                  "horizonDays": 90,
+                  "timeSteps": 3,
+                  "paths": 20,
+                  "seed": 12345,
+                  "pfeConfidenceLevel": 0.95,
+                  "lossGivenDefault": 0.60,
+                  "counterpartyHazardRate": 0.02,
+                  "discountRate": 0.05
+                }
+                """.formatted(nettingSetId);
     }
 
     private String curveRequestBody(String portfolioId) {

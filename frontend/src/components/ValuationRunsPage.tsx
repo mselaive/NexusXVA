@@ -4,7 +4,7 @@ import React from "react";
 import { Activity, AlertTriangle, CheckCircle2, History, Loader2, RefreshCw } from "lucide-react";
 import { nexusApi } from "@/lib/api";
 import { formatNumber } from "@/lib/format";
-import type { PortfolioSummary, ValuationRun, ValuationRunStatus, ValuationRunType } from "@/lib/types";
+import type { PortfolioSummary, ValuationRun, ValuationRunScopeType, ValuationRunStatus, ValuationRunType } from "@/lib/types";
 import { AppShell } from "./AppShell";
 
 const howTo = [
@@ -28,6 +28,7 @@ export function ValuationRunsPage() {
   const [selected, setSelected] = React.useState<ValuationRun | null>(null);
   const [runType, setRunType] = React.useState<ValuationRunType | "">("");
   const [status, setStatus] = React.useState<ValuationRunStatus | "">("");
+  const [scopeType, setScopeType] = React.useState<ValuationRunScopeType | "">("");
   const [portfolioId, setPortfolioId] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -47,6 +48,7 @@ export function ValuationRunsPage() {
       const nextRuns = await nexusApi.listValuationRuns({
         runType,
         status,
+        scopeType,
         portfolioId: portfolioId || undefined,
         limit: 100,
       });
@@ -66,7 +68,7 @@ export function ValuationRunsPage() {
   React.useEffect(() => {
     void loadRuns();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runType, status, portfolioId]);
+  }, [runType, status, scopeType, portfolioId]);
 
   const successes = runs.filter((run) => run.status === "SUCCESS").length;
   const failures = runs.filter((run) => run.status === "FAILED").length;
@@ -99,6 +101,14 @@ export function ValuationRunsPage() {
               </select>
             </label>
           </div>
+          <label className="field compact-field">
+            <span>Scope</span>
+            <select className="input" value={scopeType} onChange={(event) => setScopeType(event.target.value as ValuationRunScopeType | "")}>
+              <option value="">All</option>
+              <option value="PORTFOLIO">Portfolio</option>
+              <option value="NETTING_SET">Netting set</option>
+            </select>
+          </label>
           <label className="field compact-field">
             <span>Run type</span>
             <select className="input" value={runType} onChange={(event) => setRunType(event.target.value as ValuationRunType | "")}>
@@ -133,7 +143,7 @@ export function ValuationRunsPage() {
               <thead>
                 <tr>
                   <th>Created</th>
-                  <th>Portfolio</th>
+                  <th>Scope</th>
                   <th>Type</th>
                   <th>Status</th>
                   <th>Model</th>
@@ -148,7 +158,10 @@ export function ValuationRunsPage() {
                     onClick={() => setSelected(run)}
                   >
                     <td>{formatDateTime(run.createdAt)}</td>
-                    <td>{run.portfolioName}</td>
+                    <td>
+                      <strong>{run.scopeName}</strong>
+                      <small className="table-subtext">{run.scopeType === "NETTING_SET" ? "Netting set" : "Portfolio"}</small>
+                    </td>
                     <td>{run.runType}</td>
                     <td>
                       <span className={`status-chip ${run.status === "SUCCESS" ? "success-chip" : "danger-chip"}`}>
@@ -175,7 +188,7 @@ export function ValuationRunsPage() {
               <div className="valuation-detail-head">
                 <div>
                   <span className="page-eyebrow">{selected.runType}</span>
-                  <h2>{selected.portfolioName}</h2>
+                  <h2>{selected.scopeName}</h2>
                 </div>
                 <span className={`status-chip ${selected.status === "SUCCESS" ? "success-chip" : "danger-chip"}`}>
                   {selected.status}
@@ -183,6 +196,7 @@ export function ValuationRunsPage() {
               </div>
               <div className="detail-grid">
                 <Detail label="Model" value={selected.model} />
+                <Detail label="Scope" value={selected.scopeType === "NETTING_SET" ? "Netting set" : "Portfolio"} />
                 <Detail label="Valuation date" value={selected.valuationDate ?? "N/A"} />
                 <Detail label="Requested by" value={selected.requestedByDisplayName ?? selected.requestedByUsername ?? "System"} />
                 <Detail label="Group" value={selected.activeGroupCode ?? "N/A"} />

@@ -45,7 +45,7 @@ public class FrontOfficeWhatIfController {
     ) {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_RUN_WHAT_IF);
         userAccessService.requirePortfolioAccess(servletRequest, request.portfolioId());
-        operationalControlService.ensureOpen("RUN_PRE_TRADE_ANALYSIS", currentSession(servletRequest), servletRequest);
+        operationalControlService.ensureRiskRunOpen("RUN_PRE_TRADE_ANALYSIS", currentSession(servletRequest), servletRequest);
         FrontOfficeWhatIfResponse response = FrontOfficeWhatIfResponse.from(
                 service.run(request.portfolioId(), request.valuationDate(), request.trade().toCommand())
         );

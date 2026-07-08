@@ -5,7 +5,7 @@ import { Activity, CircleDollarSign, FlaskConical, Loader2, RefreshCw, Send } fr
 import { blembergApi, nexusApi, NexusApiError } from "@/lib/api";
 import { logBlembergRefreshOutcome, summarizeBlembergRefresh } from "@/lib/blembergRefresh";
 import { formatCurrency, formatNumber, formatPercent, todayIsoDate } from "@/lib/format";
-import { operationalClosedMessage, useOperationalControlStatus } from "@/lib/operationalControl";
+import { operationalRiskClosedMessage, useOperationalControlStatus } from "@/lib/operationalControl";
 import type {
   AddEuropeanOptionPositionRequest,
   BlembergMarketSnapshot,
@@ -65,7 +65,7 @@ export function FrontOfficeWhatIfPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const { status: operationalStatus } = useOperationalControlStatus();
-  const closedMessage = operationalClosedMessage(operationalStatus);
+  const closedMessage = operationalRiskClosedMessage(operationalStatus);
   const tradingClosed = Boolean(closedMessage);
   const marketSnapshotBySymbol = new Map(marketSnapshots.map((snapshot) => [snapshot.symbol.toUpperCase(), snapshot]));
   const selectedSnapshot = marketSnapshotBySymbol.get(tradeForm.underlyingSymbol.toUpperCase());

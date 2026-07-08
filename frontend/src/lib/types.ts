@@ -224,6 +224,9 @@ export type OperationalControlSettings = {
   businessDays: string[];
   tradingOpenTime: string;
   tradingCloseTime: string;
+  enforceOperationalWindow: boolean;
+  blockTradeBookingsOutsideWindow: boolean;
+  blockRiskRunsOutsideWindow: boolean;
   eodEnabled: boolean;
   eodRunTime: string;
   eodAllowStaleMarketData: boolean;
@@ -237,6 +240,8 @@ export type UpdateOperationalControlRequest = {
   businessDays: string[];
   tradingOpenTime: string;
   tradingCloseTime: string;
+  blockTradeBookingsOutsideWindow: boolean;
+  blockRiskRunsOutsideWindow: boolean;
   eodEnabled: boolean;
   eodRunTime: string;
   eodAllowStaleMarketData: boolean;
@@ -250,6 +255,9 @@ export type OperationalControlStatus = {
   nextOpenAt: string;
   tradingOpenTime: string;
   tradingCloseTime: string;
+  operationalWindowEnforced: boolean;
+  tradeBookingsWindowEnforced: boolean;
+  riskRunsWindowEnforced: boolean;
   eodEnabled: boolean;
   nextEodAt: string;
 };
@@ -724,11 +732,15 @@ export type CvaPoint = {
 
 export type ValuationRunType = "PRICING" | "EXPOSURE" | "CVA";
 export type ValuationRunStatus = "SUCCESS" | "FAILED";
+export type ValuationRunScopeType = "PORTFOLIO" | "NETTING_SET";
 
 export type ValuationRun = {
   id: string;
-  portfolioId: string;
-  portfolioName: string;
+  portfolioId: string | null;
+  portfolioName: string | null;
+  scopeType: ValuationRunScopeType;
+  scopeId: string;
+  scopeName: string;
   runType: ValuationRunType;
   model: string;
   valuationDate: string | null;

@@ -2,6 +2,7 @@ package com.nexusxva.valuationruns.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.nexusxva.valuationruns.domain.ValuationRun;
+import com.nexusxva.valuationruns.domain.ValuationRunScopeType;
 import com.nexusxva.valuationruns.domain.ValuationRunStatus;
 import com.nexusxva.valuationruns.domain.ValuationRunType;
 
@@ -13,6 +14,9 @@ public record ValuationRunResponse(
         UUID id,
         UUID portfolioId,
         String portfolioName,
+        ValuationRunScopeType scopeType,
+        UUID scopeId,
+        String scopeName,
         ValuationRunType runType,
         String model,
         LocalDate valuationDate,
@@ -33,6 +37,9 @@ public record ValuationRunResponse(
                 run.id(),
                 run.portfolioId(),
                 run.portfolioName(),
+                run.scopeType(),
+                run.scopeId(),
+                run.scopeName(),
                 run.runType(),
                 run.model(),
                 run.valuationDate(),

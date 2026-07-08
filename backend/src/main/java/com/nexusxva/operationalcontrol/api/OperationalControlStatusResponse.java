@@ -12,6 +12,9 @@ public record OperationalControlStatusResponse(
         Instant nextOpenAt,
         LocalTime tradingOpenTime,
         LocalTime tradingCloseTime,
+        boolean operationalWindowEnforced,
+        boolean tradeBookingsWindowEnforced,
+        boolean riskRunsWindowEnforced,
         boolean eodEnabled,
         Instant nextEodAt
 ) {
@@ -25,6 +28,9 @@ public record OperationalControlStatusResponse(
                 status.nextOpenAt(),
                 status.tradingOpenTime(),
                 status.tradingCloseTime(),
+                status.operationalWindowEnforced(),
+                status.tradeBookingsWindowEnforced(),
+                status.riskRunsWindowEnforced(),
                 status.eodEnabled(),
                 status.nextEodAt()
         );

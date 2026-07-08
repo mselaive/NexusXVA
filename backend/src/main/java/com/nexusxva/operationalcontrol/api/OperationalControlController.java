@@ -56,6 +56,9 @@ public class OperationalControlController {
                         "businessDays", updated.businessDays().stream().map(Enum::name).toList(),
                         "tradingOpenTime", updated.tradingOpenTime(),
                         "tradingCloseTime", updated.tradingCloseTime(),
+                        "enforceOperationalWindow", updated.enforceOperationalWindow(),
+                        "blockTradeBookingsOutsideWindow", updated.blockTradeBookingsOutsideWindow(),
+                        "blockRiskRunsOutsideWindow", updated.blockRiskRunsOutsideWindow(),
                         "eodEnabled", updated.eodEnabled(),
                         "eodRunTime", updated.eodRunTime()
                 ))

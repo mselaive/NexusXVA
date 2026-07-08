@@ -16,6 +16,7 @@ import com.nexusxva.shared.error.ResourceNotFoundException;
 import com.nexusxva.valuationruns.application.ValuationRunService;
 import com.nexusxva.valuationruns.domain.ValuationRunType;
 import com.nexusxva.xva.application.XvaReferenceDataService;
+import com.nexusxva.xva.domain.NettingSet;
 
 import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
@@ -64,7 +65,7 @@ public class CvaController {
     ) {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_RUN_CVA);
         userAccessService.requirePortfolioAccess(servletRequest, request.portfolioId());
-        operationalControlService.ensureOpen("RUN_CVA", currentSession(servletRequest), servletRequest);
+        operationalControlService.ensureRiskRunOpen("RUN_CVA", currentSession(servletRequest), servletRequest);
         try {
             CvaCalculationResult result = cvaCalculationService.calculate(request.toCommand());
             CvaCalculationResponse response = CvaCalculationResponse.from(result);
@@ -114,26 +115,51 @@ public class CvaController {
             HttpServletRequest servletRequest
     ) {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_RUN_CVA);
-        operationalControlService.ensureOpen("RUN_NETTING_SET_CVA", currentSession(servletRequest), servletRequest);
-        xvaReferenceDataService.getOperableNettingSet(request.nettingSetId())
-                .portfolios()
+        operationalControlService.ensureRiskRunOpen("RUN_NETTING_SET_CVA", currentSession(servletRequest), servletRequest);
+        NettingSet nettingSet = xvaReferenceDataService.getOperableNettingSet(request.nettingSetId());
+        nettingSet.portfolios()
                 .forEach(portfolio -> userAccessService.requirePortfolioAccess(servletRequest, portfolio.portfolioId()));
-        CvaNettingSetCalculationResult result = cvaNettingSetCalculationService.calculate(request.toCommand());
-        CvaNettingSetCalculationResponse response = CvaNettingSetCalculationResponse.from(result);
-        auditService.record(AuditEventCommand.of(
-                "NETTING_SET_CVA_RUN",
-                "XVA",
-                "RUN_NETTING_SET_CVA",
-                AuditOutcome.SUCCESS,
-                currentSession(servletRequest),
-                servletRequest,
-                200,
-                "NETTING_SET",
-                request.nettingSetId(),
-                "Netting set CVA requested",
-                auditService.metadata(nettingSetCvaSummary(response))
-        ));
-        return response;
+        try {
+            CvaNettingSetCalculationResult result = cvaNettingSetCalculationService.calculate(request.toCommand());
+            CvaNettingSetCalculationResponse response = CvaNettingSetCalculationResponse.from(result);
+            valuationRunService.recordNettingSetSuccess(
+                    currentSession(servletRequest),
+                    request.nettingSetId(),
+                    response.nettingSetName(),
+                    ValuationRunType.CVA,
+                    response.model(),
+                    response.valuationDate(),
+                    request,
+                    response,
+                    nettingSetCvaSummary(response)
+            );
+            auditService.record(AuditEventCommand.of(
+                    "NETTING_SET_CVA_RUN",
+                    "XVA",
+                    "RUN_NETTING_SET_CVA",
+                    AuditOutcome.SUCCESS,
+                    currentSession(servletRequest),
+                    servletRequest,
+                    200,
+                    "NETTING_SET",
+                    request.nettingSetId(),
+                    "Netting set CVA requested",
+                    auditService.metadata(nettingSetCvaSummary(response))
+            ));
+            return response;
+        } catch (RuntimeException exception) {
+            valuationRunService.recordNettingSetFailure(
+                    currentSession(servletRequest),
+                    request.nettingSetId(),
+                    nettingSet.name(),
+                    ValuationRunType.CVA,
+                    "SIMPLIFIED_CVA_NETTING_SET_V1",
+                    request.valuationDate(),
+                    request,
+                    exception
+            );
+            throw exception;
+        }
     }
 
     private Map<String, Object> cvaSummary(CvaCalculationResponse response) {

@@ -45,7 +45,7 @@ public class FrontOfficeStressTestController {
     ) {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_RUN_STRESS_TEST);
         userAccessService.requirePortfolioAccess(servletRequest, request.portfolioId());
-        operationalControlService.ensureOpen("RUN_STRESS_TEST", currentSession(servletRequest), servletRequest);
+        operationalControlService.ensureRiskRunOpen("RUN_STRESS_TEST", currentSession(servletRequest), servletRequest);
         FrontOfficeStressTestResponse response = FrontOfficeStressTestResponse.from(service.run(
                 request.portfolioId(),
                 request.valuationDate(),

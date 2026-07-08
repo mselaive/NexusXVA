@@ -130,6 +130,8 @@ class PortfolioEodServiceTest {
                 EnumSet.range(DayOfWeek.MONDAY, DayOfWeek.FRIDAY),
                 LocalTime.of(9, 30),
                 LocalTime.of(16, 0),
+                true,
+                true,
                 false,
                 LocalTime.of(17, 15),
                 false,

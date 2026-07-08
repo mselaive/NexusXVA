@@ -82,6 +82,22 @@ export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps
   const howToRef = React.useRef<HTMLSpanElement | null>(null);
   const notificationsRef = React.useRef<HTMLSpanElement | null>(null);
   const { status: operationalStatus } = useOperationalControlStatus(authChecked && Boolean(authUser));
+  const operationalMode = operationalStatus?.tradingOpen
+    ? "open"
+    : operationalStatus?.operationalWindowEnforced
+      ? "closed"
+      : "advisory";
+  const operationalLabel = operationalStatus?.tradingOpen
+    ? "Trading Open"
+    : operationalStatus?.operationalWindowEnforced
+      ? "Trading Closed"
+      : "Window Advisory";
+  const operationalPolicyLabel = operationalStatus
+    ? [
+        operationalStatus.tradeBookingsWindowEnforced ? "trade blocking on" : "trade advisory",
+        operationalStatus.riskRunsWindowEnforced ? "risk blocking on" : "risk advisory",
+      ].join(" · ")
+    : "Operational status";
 
   React.useEffect(() => {
     function closeOnOutsideClick(event: MouseEvent) {
@@ -296,12 +312,12 @@ export function AppShell({ title, eyebrow, children, howTo = [] }: AppShellProps
             ) : null}
             {authUser ? (
               <button
-                className={`header-action operational-chip ${operationalStatus?.tradingOpen ? "open" : "closed"}`}
+                className={`header-action operational-chip ${operationalMode}`}
                 type="button"
-                title={operationalStatus ? `${operationalStatus.reason.replaceAll("_", " ")} · Next open ${new Date(operationalStatus.nextOpenAt).toLocaleString()}` : "Operational status"}
+                title={operationalStatus ? `${operationalStatus.reason.replaceAll("_", " ")} · ${operationalPolicyLabel} · Next open ${new Date(operationalStatus.nextOpenAt).toLocaleString()}` : "Operational status"}
               >
                 <span className="status-dot" />
-                <span>{operationalStatus?.tradingOpen ? "Trading Open" : "Trading Closed"}</span>
+                <span>{operationalLabel}</span>
               </button>
             ) : null}
             {authUser ? (

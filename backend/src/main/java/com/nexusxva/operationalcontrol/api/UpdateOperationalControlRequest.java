@@ -17,6 +17,9 @@ public record UpdateOperationalControlRequest(
         @NotEmpty List<String> businessDays,
         @NotNull LocalTime tradingOpenTime,
         @NotNull LocalTime tradingCloseTime,
+        Boolean enforceOperationalWindow,
+        Boolean blockTradeBookingsOutsideWindow,
+        Boolean blockRiskRunsOutsideWindow,
         boolean eodEnabled,
         @NotNull LocalTime eodRunTime,
         boolean eodAllowStaleMarketData
@@ -35,11 +38,20 @@ public record UpdateOperationalControlRequest(
         } catch (DateTimeException exception) {
             throw new IllegalArgumentException("timezone must be a valid ZoneId");
         }
+        boolean legacyBlock = Boolean.TRUE.equals(enforceOperationalWindow);
+        boolean blockBookings = blockTradeBookingsOutsideWindow != null
+                ? blockTradeBookingsOutsideWindow
+                : legacyBlock;
+        boolean blockRisk = blockRiskRunsOutsideWindow != null
+                ? blockRiskRunsOutsideWindow
+                : legacyBlock;
         return new OperationalControlSettings(
                 zone,
                 days,
                 tradingOpenTime,
                 tradingCloseTime,
+                blockBookings,
+                blockRisk,
                 eodEnabled,
                 eodRunTime,
                 eodAllowStaleMarketData,

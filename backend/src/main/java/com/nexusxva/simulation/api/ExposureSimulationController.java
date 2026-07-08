@@ -53,7 +53,7 @@ public class ExposureSimulationController {
             HttpServletRequest servletRequest
     ) {
         userAccessService.requirePortfolioAccess(servletRequest, request.portfolioId());
-        operationalControlService.ensureOpen("RUN_EXPOSURE", currentSession(servletRequest), servletRequest);
+        operationalControlService.ensureRiskRunOpen("RUN_EXPOSURE", currentSession(servletRequest), servletRequest);
         try {
             ExposureSimulationResult result = exposureSimulationService.simulate(request.toCommand());
             ExposureSimulationResponse response = ExposureSimulationResponse.from(result);

@@ -22,7 +22,7 @@ import {
 import { blembergApi, nexusApi, NexusApiError } from "@/lib/api";
 import { logBlembergRefreshOutcome, summarizeBlembergRefresh } from "@/lib/blembergRefresh";
 import { formatCurrency, formatNumber, formatPercent, todayIsoDate } from "@/lib/format";
-import { operationalClosedMessage, useOperationalControlStatus } from "@/lib/operationalControl";
+import { operationalRiskClosedMessage, operationalTradeClosedMessage, useOperationalControlStatus } from "@/lib/operationalControl";
 import type {
   AddEuropeanOptionPositionRequest,
   CashEquityPosition,
@@ -541,7 +541,7 @@ export function UPadPage() {
   const [myLimits, setMyLimits] = useState<TradingLimitSnapshot | null>(null);
   const [ticketMode, setTicketMode] = useState<"single" | "strategy" | "cash">("single");
   const { status: operationalStatus } = useOperationalControlStatus();
-  const closedMessage = operationalClosedMessage(operationalStatus);
+  const closedMessage = operationalTradeClosedMessage(operationalStatus);
   const tradingClosed = Boolean(closedMessage);
 
   const [tradeForm, setTradeForm] = useState(initialTradeFormFromUrl);
@@ -1246,7 +1246,7 @@ export function PricingPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { status: operationalStatus } = useOperationalControlStatus();
-  const closedMessage = operationalClosedMessage(operationalStatus);
+  const closedMessage = operationalRiskClosedMessage(operationalStatus);
   const tradingClosed = Boolean(closedMessage);
 
   async function runPricing(portfolioId = selectedId) {
@@ -1387,7 +1387,7 @@ export function ExposurePage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { status: operationalStatus } = useOperationalControlStatus();
-  const closedMessage = operationalClosedMessage(operationalStatus);
+  const closedMessage = operationalRiskClosedMessage(operationalStatus);
   const tradingClosed = Boolean(closedMessage);
 
   async function runExposure() {
@@ -1441,7 +1441,7 @@ export function CvaPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { status: operationalStatus } = useOperationalControlStatus();
-  const closedMessage = operationalClosedMessage(operationalStatus);
+  const closedMessage = operationalRiskClosedMessage(operationalStatus);
   const tradingClosed = Boolean(closedMessage);
 
   useEffect(() => {
@@ -2294,7 +2294,7 @@ export function DeltaHedgePage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { status: operationalStatus } = useOperationalControlStatus();
-  const closedMessage = operationalClosedMessage(operationalStatus);
+  const closedMessage = operationalRiskClosedMessage(operationalStatus);
   const tradingClosed = Boolean(closedMessage);
 
   async function runDeltaHedge() {

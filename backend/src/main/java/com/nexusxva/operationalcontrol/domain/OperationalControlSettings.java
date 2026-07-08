@@ -13,6 +13,8 @@ public record OperationalControlSettings(
         Set<DayOfWeek> businessDays,
         LocalTime tradingOpenTime,
         LocalTime tradingCloseTime,
+        boolean blockTradeBookingsOutsideWindow,
+        boolean blockRiskRunsOutsideWindow,
         boolean eodEnabled,
         LocalTime eodRunTime,
         boolean eodAllowStaleMarketData,
@@ -38,5 +40,9 @@ public record OperationalControlSettings(
             throw new IllegalArgumentException("eodRunTime must be after tradingCloseTime");
         }
         businessDays = EnumSet.copyOf(businessDays);
+    }
+
+    public boolean enforceOperationalWindow() {
+        return blockTradeBookingsOutsideWindow || blockRiskRunsOutsideWindow;
     }
 }

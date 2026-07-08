@@ -5299,6 +5299,12 @@ tr:last-child td {
   color: #b42318;
 }
 
+.operational-chip.advisory {
+  border-color: rgba(173, 118, 0, 0.28);
+  background: rgba(255, 248, 230, 0.94);
+  color: #8a5a00;
+}
+
 .status-dot {
   width: 9px;
   height: 9px;
@@ -5354,6 +5360,12 @@ tr:last-child td {
   color: #b42318;
 }
 
+.ops-status-card.advisory {
+  border-color: rgba(173, 118, 0, 0.28);
+  background: #fff8e6;
+  color: #8a5a00;
+}
+
 .ops-status-card span {
   font-size: 0.82rem;
   font-weight: 800;
@@ -5399,11 +5411,17 @@ tr:last-child td {
   gap: 18px;
 }
 
+.ops-control-heading {
+  margin-bottom: 28px;
+}
+
 .ops-form-card {
   border-radius: 14px;
   padding: 18px;
   display: grid;
   gap: 14px;
+  background: #f6faf9;
+  border-color: #c9dcda;
 }
 
 .ops-form-card h3 {
@@ -5418,14 +5436,27 @@ tr:last-child td {
   font-weight: 700;
 }
 
+.ops-form-card label:not(.ops-toggle-row) {
+  border: 1px solid #d3e2e0;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
+}
+
 .ops-form-card input {
-  border: 1px solid var(--border);
+  border: 1px solid #bfd4d1;
   border-radius: 10px;
   min-height: 42px;
   padding: 0 12px;
   color: var(--text);
-  background: #fff;
+  background: #eef7f5;
   font: inherit;
+}
+
+.ops-form-card input:focus {
+  outline: 2px solid rgba(17, 122, 101, 0.18);
+  border-color: #7ebbb3;
+  background: #fff;
 }
 
 .ops-time-grid {
@@ -5460,6 +5491,10 @@ tr:last-child td {
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 14px;
+  border: 1px solid #d3e2e0;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
 }
 
 .ops-toggle-row span {
@@ -5483,6 +5518,14 @@ tr:last-child td {
   align-items: center;
   gap: 10px;
   color: var(--muted);
+}
+
+.table-subtext {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-top: 3px;
 }
 
 @media (max-width: 1100px) {

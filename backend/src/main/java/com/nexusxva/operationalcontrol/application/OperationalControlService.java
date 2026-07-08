@@ -82,14 +82,34 @@ public class OperationalControlService {
 
     @Transactional(readOnly = true)
     public void ensureOpen(String action, AuthSession session, HttpServletRequest request) {
+        ensureRiskRunOpen(action, session, request);
+    }
+
+    @Transactional(readOnly = true)
+    public void ensureTradeBookingOpen(String action, AuthSession session, HttpServletRequest request) {
+        ensureOpen(action, session, request, OperationalControlStatus::tradeBookingsWindowEnforced, "TRADE_BOOKING");
+    }
+
+    @Transactional(readOnly = true)
+    public void ensureRiskRunOpen(String action, AuthSession session, HttpServletRequest request) {
+        ensureOpen(action, session, request, OperationalControlStatus::riskRunsWindowEnforced, "RISK_RUN");
+    }
+
+    private void ensureOpen(
+            String action,
+            AuthSession session,
+            HttpServletRequest request,
+            java.util.function.Predicate<OperationalControlStatus> policyEnabled,
+            String policy
+    ) {
         if (!enforcementEnabled || !authProperties.isEnabled()) {
             return;
         }
         OperationalControlStatus status = status();
-        if (status.tradingOpen()) {
+        if (!policyEnabled.test(status) || status.tradingOpen()) {
             return;
         }
-        Map<String, Object> metadata = closedMetadata(action, status);
+        Map<String, Object> metadata = closedMetadata(action, status, policy);
         auditService.record(AuditEventCommand.of(
                 "OPERATIONAL_WINDOW_DENIED",
                 "OPERATIONAL_CONTROL",
@@ -118,6 +138,8 @@ public class OperationalControlService {
                 ? "OPEN"
                 : !businessDay ? "NON_BUSINESS_DAY" : localTime.isBefore(settings.tradingOpenTime()) ? "BEFORE_OPEN" : "AFTER_CLOSE";
 
+        boolean tradeBookingsEnforced = enforcementEnabled && settings.blockTradeBookingsOutsideWindow();
+        boolean riskRunsEnforced = enforcementEnabled && settings.blockRiskRunsOutsideWindow();
         return new OperationalControlStatus(
                 tradingOpen,
                 reason,
@@ -126,6 +148,9 @@ public class OperationalControlService {
                 nextOpenAt(settings, now).toInstant(),
                 settings.tradingOpenTime(),
                 settings.tradingCloseTime(),
+                tradeBookingsEnforced || riskRunsEnforced,
+                tradeBookingsEnforced,
+                riskRunsEnforced,
                 settings.eodEnabled(),
                 nextEodAt(settings, now).toInstant()
         );
@@ -169,14 +194,18 @@ public class OperationalControlService {
         return LocalDateTime.of(now.toLocalDate().plusDays(1), settings.eodRunTime()).atZone(settings.timezone());
     }
 
-    private Map<String, Object> closedMetadata(String action, OperationalControlStatus status) {
+    private Map<String, Object> closedMetadata(String action, OperationalControlStatus status, String policy) {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("action", action);
+        metadata.put("policy", policy);
         metadata.put("timezone", status.timezone());
         metadata.put("currentBusinessTime", status.currentBusinessTime().toString());
         metadata.put("nextOpenAt", status.nextOpenAt().toString());
         metadata.put("tradingOpenTime", status.tradingOpenTime().toString());
         metadata.put("tradingCloseTime", status.tradingCloseTime().toString());
+        metadata.put("operationalWindowEnforced", Boolean.toString(status.operationalWindowEnforced()));
+        metadata.put("tradeBookingsWindowEnforced", Boolean.toString(status.tradeBookingsWindowEnforced()));
+        metadata.put("riskRunsWindowEnforced", Boolean.toString(status.riskRunsWindowEnforced()));
         metadata.put("reason", status.reason());
         return metadata;
     }

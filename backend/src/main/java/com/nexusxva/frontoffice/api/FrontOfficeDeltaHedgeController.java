@@ -45,7 +45,7 @@ public class FrontOfficeDeltaHedgeController {
     ) {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_RUN_DELTA_HEDGE);
         userAccessService.requirePortfolioAccess(servletRequest, request.portfolioId());
-        operationalControlService.ensureOpen("RUN_DELTA_HEDGE", currentSession(servletRequest), servletRequest);
+        operationalControlService.ensureRiskRunOpen("RUN_DELTA_HEDGE", currentSession(servletRequest), servletRequest);
         DeltaHedgeAnalysisResponse response = DeltaHedgeAnalysisResponse.from(service.run(
                 request.portfolioId(),
                 request.valuationDate(),

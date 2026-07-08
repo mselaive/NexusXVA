@@ -252,7 +252,7 @@ FO netting-set CVA request
   -> HTTP response
 ```
 
-El netting V1 es intencionalmente simple: agrega perfiles de exposure de los portfolios asignados y resta collateral estatico de los buckets de exposure positiva. No es netting path-level, CSA margining, margin calls, wrong-way risk ni curvas de credito persistidas como master data. CVA por netting set todavia no se escribe en Run History porque ese historial hoy esta atado a portfolio.
+El netting V1 es intencionalmente simple: agrega perfiles de exposure de los portfolios asignados y resta collateral estatico de los buckets de exposure positiva. No es netting path-level, CSA margining, margin calls, wrong-way risk ni curvas de credito persistidas como master data. CVA por netting set se escribe en Run History con `scopeType=NETTING_SET`, por lo que queda auditable igual que los runs por portfolio.
 
 ## Como fluye Run History
 
@@ -266,7 +266,7 @@ request de pricing / exposure / CVA
   -> valuation_runs
 ```
 
-El run guardado contiene input JSON, result JSON, summary compacto, modelo, valuation date, portfolio, usuario, grupo activo y estado. Es historial de ejecucion de valuaciones solamente. Pricing, Exposure y CVA no leen runs anteriores para calcular nuevos valores, y Run History no reemplaza EOD ni es un store oficial de market data.
+El run guardado contiene input JSON, result JSON, summary compacto, modelo, valuation date, scope (`PORTFOLIO` o `NETTING_SET`), portfolio opcional, usuario, grupo activo y estado. Es historial de ejecucion de valuaciones solamente. Pricing, Exposure y CVA no leen runs anteriores para calcular nuevos valores, y Run History no reemplaza EOD ni es un store oficial de market data.
 
 ## Como fluye Audit Trail
 
@@ -327,7 +327,7 @@ Para desarrollo local, el frontend llama `/nexus-api/*`, que Next.js proxya a Ne
 
 `u-Pad` tambien puede capturar `executionPrice`, que representa el premium negociado por unidad. Al aprobar BO se copia a la posicion confirmada. Portfolio pricing compara ese premium con el valor unitario Black-Scholes actual para calcular unrealized P&L. Si una posicion historica no tiene economics, el P&L queda no disponible en vez de asumir costo cero.
 
-Operational Control es una politica global de ADMIN. V1 usa calendario de Nueva York lunes-viernes por defecto, bloquea bookings FO, solicitudes FO de lifecycle y risk runs fuera de la ventana configurada, y mantiene disponibles validaciones/correcciones BO y setup ADMIN. El backend es la autoridad; los botones deshabilitados del frontend son solo ayuda visual.
+Operational Control es una politica global de ADMIN. V1 usa calendario de Nueva York lunes-viernes por defecto. ADMIN puede configurar la ventana con dos controles independientes: uno bloquea bookings FO y solicitudes FO de lifecycle, y el otro bloquea risk runs como pricing, Pre-Trade Analysis, Stress, Delta Hedge, Exposure y CVA. Cualquiera de los dos controles puede quedar solo como estado informativo. Validaciones/correcciones BO y setup ADMIN siguen disponibles. El backend es la autoridad; los botones deshabilitados del frontend son solo ayuda visual.
 
 EOD es un control auditado separado y pertenece a BO o al scheduler del sistema. FO consume el cierre pero no puede crearlo. El proceso normal recorre portfolios activos y entrega un resultado independiente por libro (`CAPTURED`, `SKIPPED` o `FAILED`). Guarda market values de portfolio y posicion sin cambiar economics de ejecucion. Las correcciones BO usan cierres `VOIDED` y `SUPERSEDED` en vez de borrado fisico; latest close y Daily P&L usan solo cierres `ACTIVE`. El scheduler EOD se configura desde ADMIN Operational Control y esta apagado por default.
 
@@ -666,7 +666,7 @@ Para CVA V1 decidimos:
 - Soportar un discount rate anual continuamente compuesto o discount curves enviadas en el request.
 - Interpolar linealmente valores de curva para fechas de exposure dentro del rango de la curva.
 - Usar `lossGivenDefault` directamente, con valores entre `0.0` y `1.0`.
-- Mantener CVA sincrono; persistir snapshots auditados de Run History para CVA de portfolio, mientras el setup XVA vive separado en el modulo `xva`.
+- Mantener CVA sincrono; persistir snapshots auditados de Run History para CVA de portfolio y CVA por netting set, mientras el setup XVA vive separado en el modulo `xva`.
 - Mantener curvas de credito y descuento dentro del request hasta implementar curvas persistidas como master data.
 - Reportar CVA single-portfolio en la `baseCurrency` del portfolio y mantener opciones europeas solamente a traves del flujo de exposure reutilizado.
 
@@ -772,9 +772,7 @@ Siguiente version sugerida:
 - Tratar snapshots de Blemberg solo como datos de diagnostico/cache; pricing y exposure deben seguir usando pricing inputs.
 - Aceptar `501` de Blemberg V1 para `/v3/api-docs` como esperado porque la integracion runtime no depende de OpenAPI.
 - Mantener el smoke real opcional deshabilitado por defecto y activarlo con `RUN_REAL_BLEMBERG_SMOKE=true`.
-- Run History persistido ya existe para snapshots auditados de pricing, exposure y CVA.
-- Endurecer reporting FO/BO alrededor de lifecycle, EOD, P&L y closes corregidos.
-- Extender Run History a CVA por netting set, que hoy queda fuera del historial atado a portfolio.
+- Run History persistido ya existe para snapshots auditados de pricing, exposure, CVA de portfolio y CVA por netting set.
 - Agregar curvas de credito y descuento persistidas como master data cuando el contrato de curvas inline este estable.
 
 Fuera de scope inicial:

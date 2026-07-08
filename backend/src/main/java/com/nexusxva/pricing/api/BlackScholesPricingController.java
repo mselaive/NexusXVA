@@ -31,7 +31,7 @@ public class BlackScholesPricingController {
             @Valid @RequestBody BlackScholesPricingRequest request,
             HttpServletRequest servletRequest
     ) {
-        operationalControlService.ensureOpen("RUN_STATELESS_BLACK_SCHOLES", currentSession(servletRequest), servletRequest);
+        operationalControlService.ensureRiskRunOpen("RUN_STATELESS_BLACK_SCHOLES", currentSession(servletRequest), servletRequest);
         BlackScholesResult result = pricingService.priceWithBlackScholes(request.toInput());
         return BlackScholesPricingResponse.from(result);
     }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexusxva.auth.domain.AuthSession;
 import com.nexusxva.shared.error.ResourceNotFoundException;
 import com.nexusxva.valuationruns.domain.ValuationRun;
+import com.nexusxva.valuationruns.domain.ValuationRunScopeType;
 import com.nexusxva.valuationruns.domain.ValuationRunStatus;
 import com.nexusxva.valuationruns.domain.ValuationRunType;
 
@@ -44,6 +45,9 @@ public class ValuationRunService {
                 UUID.randomUUID(),
                 portfolioId,
                 null,
+                ValuationRunScopeType.PORTFOLIO,
+                portfolioId,
+                null,
                 runType,
                 model,
                 valuationDate,
@@ -74,6 +78,78 @@ public class ValuationRunService {
                 UUID.randomUUID(),
                 portfolioId,
                 null,
+                ValuationRunScopeType.PORTFOLIO,
+                portfolioId,
+                null,
+                runType,
+                model,
+                valuationDate,
+                ValuationRunStatus.FAILED,
+                userId(session),
+                username(session),
+                displayName(session),
+                activeGroup(session),
+                toJson(input),
+                null,
+                null,
+                sanitize(exception),
+                Instant.now()
+        ));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ValuationRun recordNettingSetSuccess(
+            AuthSession session,
+            UUID nettingSetId,
+            String nettingSetName,
+            ValuationRunType runType,
+            String model,
+            LocalDate valuationDate,
+            Object input,
+            Object result,
+            Object summary
+    ) {
+        return store.save(new ValuationRun(
+                UUID.randomUUID(),
+                null,
+                null,
+                ValuationRunScopeType.NETTING_SET,
+                nettingSetId,
+                nettingSetName,
+                runType,
+                model,
+                valuationDate,
+                ValuationRunStatus.SUCCESS,
+                userId(session),
+                username(session),
+                displayName(session),
+                activeGroup(session),
+                toJson(input),
+                toJson(result),
+                toJson(summary),
+                null,
+                Instant.now()
+        ));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ValuationRun recordNettingSetFailure(
+            AuthSession session,
+            UUID nettingSetId,
+            String nettingSetName,
+            ValuationRunType runType,
+            String model,
+            LocalDate valuationDate,
+            Object input,
+            RuntimeException exception
+    ) {
+        return store.save(new ValuationRun(
+                UUID.randomUUID(),
+                null,
+                null,
+                ValuationRunScopeType.NETTING_SET,
+                nettingSetId,
+                nettingSetName,
                 runType,
                 model,
                 valuationDate,

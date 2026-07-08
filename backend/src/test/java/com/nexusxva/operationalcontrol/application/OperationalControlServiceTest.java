@@ -67,14 +67,23 @@ class OperationalControlServiceTest {
 
     @Test
     void ensureOpenDoesNothingWhenAuthIsDisabled() {
-        assertThatCode(() -> service.ensureOpen("RUN_CVA", null, null)).doesNotThrowAnyException();
+        assertThatCode(() -> service.ensureRiskRunOpen("RUN_CVA", null, null)).doesNotThrowAnyException();
     }
 
     @Test
-    void ensureOpenRejectsWhenAuthIsEnabledAndWindowIsClosed() {
+    void ensureRiskRunOpenRejectsWhenAuthIsEnabledAndWindowIsClosed() {
         authProperties.setEnabled(true);
 
-        assertThatThrownBy(() -> service.ensureOpen("RUN_CVA", null, null))
+        assertThatThrownBy(() -> service.ensureRiskRunOpen("RUN_CVA", null, null))
+                .isInstanceOf(OperationalWindowClosedException.class)
+                .hasMessage("Operational window is closed");
+    }
+
+    @Test
+    void ensureTradeBookingOpenRejectsWhenTradePolicyIsEnabledAndWindowIsClosed() {
+        authProperties.setEnabled(true);
+
+        assertThatThrownBy(() -> service.ensureTradeBookingOpen("SUBMIT_BOOKING", null, null))
                 .isInstanceOf(OperationalWindowClosedException.class)
                 .hasMessage("Operational window is closed");
     }
@@ -90,15 +99,41 @@ class OperationalControlServiceTest {
                 false
         );
 
-        assertThatCode(() -> disabledService.ensureOpen("RUN_CVA", null, null)).doesNotThrowAnyException();
+        assertThatCode(() -> disabledService.ensureRiskRunOpen("RUN_CVA", null, null)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void ensureRiskRunOpenDoesNothingWhenRiskPolicyDoesNotEnforceWindow() {
+        authProperties.setEnabled(true);
+        when(store.settings()).thenReturn(settings(true, false));
+
+        assertThatCode(() -> service.ensureRiskRunOpen("RUN_CVA", null, null)).doesNotThrowAnyException();
+        assertThat(service.status().riskRunsWindowEnforced()).isFalse();
+        assertThat(service.status().operationalWindowEnforced()).isTrue();
+    }
+
+    @Test
+    void ensureTradeBookingOpenDoesNothingWhenTradePolicyDoesNotEnforceWindow() {
+        authProperties.setEnabled(true);
+        when(store.settings()).thenReturn(settings(false, true));
+
+        assertThatCode(() -> service.ensureTradeBookingOpen("SUBMIT_BOOKING", null, null)).doesNotThrowAnyException();
+        assertThat(service.status().tradeBookingsWindowEnforced()).isFalse();
+        assertThat(service.status().operationalWindowEnforced()).isTrue();
     }
 
     private OperationalControlSettings settings() {
+        return settings(true, true);
+    }
+
+    private OperationalControlSettings settings(boolean blockTradeBookingsOutsideWindow, boolean blockRiskRunsOutsideWindow) {
         return new OperationalControlSettings(
                 ZoneId.of("America/New_York"),
                 EnumSet.range(DayOfWeek.MONDAY, DayOfWeek.FRIDAY),
                 LocalTime.of(9, 30),
                 LocalTime.of(16, 0),
+                blockTradeBookingsOutsideWindow,
+                blockRiskRunsOutsideWindow,
                 false,
                 LocalTime.of(17, 15),
                 false,

@@ -4,7 +4,7 @@ import React from "react";
 import { FlaskConical, Loader2, Send, Waves } from "lucide-react";
 import { nexusApi, NexusApiError } from "@/lib/api";
 import { formatCurrency, formatNumber, formatPercent, todayIsoDate } from "@/lib/format";
-import { operationalClosedMessage, useOperationalControlStatus } from "@/lib/operationalControl";
+import { operationalRiskClosedMessage, useOperationalControlStatus } from "@/lib/operationalControl";
 import type {
   AddEuropeanOptionPositionRequest,
   FrontOfficeStressTestResponse,
@@ -57,7 +57,7 @@ export function StressTestingPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const { status: operationalStatus } = useOperationalControlStatus();
-  const closedMessage = operationalClosedMessage(operationalStatus);
+  const closedMessage = operationalRiskClosedMessage(operationalStatus);
   const tradingClosed = Boolean(closedMessage);
 
   async function runStressTest() {

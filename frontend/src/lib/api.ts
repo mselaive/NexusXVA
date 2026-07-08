@@ -429,6 +429,8 @@ export const nexusApi = {
   listValuationRuns: (filters: {
     runType?: ValuationRunType | "";
     status?: ValuationRunStatus | "";
+    scopeType?: string;
+    scopeId?: string;
     portfolioId?: string;
     limit?: number;
   } = {}) => {
@@ -438,6 +440,12 @@ export const nexusApi = {
     }
     if (filters.status) {
       params.set("status", filters.status);
+    }
+    if (filters.scopeType) {
+      params.set("scopeType", filters.scopeType);
+    }
+    if (filters.scopeId) {
+      params.set("scopeId", filters.scopeId);
     }
     if (filters.portfolioId) {
       params.set("portfolioId", filters.portfolioId);

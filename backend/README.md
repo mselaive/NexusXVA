@@ -201,9 +201,9 @@ Portfolio visibility supports `ALL` or `SELECTED`. The default is permissive (`A
 
 The workflow map is read-only. It visualizes trade booking requests across `Booked`, `Waiting BO`, `Accepted`, and `Rejected`; it does not approve or reject bookings. BO Trade Validation remains the owner of that maker-checker action.
 
-Operational Control is global in V1. ADMIN configures the timezone, business days, trading open/close, automatic EOD enablement, EOD time and stale-market-data policy. When auth is enabled, FO bookings, FO lifecycle requests and risk runs return `409 ApiError` outside the window. BO validation/corrections and ADMIN screens remain available.
+Operational Control is global in V1. ADMIN configures the timezone, business days, trading open/close, automatic EOD enablement, EOD time and stale-market-data policy. The trading window has two independent blocking switches: one for FO trade bookings/lifecycle requests, and one for risk runs such as pricing, Pre-Trade Analysis, Stress, Delta Hedge, Exposure and CVA. Blocked actions return `409 ApiError` outside the window; disabled switches remain advisory. BO validation/corrections and ADMIN screens remain available.
 
-Backend enforcement defaults to enabled with `NEXUSXVA_OPERATIONAL_CONTROL_ENFORCEMENT_ENABLED=true`. The flag is intended only as a controlled local/test escape hatch; production-like runs should keep it enabled.
+The ADMIN checkbox controls the runtime policy. Backend enforcement also has a technical guard, `NEXUSXVA_OPERATIONAL_CONTROL_ENFORCEMENT_ENABLED=true`, intended only as a controlled local/test escape hatch; production-like runs should keep the env guard enabled.
 
 ## Audit Trail And Technical Logs
 
@@ -339,7 +339,7 @@ The current suite has more than 150 tests, including one real Blemberg smoke tes
 
 ## Valuation Run History V1
 
-Run History records portfolio valuation executions without changing the pricing model:
+Run History records portfolio and netting-set valuation executions without changing the pricing model:
 
 - `GET /api/valuation-runs`
 - `GET /api/valuation-runs/{runId}`
@@ -348,10 +348,12 @@ Filters:
 
 - `runType=PRICING|EXPOSURE|CVA`
 - `status=SUCCESS|FAILED`
+- `scopeType=PORTFOLIO|NETTING_SET`
+- `scopeId=<uuid>`
 - `portfolioId=<uuid>`
 - `limit=50`
 
-Stored fields include portfolio, model, valuation date, status, requesting user/group, `input_json`, `result_json`, `summary_json`, error message and timestamp.
+Stored fields include scope, optional portfolio, model, valuation date, status, requesting user/group, `input_json`, `result_json`, `summary_json`, error message and timestamp. `PORTFOLIO` runs keep `portfolioId`; `NETTING_SET` runs use `scopeType=NETTING_SET` and `scopeId=<nettingSetId>`.
 
 Important boundaries:
 
@@ -832,7 +834,7 @@ V1 CVA rules:
 - `lossGivenDefault` must be between `0.0` and `1.0`.
 - CVA reuses Exposure V1 and reports values in the portfolio `baseCurrency`.
 - European-options-only limitations still apply for the simulation leg.
-- Single-portfolio CVA writes valuation run audit snapshots. Netting-set CVA V1 does not write valuation runs yet because run history is currently portfolio-scoped.
+- Single-portfolio CVA and netting-set CVA both write valuation run audit snapshots. Netting-set runs are stored with `scopeType=NETTING_SET`.
 - Wrong-way risk, path-level netting, margining, CSA rules, persisted credit curves, and persisted CVA result state are still out of scope.
 
 ### Counterparties, Netting Sets And Collateral V1

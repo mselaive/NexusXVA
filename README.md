@@ -94,13 +94,14 @@ ADMIN owns the global operating calendar from **Operational Control**:
 * timezone: default `America/New_York`
 * business days: default Monday to Friday
 * trading window: default `09:30` to `16:00`
+* blocking mode: default enabled
 * scheduled EOD time: default `17:15`
 
-When authentication is enabled, NexusXVA blocks FO trade submission, FO lifecycle requests, and risk runs outside the trading window. BO validation, BO EOD corrections, read-only reporting, login, notifications, and ADMIN configuration remain available.
+When authentication is enabled, ADMIN can independently block two families of actions outside the trading window: new FO trade bookings/lifecycle requests, and risk runs such as pricing, Pre-Trade Analysis, Stress, Delta Hedge, Exposure and CVA. If a block is disabled, that family remains advisory only. BO validation, BO EOD corrections, read-only reporting, login, notifications, and ADMIN configuration remain available.
 
-The header shows `Trading Open` or `Trading Closed`. FO/risk screens disable their main action buttons when the window is closed; the backend still enforces the rule with `409 Operational window is closed`.
+The header shows `Trading Open`, `Trading Closed`, or `Window Advisory`. FO/risk screens disable their main action buttons only when blocking is enabled and the window is closed; the backend still enforces the rule with `409 Operational window is closed`.
 
-`NEXUSXVA_OPERATIONAL_CONTROL_ENFORCEMENT_ENABLED` defaults to `true`. It exists only as a controlled local/test escape hatch; production-like environments should keep backend enforcement enabled.
+The ADMIN checkbox controls the runtime policy. `NEXUSXVA_OPERATIONAL_CONTROL_ENFORCEMENT_ENABLED` defaults to `true` and exists only as a controlled local/test escape hatch; production-like environments should keep the env guard enabled.
 
 ## Positions and Lifecycle
 
@@ -161,12 +162,12 @@ The scheduler bean is enabled by default with `NEXUSXVA_EOD_SCHEDULER_ENABLED=tr
 
 ## Run History
 
-Each portfolio pricing, Exposure, and CVA execution stores an audited copy in `valuation_runs`:
+Each portfolio pricing, Exposure, single-portfolio CVA, and netting-set CVA execution stores an audited copy in `valuation_runs`:
 
 * input JSON sent to the calculation.
 * response JSON returned by the backend.
 * compact summary for quick inspection.
-* user, active group, portfolio, model, date, and status: `SUCCESS` or `FAILED`.
+* user, active group, scope (`PORTFOLIO` or `NETTING_SET`), model, date, and status: `SUCCESS` or `FAILED`.
 
 This does not replace EOD and does not store market data as the official source. It is an execution history used to review what was run, with which parameters, and what the system returned.
 
@@ -265,8 +266,6 @@ Common URLs:
 
 Natural next candidates are:
 
-* FO/BO reporting polish around lifecycle, EOD, P&L and corrected closes.
-* Netting-set CVA valuation run history, so netting-set runs are audited like portfolio runs.
 * Persisted credit curve master data for richer CVA.
 * Persisted valuation/EOD reporting history if FO/BO need saved report views.
 * Cash equity lots/executions for average cost and realized P&L.

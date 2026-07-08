@@ -260,7 +260,10 @@ Run History guarda auditoria de ejecuciones de Pricing, Exposure y CVA. No es EO
 
 Campos importantes:
 
-- `portfolio_id`: UUID del portfolio. No tiene FK fuerte para preservar historial aunque tests o procesos borren fisicamente.
+- `scope_type`: `PORTFOLIO` o `NETTING_SET`.
+- `scope_id`: UUID del scope auditado.
+- `scope_name_snapshot`: nombre del portfolio o netting set al momento del run.
+- `portfolio_id`: UUID del portfolio para runs `PORTFOLIO`; queda `NULL` para runs `NETTING_SET`. No tiene FK fuerte para preservar historial aunque tests o procesos borren fisicamente.
 - `portfolio_name_snapshot`: nombre al momento del run.
 - `run_type`: `PRICING`, `EXPOSURE`, `CVA`.
 - `model`: modelo usado.
@@ -280,7 +283,8 @@ Pricing / Exposure / CVA recalculan desde portfolio + marketdata, no desde valua
 
 ```mermaid
 erDiagram
-    PORTFOLIOS ||--o{ VALUATION_RUNS : logical_reference
+    PORTFOLIOS ||--o{ VALUATION_RUNS : portfolio_scope
+    NETTING_SETS ||--o{ VALUATION_RUNS : netting_set_scope
     AUTH_USER_ACCOUNTS ||--o{ VALUATION_RUNS : requested
 ```
 

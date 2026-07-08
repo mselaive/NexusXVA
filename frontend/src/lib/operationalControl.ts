@@ -30,9 +30,27 @@ export function useOperationalControlStatus(enabled = true) {
 }
 
 export function operationalClosedMessage(status: OperationalControlStatus | null) {
-  if (!status || status.tradingOpen) {
+  if (!status || status.tradingOpen || !status.operationalWindowEnforced) {
     return null;
   }
+  return closedMessage(status, "Trading is closed");
+}
+
+export function operationalTradeClosedMessage(status: OperationalControlStatus | null) {
+  if (!status || status.tradingOpen || !status.tradeBookingsWindowEnforced) {
+    return null;
+  }
+  return closedMessage(status, "Trade booking is closed");
+}
+
+export function operationalRiskClosedMessage(status: OperationalControlStatus | null) {
+  if (!status || status.tradingOpen || !status.riskRunsWindowEnforced) {
+    return null;
+  }
+  return closedMessage(status, "Risk runs are closed");
+}
+
+function closedMessage(status: OperationalControlStatus, prefix: string) {
   const nextOpen = new Date(status.nextOpenAt).toLocaleString();
-  return `Trading is closed (${status.reason.replaceAll("_", " ").toLowerCase()}). Next open: ${nextOpen}.`;
+  return `${prefix} (${status.reason.replaceAll("_", " ").toLowerCase()}). Next open: ${nextOpen}.`;
 }

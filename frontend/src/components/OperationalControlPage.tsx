@@ -18,7 +18,7 @@ const days = [
 ] as const;
 
 const howTo = [
-  { title: "Trading window", body: "FO bookings, lifecycle requests and risk runs are blocked outside this global window." },
+  { title: "Trading window", body: "The window defines open/closed business time. ADMIN can block trade capture, risk runs, both, or neither." },
   { title: "EOD schedule", body: "The backend scheduler checks this database setting every minute, so changing the time does not require a restart." },
   { title: "BO remains open", body: "BO validation and EOD corrections stay available outside trading hours." },
 ];
@@ -89,9 +89,9 @@ export function OperationalControlPage() {
   return (
     <AppShell title="Operational Control" eyebrow="Administration" howTo={howTo}>
       <section className="ops-control-hero">
-        <div className={`ops-status-card ${status?.tradingOpen ? "open" : "closed"}`}>
+        <div className={`ops-status-card ${status?.tradingOpen ? "open" : status?.operationalWindowEnforced ? "closed" : "advisory"}`}>
           {status?.tradingOpen ? <CheckCircle2 size={22} /> : <XCircle size={22} />}
-          <span>{status?.tradingOpen ? "Trading Open" : "Trading Closed"}</span>
+          <span>{status?.tradingOpen ? "Trading Open" : status?.operationalWindowEnforced ? "Trading Closed" : "Window Advisory"}</span>
           <strong>{status?.reason?.replaceAll("_", " ") ?? "Loading"}</strong>
         </div>
         <div className="ops-status-grid">
@@ -106,7 +106,7 @@ export function OperationalControlPage() {
       {message ? <div className="success-banner">{message}</div> : null}
 
       <section className="panel section">
-        <div className="section-heading">
+        <div className="section-heading ops-control-heading">
           <div>
             <span className="page-eyebrow">Global policy</span>
             <h2>Trading window and EOD schedule</h2>
@@ -121,6 +121,28 @@ export function OperationalControlPage() {
           <div className="ops-control-layout">
             <div className="ops-form-card">
               <h3>Trading window</h3>
+              <label className="ops-toggle-row">
+                <span>
+                  <strong>Block new trade bookings</strong>
+                  <small>FO bookings and lifecycle requests return 409 outside the configured window.</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={form.blockTradeBookingsOutsideWindow}
+                  onChange={(event) => patch({ blockTradeBookingsOutsideWindow: event.target.checked })}
+                />
+              </label>
+              <label className="ops-toggle-row">
+                <span>
+                  <strong>Block risk runs</strong>
+                  <small>Pricing, Pre-Trade Analysis, Stress, Delta Hedge, Exposure and CVA return 409 outside the window.</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={form.blockRiskRunsOutsideWindow}
+                  onChange={(event) => patch({ blockRiskRunsOutsideWindow: event.target.checked })}
+                />
+              </label>
               <label>
                 <span>Timezone</span>
                 <input value={form.timezone} onChange={(event) => patch({ timezone: event.target.value })} />
@@ -207,6 +229,8 @@ function toForm(settings: OperationalControlSettings): UpdateOperationalControlR
     businessDays: settings.businessDays,
     tradingOpenTime: settings.tradingOpenTime,
     tradingCloseTime: settings.tradingCloseTime,
+    blockTradeBookingsOutsideWindow: settings.blockTradeBookingsOutsideWindow,
+    blockRiskRunsOutsideWindow: settings.blockRiskRunsOutsideWindow,
     eodEnabled: settings.eodEnabled,
     eodRunTime: settings.eodRunTime,
     eodAllowStaleMarketData: settings.eodAllowStaleMarketData,

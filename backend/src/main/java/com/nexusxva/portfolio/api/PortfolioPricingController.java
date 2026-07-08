@@ -56,7 +56,7 @@ public class PortfolioPricingController {
             HttpServletRequest servletRequest
     ) {
         userAccessService.requirePortfolioAccess(servletRequest, portfolioId);
-        operationalControlService.ensureOpen("RUN_PORTFOLIO_PRICING", currentSession(servletRequest), servletRequest);
+        operationalControlService.ensureRiskRunOpen("RUN_PORTFOLIO_PRICING", currentSession(servletRequest), servletRequest);
         LocalDate valuationDate = request == null ? null : request.valuationDate();
         Map<String, Object> input = pricingInput(portfolioId, valuationDate);
         try {

@@ -55,7 +55,7 @@ public class FrontOfficeLifecycleController {
         userAccessService.requireFeature(request, FeaturePermissionCode.FO_REQUEST_LIFECYCLE);
         EuropeanOptionPosition position = service.position(positionId);
         userAccessService.requirePortfolioAccess(request, position.portfolioId());
-        operationalControlService.ensureOpen("REQUEST_OPTION_AMEND", currentSession(request), request);
+        operationalControlService.ensureTradeBookingOpen("REQUEST_OPTION_AMEND", currentSession(request), request);
         TradeLifecycleRequest lifecycleRequest = service.submitAmend(positionId, body.toCommand(), TradeBookingActorResolver.resolve(request));
         auditLifecycleSubmitted(request, lifecycleRequest, "LIFECYCLE_AMEND_REQUESTED", "REQUEST_AMEND");
         return TradeLifecycleResponse.from(lifecycleRequest);
@@ -66,7 +66,7 @@ public class FrontOfficeLifecycleController {
         userAccessService.requireFeature(request, FeaturePermissionCode.FO_REQUEST_LIFECYCLE);
         EuropeanOptionPosition position = service.position(positionId);
         userAccessService.requirePortfolioAccess(request, position.portfolioId());
-        operationalControlService.ensureOpen("REQUEST_OPTION_CANCEL", currentSession(request), request);
+        operationalControlService.ensureTradeBookingOpen("REQUEST_OPTION_CANCEL", currentSession(request), request);
         TradeLifecycleRequest lifecycleRequest = service.submitCancel(positionId, TradeBookingActorResolver.resolve(request));
         auditLifecycleSubmitted(request, lifecycleRequest, "LIFECYCLE_CANCEL_REQUESTED", "REQUEST_CANCEL");
         return TradeLifecycleResponse.from(lifecycleRequest);
@@ -81,7 +81,7 @@ public class FrontOfficeLifecycleController {
         userAccessService.requireFeature(request, FeaturePermissionCode.FO_REQUEST_LIFECYCLE);
         CashEquityPosition position = service.cashEquityPosition(positionId);
         userAccessService.requirePortfolioAccess(request, position.portfolioId());
-        operationalControlService.ensureOpen("REQUEST_CASH_EQUITY_AMEND", currentSession(request), request);
+        operationalControlService.ensureTradeBookingOpen("REQUEST_CASH_EQUITY_AMEND", currentSession(request), request);
         TradeLifecycleRequest lifecycleRequest = service.submitCashEquityAmend(positionId, body.toCommand(), TradeBookingActorResolver.resolve(request));
         auditLifecycleSubmitted(request, lifecycleRequest, "LIFECYCLE_AMEND_REQUESTED", "REQUEST_AMEND");
         return TradeLifecycleResponse.from(lifecycleRequest);
@@ -92,7 +92,7 @@ public class FrontOfficeLifecycleController {
         userAccessService.requireFeature(request, FeaturePermissionCode.FO_REQUEST_LIFECYCLE);
         CashEquityPosition position = service.cashEquityPosition(positionId);
         userAccessService.requirePortfolioAccess(request, position.portfolioId());
-        operationalControlService.ensureOpen("REQUEST_CASH_EQUITY_CANCEL", currentSession(request), request);
+        operationalControlService.ensureTradeBookingOpen("REQUEST_CASH_EQUITY_CANCEL", currentSession(request), request);
         TradeLifecycleRequest lifecycleRequest = service.submitCashEquityCancel(positionId, TradeBookingActorResolver.resolve(request));
         auditLifecycleSubmitted(request, lifecycleRequest, "LIFECYCLE_CANCEL_REQUESTED", "REQUEST_CANCEL");
         return TradeLifecycleResponse.from(lifecycleRequest);

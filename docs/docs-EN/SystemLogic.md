@@ -250,7 +250,7 @@ FO netting-set CVA request
   -> HTTP response
 ```
 
-V1 netting is intentionally simple: it aggregates exposure profiles across assigned portfolios and subtracts static collateral from positive exposure buckets. It is not path-level netting, CSA margining, collateral calls, wrong-way risk, or persisted credit curve master data. Netting-set CVA is not yet written to valuation run history because that history is currently portfolio-scoped.
+V1 netting is intentionally simple: it aggregates exposure profiles across assigned portfolios and subtracts static collateral from positive exposure buckets. It is not path-level netting, CSA margining, collateral calls, wrong-way risk, or persisted credit curve master data. Netting-set CVA is written to valuation run history with `scopeType=NETTING_SET`, so it is auditable like portfolio-level runs.
 
 ## How Valuation Run History Flows
 
@@ -264,7 +264,7 @@ pricing / exposure / CVA request
   -> valuation_runs
 ```
 
-The stored run contains input JSON, result JSON, a compact summary, model, valuation date, portfolio, user, active group and status. This is valuation execution history only. Pricing, Exposure and CVA do not read old runs to produce new values, and Run History is not an EOD close or official market-data store.
+The stored run contains input JSON, result JSON, a compact summary, model, valuation date, scope (`PORTFOLIO` or `NETTING_SET`), optional portfolio, user, active group and status. This is valuation execution history only. Pricing, Exposure and CVA do not read old runs to produce new values, and Run History is not an EOD close or official market-data store.
 
 ## How Audit Trail Flows
 
@@ -324,7 +324,7 @@ For local development, the frontend calls `/nexus-api/*`, which Next.js proxies 
 
 `u-Pad` may also capture the option `executionPrice`, meaning premium per unit. On BO approval it is copied into the confirmed position. Portfolio pricing compares this execution premium with the current Black-Scholes unit value to produce unrealized P&L. Missing legacy economics remain unavailable rather than being treated as zero.
 
-Operational Control is a global ADMIN policy. V1 uses a New York Monday-Friday calendar by default, blocks FO bookings, FO lifecycle requests and risk runs outside the configured trading window, and keeps BO validation/corrections plus ADMIN setup available. The backend is the source of authority; frontend disabled buttons are only a convenience.
+Operational Control is a global ADMIN policy. V1 uses a New York Monday-Friday calendar by default. ADMIN can configure the window as two independent controls: one blocks FO bookings and FO lifecycle requests, and the other blocks risk runs such as pricing, Pre-Trade Analysis, Stress, Delta Hedge, Exposure and CVA. Either control can also stay advisory only. BO validation/corrections plus ADMIN setup remain available. The backend is the source of authority; frontend disabled buttons are only a convenience.
 
 EOD is a separate audited control owned by BO or the system scheduler. FO consumes the close but cannot create it. The normal process closes active portfolios and reports an independent `CAPTURED`, `SKIPPED`, or `FAILED` result for each book. It snapshots portfolio and position market values without changing execution economics. BO corrections use `VOIDED` and `SUPERSEDED` runs rather than physical deletion; latest close and Daily P&L use only `ACTIVE` runs. Scheduled EOD is configured from ADMIN Operational Control and is disabled by default.
 
@@ -780,9 +780,7 @@ Suggested next version:
 - Treat Blemberg snapshots as diagnostic/cache data only; pricing and exposure must keep using pricing inputs.
 - Accept Blemberg V1 `501` for `/v3/api-docs` as expected because runtime integration does not depend on OpenAPI.
 - Keep the optional real Blemberg smoke test disabled by default and enable it with `RUN_REAL_BLEMBERG_SMOKE=true`.
-- Persisted valuation run history now exists for pricing, exposure and CVA audit snapshots.
-- Harden FO/BO reporting around lifecycle, EOD, P&L and corrected closes.
-- Extend valuation run history to netting-set CVA, which is currently outside the portfolio-scoped run history.
+- Persisted valuation run history now exists for pricing, exposure, single-portfolio CVA and netting-set CVA audit snapshots.
 - Add persisted credit and discount curve master data when the inline curve contract is stable.
 
 Out of initial scope:

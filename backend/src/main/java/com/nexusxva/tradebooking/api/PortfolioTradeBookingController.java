@@ -50,7 +50,7 @@ public class PortfolioTradeBookingController {
     ) {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_BOOK_TRADES);
         userAccessService.requirePortfolioAccess(servletRequest, portfolioId);
-        operationalControlService.ensureOpen("SUBMIT_EUROPEAN_OPTION_BOOKING", currentSession(servletRequest), servletRequest);
+        operationalControlService.ensureTradeBookingOpen("SUBMIT_EUROPEAN_OPTION_BOOKING", currentSession(servletRequest), servletRequest);
         TradeBookingRequest booking = service.submitEuropeanOption(
                 portfolioId,
                 request.toCommand(),
@@ -70,7 +70,7 @@ public class PortfolioTradeBookingController {
     ) {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_BOOK_TRADES);
         userAccessService.requirePortfolioAccess(servletRequest, portfolioId);
-        operationalControlService.ensureOpen("SUBMIT_OPTION_STRATEGY_BOOKING", currentSession(servletRequest), servletRequest);
+        operationalControlService.ensureTradeBookingOpen("SUBMIT_OPTION_STRATEGY_BOOKING", currentSession(servletRequest), servletRequest);
         TradeBookingRequest booking = service.submitOptionStrategy(
                 portfolioId,
                 request.toCommand(),
@@ -90,7 +90,7 @@ public class PortfolioTradeBookingController {
     ) {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_BOOK_TRADES);
         userAccessService.requirePortfolioAccess(servletRequest, portfolioId);
-        operationalControlService.ensureOpen("SUBMIT_CASH_EQUITY_BOOKING", currentSession(servletRequest), servletRequest);
+        operationalControlService.ensureTradeBookingOpen("SUBMIT_CASH_EQUITY_BOOKING", currentSession(servletRequest), servletRequest);
         TradeBookingRequest booking = service.submitCashEquity(
                 portfolioId,
                 request.toCommand(),

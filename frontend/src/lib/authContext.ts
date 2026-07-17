@@ -16,21 +16,21 @@ export const WORK_GROUPS: Record<WorkGroupCode, WorkGroup> = {
     name: "Front Office",
     description: "Book trades, monitor market data, run pricing and analyze exposure.",
     landingHref: "/fo-desk",
-    allowedHrefs: ["/", "/fo-desk", "/pre-trade-analysis", "/stress-testing", "/delta-hedge", "/upad", "/what-if", "/portfolios", "/pricing", "/exposure", "/cva", "/valuation-runs"],
+    allowedHrefs: ["/", "/fo-desk", "/pre-trade-analysis", "/stress-testing", "/delta-hedge", "/upad", "/what-if", "/portfolios", "/pricing", "/exposure", "/cva", "/valuation-runs", "/report-history"],
   },
   BO: {
     code: "BO",
     name: "Back Office",
     description: "Validate pending trades and manage preventive Front Office trading limits.",
     landingHref: "/trade-validation",
-    allowedHrefs: ["/trade-validation", "/lifecycle-reporting", "/operations-reporting", "/trading-limits", "/eod-control", "/valuation-runs"],
+    allowedHrefs: ["/trade-validation", "/lifecycle-reporting", "/operations-reporting", "/trading-limits", "/eod-control", "/execute-scripts", "/valuation-runs", "/report-history"],
   },
   ADMIN: {
     code: "ADMIN",
     name: "Admin",
     description: "Manage users, access controls and workflow monitoring.",
     landingHref: "/admin",
-    allowedHrefs: ["/admin", "/operational-control", "/xva-setup", "/workflows", "/audit-logs", "/valuation-runs"],
+    allowedHrefs: ["/admin", "/execute-scripts-setup", "/operational-control", "/xva-setup", "/workflows", "/audit-logs", "/valuation-runs", "/report-history"],
   },
 };
 

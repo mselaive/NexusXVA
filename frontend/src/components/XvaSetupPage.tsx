@@ -12,12 +12,13 @@ import {
   RefreshCw,
   Save,
   Search,
+  Upload,
   Wallet,
   X,
 } from "lucide-react";
 import { nexusApi, NexusApiError } from "@/lib/api";
-import { formatCurrency, formatNumber } from "@/lib/format";
-import type { AdminPortfolioSummary, Counterparty, NettingSet } from "@/lib/types";
+import { formatCurrency, formatNumber, todayIsoDate } from "@/lib/format";
+import type { AdminPortfolioSummary, Counterparty, CreditCurve, CreditCurveType, DiscountCurve, NettingSet } from "@/lib/types";
 import { AppShell } from "./AppShell";
 
 const howTo = [
@@ -25,6 +26,7 @@ const howTo = [
   { title: "Netting sets", body: "A netting set groups portfolios for profile-level CVA netting. V1 allows one netting set per portfolio." },
   { title: "Collateral", body: "Collateral is a static amount in the netting set base currency. It reduces positive exposure buckets in V1." },
   { title: "Portfolio assignment", body: "Only non-archived portfolios with matching base currency can be assigned. A portfolio can belong to one netting set." },
+  { title: "CVA curves", body: "ADMIN can store credit and discount curves as master data. CVA can then reference curve IDs instead of sending inline points on every run." },
 ];
 
 type CounterpartyForm = {
@@ -41,6 +43,12 @@ type NettingSetForm = {
   active: boolean;
 };
 
+type CurveForm = {
+  name: string;
+  curveType: CreditCurveType;
+  currency: string;
+};
+
 const emptyCounterpartyForm: CounterpartyForm = {
   name: "",
   externalId: "",
@@ -55,10 +63,18 @@ const emptyNettingSetForm: NettingSetForm = {
   active: true,
 };
 
+const emptyCurveForm: CurveForm = {
+  name: "",
+  curveType: "SURVIVAL_PROBABILITY",
+  currency: "USD",
+};
+
 export function XvaSetupPage() {
   const [counterparties, setCounterparties] = React.useState<Counterparty[]>([]);
   const [nettingSets, setNettingSets] = React.useState<NettingSet[]>([]);
   const [portfolios, setPortfolios] = React.useState<AdminPortfolioSummary[]>([]);
+  const [creditCurves, setCreditCurves] = React.useState<CreditCurve[]>([]);
+  const [discountCurves, setDiscountCurves] = React.useState<DiscountCurve[]>([]);
   const [selectedCounterpartyId, setSelectedCounterpartyId] = React.useState("");
   const [selectedNettingSetId, setSelectedNettingSetId] = React.useState("");
   const [query, setQuery] = React.useState("");
@@ -66,6 +82,8 @@ export function XvaSetupPage() {
   const [newCounterpartyForm, setNewCounterpartyForm] = React.useState<CounterpartyForm>(emptyCounterpartyForm);
   const [nettingSetForm, setNettingSetForm] = React.useState<NettingSetForm>(emptyNettingSetForm);
   const [newNettingSetForm, setNewNettingSetForm] = React.useState<NettingSetForm>(emptyNettingSetForm);
+  const [creditCurveForm, setCreditCurveForm] = React.useState<CurveForm>(emptyCurveForm);
+  const [discountCurveForm, setDiscountCurveForm] = React.useState<CurveForm>(emptyCurveForm);
   const [createCounterpartyOpen, setCreateCounterpartyOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState<string | null>(null);
@@ -95,9 +113,15 @@ export function XvaSetupPage() {
         nexusApi.listNettingSets(true),
         nexusApi.listAdminPortfolios(),
       ]);
+      const [nextCreditCurves, nextDiscountCurves] = await Promise.all([
+        nexusApi.listCreditCurves(undefined, true),
+        nexusApi.listDiscountCurves(undefined, true),
+      ]);
       setCounterparties(nextCounterparties);
       setNettingSets(nextNettingSets);
       setPortfolios(nextPortfolios);
+      setCreditCurves(nextCreditCurves);
+      setDiscountCurves(nextDiscountCurves);
       const nextCounterpartyId = preferredCounterpartyId && nextCounterparties.some((item) => item.id === preferredCounterpartyId)
         ? preferredCounterpartyId
         : nextCounterparties[0]?.id ?? "";
@@ -131,6 +155,7 @@ export function XvaSetupPage() {
   const totalCollateral = nettingSets
     .filter((nettingSet) => nettingSet.active && nettingSet.counterpartyActive)
     .reduce((total, nettingSet) => total + nettingSet.collateralAmount, 0);
+  const selectedCreditCurves = creditCurves.filter((curve) => curve.counterpartyId === selectedCounterpartyId);
 
   async function createCounterparty() {
     if (!newCounterpartyForm.name.trim()) return;
@@ -199,6 +224,134 @@ export function XvaSetupPage() {
       const updated = await nexusApi.removeNettingSetPortfolio(selectedNettingSet.id, portfolioId);
       setSuccess("Portfolio removed.");
       await load(updated.counterpartyId, updated.id);
+    });
+  }
+
+  async function createCreditCurve() {
+    if (!selectedCounterparty || !creditCurveForm.name.trim()) return;
+    await withSave("create-credit-curve", async () => {
+      const created = await nexusApi.createCreditCurve({
+        counterpartyId: selectedCounterparty.id,
+        name: creditCurveForm.name.trim(),
+        curveType: creditCurveForm.curveType,
+        active: true,
+        points: defaultCreditCurvePoints(creditCurveForm.curveType),
+      });
+      setCreditCurveForm(emptyCurveForm);
+      setSuccess(`Credit curve "${created.name}" created.`);
+      await load(selectedCounterparty.id, selectedNettingSetId);
+    });
+  }
+
+  async function createDiscountCurve() {
+    if (!discountCurveForm.name.trim()) return;
+    await withSave("create-discount-curve", async () => {
+      const created = await nexusApi.createDiscountCurve({
+        name: discountCurveForm.name.trim(),
+        currency: discountCurveForm.currency.trim().toUpperCase(),
+        active: true,
+        points: defaultDiscountCurvePoints(),
+      });
+      setDiscountCurveForm(emptyCurveForm);
+      setSuccess(`Discount curve "${created.name}" created.`);
+      await load(selectedCounterpartyId, selectedNettingSetId);
+    });
+  }
+
+  async function importCreditCurve(file: File) {
+    if (!selectedCounterparty || !creditCurveForm.name.trim()) {
+      setError("Choose a counterparty and enter a curve name before importing.");
+      return;
+    }
+    await withSave("import-credit-curve", async () => {
+      const rows = parseCsv(file.name, await file.text());
+      const points = rows.map((row) => ({
+        date: requiredCell(row, "date"),
+        survivalProbability: creditCurveForm.curveType === "SURVIVAL_PROBABILITY" ? numberCell(row, "survivalProbability", "value") : null,
+        cumulativeDefaultProbability: creditCurveForm.curveType === "CUMULATIVE_DEFAULT_PROBABILITY" ? numberCell(row, "cumulativeDefaultProbability", "value") : null,
+      }));
+      const created = await nexusApi.importCreditCurve({
+        counterpartyId: selectedCounterparty.id,
+        name: creditCurveForm.name.trim(),
+        curveType: creditCurveForm.curveType,
+        active: false,
+        points,
+      });
+      setSuccess(`Credit curve "${created.name}" imported as DRAFT.`);
+      await load(selectedCounterparty.id, selectedNettingSetId);
+    });
+  }
+
+  async function importDiscountCurve(file: File) {
+    if (!discountCurveForm.name.trim()) {
+      setError("Enter a discount curve name before importing.");
+      return;
+    }
+    await withSave("import-discount-curve", async () => {
+      const rows = parseCsv(file.name, await file.text());
+      const points = rows.map((row) => ({ date: requiredCell(row, "date"), discountFactor: numberCell(row, "discountFactor", "value") }));
+      const created = await nexusApi.importDiscountCurve({
+        name: discountCurveForm.name.trim(),
+        currency: discountCurveForm.currency.trim().toUpperCase(),
+        active: false,
+        points,
+      });
+      setSuccess(`Discount curve "${created.name}" imported as DRAFT.`);
+      await load(selectedCounterpartyId, selectedNettingSetId);
+    });
+  }
+
+  async function importDiscountCurveFromMarketData() {
+    const currency = discountCurveForm.currency.trim().toUpperCase();
+    if (!currency) {
+      setError("Enter the discount curve currency before importing from market data.");
+      return;
+    }
+    await withSave("import-market-discount-curve", async () => {
+      const created = await nexusApi.importMarketDataDiscountCurve({
+        currency,
+        valuationDate: todayIsoDate(),
+        name: discountCurveForm.name.trim() || null,
+        allowStale: false,
+      });
+      setSuccess(`Market-data curve "${created.name}" imported as DRAFT. Review it before approval.`);
+      await load(selectedCounterpartyId, selectedNettingSetId);
+    });
+  }
+
+  async function approveCreditCurve(curveId: string) {
+    await withSave(`approve-credit-${curveId}`, async () => {
+      const approved = await nexusApi.approveCreditCurve(curveId);
+      setSuccess(`Credit curve "${approved.name}" v${approved.version} approved.`);
+      await load(selectedCounterpartyId, selectedNettingSetId);
+    });
+  }
+
+  async function rejectCreditCurve(curveId: string) {
+    const reason = window.prompt("Why reject this credit curve?");
+    if (!reason?.trim()) return;
+    await withSave(`reject-credit-${curveId}`, async () => {
+      const rejected = await nexusApi.rejectCreditCurve(curveId, reason.trim());
+      setSuccess(`Credit curve "${rejected.name}" v${rejected.version} rejected.`);
+      await load(selectedCounterpartyId, selectedNettingSetId);
+    });
+  }
+
+  async function approveDiscountCurve(curveId: string) {
+    await withSave(`approve-discount-${curveId}`, async () => {
+      const approved = await nexusApi.approveDiscountCurve(curveId);
+      setSuccess(`Discount curve "${approved.name}" v${approved.version} approved.`);
+      await load(selectedCounterpartyId, selectedNettingSetId);
+    });
+  }
+
+  async function rejectDiscountCurve(curveId: string) {
+    const reason = window.prompt("Why reject this discount curve?");
+    if (!reason?.trim()) return;
+    await withSave(`reject-discount-${curveId}`, async () => {
+      const rejected = await nexusApi.rejectDiscountCurve(curveId, reason.trim());
+      setSuccess(`Discount curve "${rejected.name}" v${rejected.version} rejected.`);
+      await load(selectedCounterpartyId, selectedNettingSetId);
     });
   }
 
@@ -409,6 +562,85 @@ export function XvaSetupPage() {
                   )}
                 </section>
               </div>
+
+              <section className="xva-card xva-card-wide xva-curve-master-data">
+                <div className="section-head compact">
+                  <div>
+                    <h3>Curve master data</h3>
+                    <p>Create reusable curves for CVA curve mode. Demo curves start at 6, 12 and 18 months.</p>
+                  </div>
+                </div>
+                <div className="xva-two-column">
+                  <div>
+                    <h4>Credit curves for {selectedCounterparty.name}</h4>
+                    <div className="form-grid">
+                      <TextInput label="Name" value={creditCurveForm.name} onChange={(name) => setCreditCurveForm({ ...creditCurveForm, name })} />
+                      <label className="field">
+                        <span>Curve type</span>
+                        <select className="select" value={creditCurveForm.curveType} onChange={(event) => setCreditCurveForm({ ...creditCurveForm, curveType: event.target.value as CreditCurveType })}>
+                          <option value="SURVIVAL_PROBABILITY">Survival probability</option>
+                          <option value="CUMULATIVE_DEFAULT_PROBABILITY">Cumulative default probability</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="toolbar">
+                      <button className="btn secondary" type="button" onClick={createCreditCurve} disabled={saving === "create-credit-curve" || !selectedCounterparty.active || !creditCurveForm.name.trim()}>
+                        {saving === "create-credit-curve" ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
+                        Create credit curve
+                      </button>
+                      <label className="btn secondary curve-import-button">
+                        <Upload size={16} /> Import CSV
+                        <input type="file" accept=".csv,text/csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importCreditCurve(file); event.target.value = ""; }} />
+                      </label>
+                    </div>
+                    <CurveList
+                      curves={selectedCreditCurves.map((curve) => ({
+                        id: curve.id,
+                        label: `${curve.name} v${curve.version} · ${curve.curveType.replaceAll("_", " ")}`,
+                        status: curve.status,
+                        active: curve.active,
+                      }))}
+                      emptyText="No credit curves for this counterparty."
+                      saving={saving}
+                      onApprove={approveCreditCurve}
+                      onReject={rejectCreditCurve}
+                    />
+                  </div>
+                  <div>
+                    <h4>Discount curves</h4>
+                    <div className="form-grid">
+                      <TextInput label="Name" value={discountCurveForm.name} onChange={(name) => setDiscountCurveForm({ ...discountCurveForm, name })} />
+                      <TextInput label="Currency" value={discountCurveForm.currency} onChange={(currency) => setDiscountCurveForm({ ...discountCurveForm, currency })} />
+                    </div>
+                    <div className="toolbar">
+                      <button className="btn secondary" type="button" onClick={createDiscountCurve} disabled={saving === "create-discount-curve" || !discountCurveForm.name.trim()}>
+                        {saving === "create-discount-curve" ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
+                        Create discount curve
+                      </button>
+                      <label className="btn secondary curve-import-button">
+                        <Upload size={16} /> Import CSV
+                        <input type="file" accept=".csv,text/csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importDiscountCurve(file); event.target.value = ""; }} />
+                      </label>
+                      <button className="btn secondary" type="button" onClick={importDiscountCurveFromMarketData} disabled={saving === "import-market-discount-curve" || !discountCurveForm.currency.trim()}>
+                        {saving === "import-market-discount-curve" ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
+                        Import from Blemberg
+                      </button>
+                    </div>
+                    <CurveList
+                      curves={discountCurves.map((curve) => ({
+                        id: curve.id,
+                        label: `${curve.currency} · ${curve.name} v${curve.version}`,
+                        status: curve.status,
+                        active: curve.active,
+                      }))}
+                      emptyText="No discount curves configured."
+                      saving={saving}
+                      onApprove={approveDiscountCurve}
+                      onReject={rejectDiscountCurve}
+                    />
+                  </div>
+                </div>
+              </section>
             </>
           ) : (
             <div className="empty">Create a counterparty to start configuring XVA reference data.</div>
@@ -416,6 +648,43 @@ export function XvaSetupPage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function CurveList({
+  curves,
+  emptyText,
+  saving,
+  onApprove,
+  onReject,
+}: {
+  curves: Array<{ id: string; label: string; status: string; active: boolean }>;
+  emptyText: string;
+  saving: string | null;
+  onApprove: (curveId: string) => void;
+  onReject: (curveId: string) => void;
+}) {
+  if (curves.length === 0) {
+    return <div className="empty compact-empty">{emptyText}</div>;
+  }
+  return (
+    <div className="xva-curve-list">
+      {curves.map((curve) => (
+        <div className="xva-curve-pill" key={curve.id}>
+          <span>{curve.label} · {curve.status}{curve.active ? " · Active" : ""}</span>
+          {curve.status === "DRAFT" ? (
+            <div className="row-actions">
+              <button className="text-action" type="button" onClick={() => onApprove(curve.id)} disabled={saving === `approve-credit-${curve.id}` || saving === `approve-discount-${curve.id}`}>
+                Approve
+              </button>
+              <button className="text-action danger" type="button" onClick={() => onReject(curve.id)} disabled={saving === `reject-credit-${curve.id}` || saving === `reject-discount-${curve.id}`}>
+                Reject
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -554,6 +823,78 @@ function counterpartyRequest(form: CounterpartyForm) {
     creditRating: form.creditRating.trim() || null,
     active: form.active,
   };
+}
+
+function defaultCreditCurvePoints(curveType: CreditCurveType) {
+  const values = curveType === "SURVIVAL_PROBABILITY" ? [0.99, 0.97, 0.94] : [0.01, 0.03, 0.06];
+  return values.map((value, index) => ({
+    date: addMonths(todayIsoDate(), (index + 1) * 6),
+    survivalProbability: curveType === "SURVIVAL_PROBABILITY" ? value : null,
+    cumulativeDefaultProbability: curveType === "CUMULATIVE_DEFAULT_PROBABILITY" ? value : null,
+  }));
+}
+
+function defaultDiscountCurvePoints() {
+  return [0.98, 0.96, 0.93].map((discountFactor, index) => ({
+    date: addMonths(todayIsoDate(), (index + 1) * 6),
+    discountFactor,
+  }));
+}
+
+function parseCsv(fileName: string, text: string): Array<Record<string, string>> {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim().length > 0);
+  if (lines.length < 2) throw new Error(`${fileName} must contain a header and at least one data row.`);
+  const headers = parseCsvLine(lines[0]).map((header) => header.trim());
+  const rows = lines.slice(1).map((line, index) => {
+    const values = parseCsvLine(line);
+    if (values.length !== headers.length) throw new Error(`${fileName} row ${index + 2} has ${values.length} columns; expected ${headers.length}.`);
+    return Object.fromEntries(headers.map((header, column) => [header, values[column].trim()]));
+  });
+  return rows;
+}
+
+function parseCsvLine(line: string): string[] {
+  const values: string[] = [];
+  let value = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (character === '"') {
+      if (quoted && line[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === "," && !quoted) {
+      values.push(value);
+      value = "";
+    } else {
+      value += character;
+    }
+  }
+  if (quoted) throw new Error("CSV contains an unclosed quoted value.");
+  values.push(value);
+  return values;
+}
+
+function requiredCell(row: Record<string, string>, name: string): string {
+  const value = row[name]?.trim();
+  if (!value) throw new Error(`CSV column ${name} is required.`);
+  return value;
+}
+
+function numberCell(row: Record<string, string>, primary: string, fallback: string): number {
+  const raw = row[primary]?.trim() || row[fallback]?.trim();
+  const value = Number(raw);
+  if (!raw || !Number.isFinite(value)) throw new Error(`CSV column ${primary} (or ${fallback}) must contain a finite number.`);
+  return value;
+}
+
+function addMonths(date: string, months: number) {
+  const next = new Date(`${date}T00:00:00Z`);
+  next.setUTCMonth(next.getUTCMonth() + months);
+  return next.toISOString().slice(0, 10);
 }
 
 function errorMessage(caught: unknown) {

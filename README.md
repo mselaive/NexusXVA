@@ -6,7 +6,7 @@
 
 NexusXVA is a risk workstation for learning and building Front Office, Back Office, and XVA-style workflows on portfolios of European options.
 
-The project is not trying to be Murex or Bloomberg. The idea is to build, step by step, a clear platform where the full cycle can be seen:
+The project is being built step by step as a clear platform where the full operating and risk cycle can be seen:
 
 ```text
 FO analyzes and books
@@ -28,15 +28,17 @@ FO analyzes and books
 * Amendments and cancellations with maker-checker workflow.
 * FO P&L Snapshot and BO Operations Reporting derived from bookings, lifecycle and EOD.
 * Persisted user notifications.
-* Trade Economics V1 with execution premium and unrealized P&L.
+* Trade Economics V1 with execution prices, cash equity lots, average cost, unrealized P&L, and first realized P&L support.
 * Immutable EOD snapshots and Daily P&L against the previous close.
 * Persisted Run History for pricing, exposure, and CVA auditability.
+* Persisted Report History for FO P&L snapshots and BO reporting views.
 * Audit Trail V1 for user activity, denied access, workflow actions, and ADMIN review.
 * Rotated backend technical logs for system, auth, market-data integration, EOD jobs, and errors.
 * Individual and portfolio-level Black-Scholes pricing.
 * Monte Carlo Exposure V1.
-* CVA V1.1 with flat mode and simple curves.
-* ADMIN XVA Setup for counterparties, netting sets, portfolio assignments, active/inactive controls and static collateral.
+* CVA V1.2 with flat mode, inline curves and persisted curve master data.
+* Curve lifecycle for CVA master data: versioned draft curves, ADMIN approval/rejection and superseded history.
+* ADMIN XVA Setup for counterparties, netting sets, portfolio assignments, active/inactive controls, static collateral and reusable CVA curves.
 * Netting-set CVA V1 using active XVA setup records.
 * Market data integration through the `marketdata` boundary, using either Blemberg or a local provider.
 
@@ -81,9 +83,9 @@ flowchart TD
 
 ## Groups
 
-* **FO**: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, Portfolios, Pricing, Exposure, CVA, and Run History.
-* **BO**: Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control, and Run History.
-* **ADMIN**: users, groups, FO permissions, portfolio visibility, Operational Control, workflow map, XVA Setup, Audit Logs, and Run History.
+* **FO**: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, Portfolios, Pricing, Exposure, CVA, Run History, and Report History.
+* **BO**: Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control, Run History, and Report History.
+* **ADMIN**: users, groups, FO permissions, portfolio visibility, Operational Control, workflow map, XVA Setup, Audit Logs, Run History, and Report History.
 
 A user can belong to multiple groups. After login, the user chooses the active group for the session.
 
@@ -98,6 +100,26 @@ ADMIN owns the global operating calendar from **Operational Control**:
 * scheduled EOD time: default `17:15`
 
 When authentication is enabled, ADMIN can independently block two families of actions outside the trading window: new FO trade bookings/lifecycle requests, and risk runs such as pricing, Pre-Trade Analysis, Stress, Delta Hedge, Exposure and CVA. If a block is disabled, that family remains advisory only. BO validation, BO EOD corrections, read-only reporting, login, notifications, and ADMIN configuration remain available.
+
+ADMIN can also configure a **Close Checklist**. This is the operational playbook for close:
+
+```text
+PRE_EOD reports/risk checks
+  -> EOD close
+  -> POST_EOD reports/risk snapshots
+```
+
+V1 uses an explicit selected-portfolio list and global risk defaults for pricing, exposure and CVA. BO can run the checklist manually from EOD Control. If the scheduler is enabled and the checklist is enabled, the scheduled close runs the checklist instead of plain EOD. A critical failed `PRE_EOD` step blocks EOD.
+
+ADMIN can also define **ExecuteScript** templates. These are flexible operational playbooks for BO diagnostics:
+
+```text
+ADMIN template
+  -> BO DRY_RUN or REAL_RUN
+  -> step-by-step outputs in ExecuteScript history
+```
+
+Use ExecuteScript when BO wants to test whether reports, pricing, exposure, CVA curves or EOD readiness will fail before running the formal close. `DRY_RUN` stores only ExecuteScript history and does not create EOD closes, valuation runs or report snapshots. `REAL_RUN` may create report snapshots, valuation runs and EOD captures if the selected template includes those steps.
 
 The header shows `Trading Open`, `Trading Closed`, or `Window Advisory`. FO/risk screens disable their main action buttons only when blocking is enabled and the window is closed; the backend still enforces the rule with `409 Operational window is closed`.
 
@@ -156,9 +178,11 @@ From `EOD Control`, BO runs a global close across all portfolios. Each portfolio
 
 If the close was incorrect, BO does not delete the EOD. Instead, BO uses `Void` to cancel it with a reason, or `Recapture` to mark the previous close as `SUPERSEDED` and create a new `ACTIVE` close for the same portfolio/date. Daily P&L only uses `ACTIVE` closes.
 
-Scheduled EOD is configured from ADMIN -> Operational Control. The scheduler wakes once per minute, reads the database setting, and runs once per business date after the configured EOD time. EOD rejects stale market data unless ADMIN explicitly enables stale market data for close.
+Scheduled EOD is configured from ADMIN -> Operational Control. The scheduler wakes once per minute, reads the database setting, and runs once per business date after the configured EOD time. If Close Checklist is enabled, the scheduler runs the configured checklist; otherwise it runs plain EOD. EOD rejects stale market data unless ADMIN explicitly enables stale market data for close.
 
 The scheduler bean is enabled by default with `NEXUSXVA_EOD_SCHEDULER_ENABLED=true`; tests disable it to avoid background jobs against temporary databases.
+
+ExecuteScript is separate from scheduled EOD. It is manually run by BO from `Execute Scripts`, while templates are maintained by ADMIN in `Execute Scripts Setup`.
 
 ## Run History
 
@@ -170,6 +194,16 @@ Each portfolio pricing, Exposure, single-portfolio CVA, and netting-set CVA exec
 * user, active group, scope (`PORTFOLIO` or `NETTING_SET`), model, date, and status: `SUCCESS` or `FAILED`.
 
 This does not replace EOD and does not store market data as the official source. It is an execution history used to review what was run, with which parameters, and what the system returned.
+
+## Report History
+
+FO/BO reporting screens also persist read-only snapshots in `report_snapshots`:
+
+* FO P&L Snapshot from FO Desk.
+* BO Operations Reporting.
+* BO Lifecycle Reporting.
+
+Report History stores the rendered report JSON, summary, filters, user, active group and timestamp. It is a saved workstation view for audit and review. It does not replace EOD, valuation runs, market data, accounting, or recalculation logic.
 
 ## Audit Trail and Logs
 
@@ -184,9 +218,13 @@ Audit metadata is sanitized. Passwords, cookies, CSRF tokens, raw request bodies
 
 ## Counterparties, Netting and Collateral
 
-ADMIN can configure counterparties, netting sets, assign portfolios to a netting set, activate/deactivate setup records, and set a simple static collateral amount from **XVA Setup**. FO can then run CVA in either single-portfolio mode or active netting-set mode.
+ADMIN can configure counterparties, netting sets, assign portfolios to a netting set, activate/deactivate setup records, set a simple static collateral amount, and create reusable credit/discount curves from **XVA Setup**. Curves are versioned: new curves start as draft, ADMIN approves or rejects them, and approval supersedes the previous active version. FO can then run CVA in either single-portfolio mode or active netting-set mode, using flat assumptions, inline curves or approved persisted curve IDs.
 
 Netting-set CVA V1 aggregates the assigned portfolio exposure profiles, subtracts static collateral from positive exposure buckets, and applies the existing CVA formula. This is intentionally an early model: it is not path-level legal netting, CSA margining, collateral calls, or wrong-way risk.
+
+## Cash Equity Lots
+
+Cash equity bookings approved by BO now create execution lots. Pricing shows average cost, cost basis, unrealized P&L and realized P&L for cash equity rows. Amendments that reduce a cash equity position and include an execution price record an amendment-close lot and calculate realized P&L. This is still lighter than a full accounting ledger; aggregate positions remain the pricing source for now.
 
 ## Users and P&L Demo Portfolios
 
@@ -255,17 +293,19 @@ Common URLs:
 * Backend: [backend/README.md](backend/README.md)
 * System logic EN: [docs/docs-EN/SystemLogic.md](docs/docs-EN/SystemLogic.md)
 * System logic ES: [docs/docs-ES/LogicaDelSistema.md](docs/docs-ES/LogicaDelSistema.md)
+* Recent recap EN: [docs/docs-EN/RecentRecap.md](docs/docs-EN/RecentRecap.md)
+* Recent recap ES: [docs/docs-ES/RecapReciente.md](docs/docs-ES/RecapReciente.md)
 * Data model ES: [docs/docs-ES/DataModel.md](docs/docs-ES/DataModel.md)
 * Cash equities and delta hedging ES: [docs/docs-ES/CashEquitiesYDeltaHedgingPlan.md](docs/docs-ES/CashEquitiesYDeltaHedgingPlan.md)
 * Financial concepts EN: [docs/docs-EN/FinancialConcepts.md](docs/docs-EN/FinancialConcepts.md)
 * Financial concepts ES: [docs/docs-ES/ConceptosFinancieros.md](docs/docs-ES/ConceptosFinancieros.md)
 * EOD process ES: [docs/docs-ES/ProcesoEOD.md](docs/docs-ES/ProcesoEOD.md)
 * EOD process EN: [docs/docs-EN/EodProcess.md](docs/docs-EN/EodProcess.md)
+* Blemberg curve integration contract: [docs/docs-EN/BlembergCurveContract.md](docs/docs-EN/BlembergCurveContract.md)
 
 ## Next Steps
 
 Natural next candidates are:
 
-* Persisted credit curve master data for richer CVA.
-* Persisted valuation/EOD reporting history if FO/BO need saved report views.
-* Cash equity lots/executions for average cost and realized P&L.
+* Complete market-data sourced discount-curve drafts after Blemberg implements the curve endpoint.
+* Full cash equity buy/sell lot accounting with realized P&L across reductions and partial closes.

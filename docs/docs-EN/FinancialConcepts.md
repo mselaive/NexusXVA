@@ -541,7 +541,7 @@ The current version avoids some cases on purpose:
 * Exact payoff at expiration.
 * Persisted valuation results as reusable risk state; current run history is audit/reporting only.
 * Real market data storage inside NexusXVA.
-* Persisted credit curve master data, path-level legal netting, dynamic collateral/margining, and wrong-way risk.
+* Curve versioning/approval, path-level legal netting, dynamic collateral/margining, and wrong-way risk.
 
 These cases are not forgotten.
 They are out of scope so the current slice stays small, correct, and testable.

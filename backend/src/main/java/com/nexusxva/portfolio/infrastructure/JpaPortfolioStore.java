@@ -188,6 +188,13 @@ class JpaPortfolioStore implements PortfolioStore {
         cashEquityPositionJpaRepository.save(position);
     }
 
+    @Override
+    public void recordCashEquityAmendmentClose(UUID positionId, AddCashEquityPositionCommand requestedTerms) {
+        CashEquityPositionEntity position = findCashEquityPositionEntity(positionId);
+        position.addAmendmentCloseLot(requestedTerms.quantity(), requestedTerms.executionPrice());
+        cashEquityPositionJpaRepository.save(position);
+    }
+
     private PortfolioEntity findPortfolioEntity(UUID portfolioId) {
         return portfolioJpaRepository.findActiveById(portfolioId)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found"));

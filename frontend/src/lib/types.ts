@@ -45,9 +45,24 @@ export type CashEquityPosition = {
   underlyingSymbol: string;
   quantity: number;
   executionPrice: number | null;
+  averageCost: number | null;
+  realizedPnl: number;
   lifecycleStatus: "ACTIVE" | "CANCELLED" | "AMENDED";
   createdAt: string;
   updatedAt: string;
+  lots: CashEquityLot[];
+};
+
+export type CashEquityLot = {
+  id: string;
+  positionId: string;
+  lotType: "OPENING" | "AMENDMENT_CLOSE" | "CANCELLATION";
+  quantity: number;
+  executionPrice: number | null;
+  averageCost: number | null;
+  realizedPnl: number;
+  executedAt: string;
+  createdAt: string;
 };
 
 export type CreatePortfolioRequest = {
@@ -230,6 +245,7 @@ export type OperationalControlSettings = {
   eodEnabled: boolean;
   eodRunTime: string;
   eodAllowStaleMarketData: boolean;
+  closeChecklist: CloseChecklistSettings;
   updatedAt: string;
   updatedByUserId: string | null;
   version: number;
@@ -245,6 +261,154 @@ export type UpdateOperationalControlRequest = {
   eodEnabled: boolean;
   eodRunTime: string;
   eodAllowStaleMarketData: boolean;
+  closeChecklist: CloseChecklistSettings;
+};
+
+export type CloseChecklistPhase = "PRE_EOD" | "EOD" | "POST_EOD";
+export type CloseChecklistStepType =
+  | "FO_PNL_REPORT"
+  | "BO_OPERATIONS_REPORT"
+  | "BO_LIFECYCLE_REPORT"
+  | "PORTFOLIO_PRICING"
+  | "EXPOSURE"
+  | "CVA"
+  | "EOD"
+  | "SCRIPT_TEMPLATE";
+
+export type CloseChecklistStepDefinition = {
+  phase: CloseChecklistPhase;
+  stepType: CloseChecklistStepType;
+  templateId?: string | null;
+  scriptMode?: ExecuteScriptMode | null;
+  enabled: boolean;
+  critical: boolean;
+  order: number;
+};
+
+export type CloseChecklistRiskDefaults = {
+  horizonDays: number;
+  timeSteps: number;
+  paths: number;
+  seed: number;
+  pfeConfidenceLevel: number;
+  lossGivenDefault: number;
+  creditCurveId: string | null;
+  discountCurveId: string | null;
+};
+
+export type CloseChecklistSettings = {
+  enabled: boolean;
+  portfolioIds: string[];
+  steps: CloseChecklistStepDefinition[];
+  riskDefaults: CloseChecklistRiskDefaults;
+};
+
+export type CloseChecklistRunStatus = "RUNNING" | "COMPLETED" | "FAILED" | "PARTIAL";
+export type CloseChecklistStepStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "SKIPPED";
+
+export type CloseChecklistRun = {
+  id: string;
+  businessDate: string;
+  source: string;
+  status: CloseChecklistRunStatus;
+  startedAt: string;
+  completedAt: string | null;
+  requestedByUserId: string | null;
+  message: string | null;
+  config: unknown;
+  steps: CloseChecklistRunStep[];
+};
+
+export type CloseChecklistRunStep = {
+  id: string;
+  phase: CloseChecklistPhase;
+  stepType: CloseChecklistStepType;
+  templateId?: string | null;
+  scriptMode?: ExecuteScriptMode | null;
+  order: number;
+  critical: boolean;
+  status: CloseChecklistStepStatus;
+  startedAt: string | null;
+  completedAt: string | null;
+  message: string | null;
+  output: unknown;
+};
+
+export type ExecuteScriptMode = "DRY_RUN" | "REAL_RUN";
+export type ExecuteScriptRunStatus = "RUNNING" | "COMPLETED" | "FAILED" | "PARTIAL";
+export type ExecuteScriptStepStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "SKIPPED";
+export type ExecuteScriptStepType =
+  | "FO_PNL_REPORT"
+  | "BO_OPERATIONS_REPORT"
+  | "BO_LIFECYCLE_REPORT"
+  | "PORTFOLIO_PRICING"
+  | "EXPOSURE"
+  | "CVA"
+  | "EOD_VALIDATE"
+  | "EOD_CAPTURE";
+
+export type ExecuteScriptTemplateStep = {
+  id?: string;
+  stepType: ExecuteScriptStepType;
+  order: number;
+  critical: boolean;
+  enabled: boolean;
+  parameters: unknown;
+};
+
+export type ExecuteScriptTemplate = {
+  id: string;
+  name: string;
+  description: string | null;
+  active: boolean;
+  defaultParameters: unknown;
+  createdAt: string;
+  updatedAt: string;
+  updatedByUserId: string | null;
+  steps: ExecuteScriptTemplateStep[];
+};
+
+export type SaveExecuteScriptTemplateRequest = {
+  name: string;
+  description: string | null;
+  active: boolean;
+  defaultParameters: unknown;
+  steps: ExecuteScriptTemplateStep[];
+};
+
+export type ExecuteScriptRunStep = {
+  id: string;
+  stepType: ExecuteScriptStepType;
+  order: number;
+  critical: boolean;
+  status: ExecuteScriptStepStatus;
+  startedAt: string | null;
+  completedAt: string | null;
+  message: string | null;
+  output: unknown;
+};
+
+export type ExecuteScriptRun = {
+  id: string;
+  templateId: string | null;
+  templateName: string;
+  mode: ExecuteScriptMode;
+  businessDate: string;
+  status: ExecuteScriptRunStatus;
+  startedAt: string;
+  completedAt: string | null;
+  requestedByUserId: string | null;
+  message: string | null;
+  input: unknown;
+  steps: ExecuteScriptRunStep[];
+};
+
+export type RunExecuteScriptRequest = {
+  templateId: string;
+  mode: ExecuteScriptMode;
+  businessDate: string;
+  portfolioIds: string[];
+  parameters: unknown;
 };
 
 export type OperationalControlStatus = {
@@ -383,8 +547,11 @@ export type CashEquityPositionPricing = {
   spot: number;
   marketValue: number;
   executionPrice: number | null;
+  averageCost: number | null;
+  costBasis: number | null;
   tradeValue: number | null;
   unrealizedPnl: number | null;
+  realizedPnl: number;
   positionGreeks: Greeks;
   marketData: PortfolioPositionMarketData;
 };
@@ -616,6 +783,8 @@ export type CvaCalculationRequest = ExposureSimulationRequest & {
   lossGivenDefault: number;
   counterpartyHazardRate?: number;
   discountRate?: number;
+  creditCurveId?: string;
+  discountCurveId?: string;
   creditCurve?: CreditCurvePointRequest[];
   discountCurve?: DiscountCurvePointRequest[];
 };
@@ -720,6 +889,74 @@ export type UpdateNettingSetRequest = {
   active: boolean;
 };
 
+export type CreditCurveType = "SURVIVAL_PROBABILITY" | "CUMULATIVE_DEFAULT_PROBABILITY";
+export type CurveLifecycleStatus = "DRAFT" | "APPROVED" | "REJECTED" | "SUPERSEDED";
+
+export type CreditCurve = {
+  id: string;
+  counterpartyId: string;
+  counterpartyName: string;
+  name: string;
+  curveType: CreditCurveType;
+  version: number;
+  status: CurveLifecycleStatus;
+  source: "MANUAL" | "IMPORT" | "MARKET_DATA";
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  submittedAt: string | null;
+  approvedAt: string | null;
+  approvedByUserId: string | null;
+  rejectionReason: string | null;
+  points: Array<{
+    date: string;
+    survivalProbability?: number | null;
+    cumulativeDefaultProbability?: number | null;
+  }>;
+};
+
+export type SaveCreditCurveRequest = {
+  counterpartyId: string;
+  name: string;
+  curveType: CreditCurveType;
+  active: boolean;
+  points: Array<{
+    date: string;
+    survivalProbability?: number | null;
+    cumulativeDefaultProbability?: number | null;
+  }>;
+};
+
+export type DiscountCurve = {
+  id: string;
+  name: string;
+  currency: string;
+  version: number;
+  status: CurveLifecycleStatus;
+  source: "MANUAL" | "IMPORT" | "MARKET_DATA";
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  submittedAt: string | null;
+  approvedAt: string | null;
+  approvedByUserId: string | null;
+  rejectionReason: string | null;
+  points: Array<{
+    date: string;
+    discountFactor: number;
+  }>;
+};
+
+export type SaveDiscountCurveRequest = {
+  name: string;
+  currency: string;
+  active: boolean;
+  points: Array<{
+    date: string;
+    discountFactor: number;
+  }>;
+};
+
 export type CvaPoint = {
   date: string;
   expectedExposure: number;
@@ -753,6 +990,27 @@ export type ValuationRun = {
   result: unknown | null;
   summary: unknown | null;
   errorMessage: string | null;
+  createdAt: string;
+};
+
+export type ReportSnapshotType = "FO_PNL_SNAPSHOT" | "BO_OPERATIONS" | "BO_LIFECYCLE";
+export type ReportSnapshotScopeType = "USER" | "BACK_OFFICE" | "PORTFOLIO" | "GLOBAL";
+
+export type ReportSnapshot = {
+  id: string;
+  reportType: ReportSnapshotType;
+  title: string;
+  businessDate: string | null;
+  scopeType: ReportSnapshotScopeType;
+  scopeId: string | null;
+  scopeName: string | null;
+  requestedByUserId: string | null;
+  requestedByUsername: string | null;
+  requestedByDisplayName: string | null;
+  activeGroupCode: string | null;
+  filters: unknown;
+  result: unknown;
+  summary: unknown;
   createdAt: string;
 };
 

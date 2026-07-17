@@ -10,8 +10,11 @@ public record CashEquityPositionPricingResult(
         double spot,
         double marketValue,
         Double executionPrice,
+        Double averageCost,
+        Double costBasis,
         Double tradeValue,
         Double unrealizedPnl,
+        double realizedPnl,
         PortfolioGreeks positionGreeks,
         PortfolioPositionMarketData marketData
 ) {

@@ -24,11 +24,15 @@ import type {
   CvaCalculationResponse,
   CvaNettingSetCalculationRequest,
   CvaNettingSetCalculationResponse,
+  CreditCurve,
   DeltaHedgeAnalysisRequest,
   DeltaHedgeAnalysisResponse,
+  DiscountCurve,
   ExposureSimulationRequest,
   ExposureSimulationResponse,
   EodBatchResult,
+  ExecuteScriptRun,
+  ExecuteScriptTemplate,
   FrontOfficeDeskResponse,
   FrontOfficePnlReport,
   FrontOfficeStressTestRequest,
@@ -39,6 +43,7 @@ import type {
   NotificationPage,
   OperationalControlSettings,
   OperationalControlStatus,
+  CloseChecklistRun,
   Counterparty,
   NettingSet,
   Portfolio,
@@ -46,6 +51,8 @@ import type {
   PortfolioEodSnapshot,
   PortfolioPricingResponse,
   PortfolioSummary,
+  ReportSnapshot,
+  ReportSnapshotType,
   TradeBooking,
   TradeBookingPage,
   TradeBookingStatus,
@@ -59,6 +66,10 @@ import type {
   UpdateOperationalControlRequest,
   UpdateCounterpartyRequest,
   UpdateNettingSetRequest,
+  SaveCreditCurveRequest,
+  SaveDiscountCurveRequest,
+  SaveExecuteScriptTemplateRequest,
+  RunExecuteScriptRequest,
   UserNotification,
   ValuationRun,
   ValuationRunStatus,
@@ -168,6 +179,48 @@ export const nexusApi = {
       method: "PUT",
       body: JSON.stringify(body),
     }),
+
+  runCloseChecklist: (businessDate: string) =>
+    request<CloseChecklistRun>("/back-office/close-checklist/runs", {
+      method: "POST",
+      body: JSON.stringify({ businessDate }),
+    }),
+
+  listCloseChecklistRuns: (limit = 20) =>
+    request<CloseChecklistRun[]>(`/back-office/close-checklist/runs?limit=${limit}`),
+
+  getCloseChecklistRun: (runId: string) =>
+    request<CloseChecklistRun>(`/back-office/close-checklist/runs/${runId}`),
+
+  listAdminExecuteScriptTemplates: () =>
+    request<ExecuteScriptTemplate[]>("/admin/execute-scripts/templates?includeInactive=true"),
+
+  createExecuteScriptTemplate: (body: SaveExecuteScriptTemplateRequest) =>
+    request<ExecuteScriptTemplate>("/admin/execute-scripts/templates", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  updateExecuteScriptTemplate: (templateId: string, body: SaveExecuteScriptTemplateRequest) =>
+    request<ExecuteScriptTemplate>(`/admin/execute-scripts/templates/${templateId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  listBackOfficeExecuteScriptTemplates: () =>
+    request<ExecuteScriptTemplate[]>("/back-office/execute-scripts/templates"),
+
+  runExecuteScript: (body: RunExecuteScriptRequest) =>
+    request<ExecuteScriptRun>("/back-office/execute-scripts/runs", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listExecuteScriptRuns: (limit = 20) =>
+    request<ExecuteScriptRun[]>(`/back-office/execute-scripts/runs?limit=${limit}`),
+
+  getExecuteScriptRun: (runId: string) =>
+    request<ExecuteScriptRun>(`/back-office/execute-scripts/runs/${runId}`),
 
   listPortfolios: () => request<PortfolioSummary[]>("/portfolios"),
 
@@ -426,6 +479,86 @@ export const nexusApi = {
       method: "DELETE",
     }),
 
+  listCreditCurves: (counterpartyId?: string, includeInactive = false) => {
+    const query = new URLSearchParams({ includeInactive: String(includeInactive) });
+    if (counterpartyId) {
+      query.set("counterpartyId", counterpartyId);
+    }
+    return request<CreditCurve[]>(`/xva/credit-curves?${query.toString()}`);
+  },
+
+  createCreditCurve: (body: SaveCreditCurveRequest) =>
+    request<CreditCurve>("/xva/credit-curves", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  importCreditCurve: (body: SaveCreditCurveRequest) =>
+    request<CreditCurve>("/xva/credit-curves/imports", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  updateCreditCurve: (curveId: string, body: SaveCreditCurveRequest) =>
+    request<CreditCurve>(`/xva/credit-curves/${curveId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  approveCreditCurve: (curveId: string) =>
+    request<CreditCurve>(`/xva/credit-curves/${curveId}/approve`, {
+      method: "POST",
+    }),
+
+  rejectCreditCurve: (curveId: string, reason: string) =>
+    request<CreditCurve>(`/xva/credit-curves/${curveId}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  listDiscountCurves: (currency?: string, includeInactive = false) => {
+    const query = new URLSearchParams({ includeInactive: String(includeInactive) });
+    if (currency) {
+      query.set("currency", currency);
+    }
+    return request<DiscountCurve[]>(`/xva/discount-curves?${query.toString()}`);
+  },
+
+  createDiscountCurve: (body: SaveDiscountCurveRequest) =>
+    request<DiscountCurve>("/xva/discount-curves", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  importDiscountCurve: (body: SaveDiscountCurveRequest) =>
+    request<DiscountCurve>("/xva/discount-curves/imports", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  importMarketDataDiscountCurve: (body: { currency: string; valuationDate: string; name: string | null; allowStale: boolean }) =>
+    request<DiscountCurve>("/xva/discount-curves/imports/market-data", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  updateDiscountCurve: (curveId: string, body: SaveDiscountCurveRequest) =>
+    request<DiscountCurve>(`/xva/discount-curves/${curveId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  approveDiscountCurve: (curveId: string) =>
+    request<DiscountCurve>(`/xva/discount-curves/${curveId}/approve`, {
+      method: "POST",
+    }),
+
+  rejectDiscountCurve: (curveId: string, reason: string) =>
+    request<DiscountCurve>(`/xva/discount-curves/${curveId}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
   listValuationRuns: (filters: {
     runType?: ValuationRunType | "";
     status?: ValuationRunStatus | "";
@@ -458,6 +591,20 @@ export const nexusApi = {
   },
 
   getValuationRun: (runId: string) => request<ValuationRun>(`/valuation-runs/${runId}`),
+
+  listReportSnapshots: (filters: { reportType?: ReportSnapshotType | ""; limit?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.reportType) {
+      params.set("reportType", filters.reportType);
+    }
+    if (filters.limit) {
+      params.set("limit", String(filters.limit));
+    }
+    const query = params.toString();
+    return request<ReportSnapshot[]>(`/report-snapshots${query ? `?${query}` : ""}`);
+  },
+
+  getReportSnapshot: (snapshotId: string) => request<ReportSnapshot>(`/report-snapshots/${snapshotId}`),
 
   listAdminUsers: (query = "", page = 0, size = 50) => {
     const params = new URLSearchParams({ page: String(page), size: String(size) });

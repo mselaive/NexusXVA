@@ -1,5 +1,11 @@
 package com.nexusxva.operationalcontrol.infrastructure;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexusxva.operationalcontrol.domain.CloseChecklistRiskDefaults;
+import com.nexusxva.operationalcontrol.domain.CloseChecklistSettings;
+import com.nexusxva.operationalcontrol.domain.CloseChecklistStepDefinition;
 import com.nexusxva.operationalcontrol.application.OperationalControlStore;
 import com.nexusxva.operationalcontrol.domain.OperationalControlSettings;
 import java.sql.ResultSet;
@@ -23,9 +29,11 @@ import org.springframework.stereotype.Repository;
 class JdbcOperationalControlStore implements OperationalControlStore {
 
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
 
-    JdbcOperationalControlStore(JdbcTemplate jdbcTemplate) {
+    JdbcOperationalControlStore(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -55,6 +63,10 @@ class JdbcOperationalControlStore implements OperationalControlStore {
                     eod_enabled = ?,
                     eod_run_time = ?,
                     eod_allow_stale_market_data = ?,
+                    close_checklist_enabled = ?,
+                    close_checklist_portfolio_ids = ?::jsonb,
+                    close_checklist_steps = ?::jsonb,
+                    close_checklist_risk_defaults = ?::jsonb,
                     updated_at = ?,
                     updated_by_user_id = ?,
                     version = version + 1
@@ -70,6 +82,10 @@ class JdbcOperationalControlStore implements OperationalControlStore {
                 settings.eodEnabled(),
                 settings.eodRunTime(),
                 settings.eodAllowStaleMarketData(),
+                settings.closeChecklist().enabled(),
+                toJson(settings.closeChecklist().portfolioIds()),
+                toJson(settings.closeChecklist().steps()),
+                toJson(settings.closeChecklist().riskDefaults()),
                 Timestamp.from(Instant.now()),
                 updatedByUserId
         );
@@ -158,6 +174,12 @@ class JdbcOperationalControlStore implements OperationalControlStore {
                 rs.getBoolean("eod_enabled"),
                 rs.getObject("eod_run_time", LocalTime.class),
                 rs.getBoolean("eod_allow_stale_market_data"),
+                new CloseChecklistSettings(
+                        rs.getBoolean("close_checklist_enabled"),
+                        fromJson(rs.getString("close_checklist_portfolio_ids"), new TypeReference<>() {}, java.util.List.of()),
+                        fromJson(rs.getString("close_checklist_steps"), new TypeReference<>() {}, CloseChecklistSettings.defaults().steps()),
+                        fromJson(rs.getString("close_checklist_risk_defaults"), CloseChecklistRiskDefaults.class, CloseChecklistRiskDefaults.defaults())
+                ),
                 rs.getTimestamp("updated_at").toInstant(),
                 rs.getObject("updated_by_user_id", UUID.class),
                 rs.getLong("version")
@@ -185,5 +207,35 @@ class JdbcOperationalControlStore implements OperationalControlStore {
             return null;
         }
         return message.length() <= 500 ? message : message.substring(0, 500);
+    }
+
+    private String toJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException("Could not serialize operational control settings");
+        }
+    }
+
+    private <T> T fromJson(String json, TypeReference<T> type, T fallback) {
+        if (json == null || json.isBlank()) {
+            return fallback;
+        }
+        try {
+            return objectMapper.readValue(json, type);
+        } catch (JsonProcessingException exception) {
+            return fallback;
+        }
+    }
+
+    private <T> T fromJson(String json, Class<T> type, T fallback) {
+        if (json == null || json.isBlank()) {
+            return fallback;
+        }
+        try {
+            return objectMapper.readValue(json, type);
+        } catch (JsonProcessingException exception) {
+            return fallback;
+        }
     }
 }

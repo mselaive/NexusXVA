@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.nexusxva.portfolio.application.PortfolioStore;
 import com.nexusxva.portfolio.domain.PortfolioSummary;
 import com.nexusxva.operationalcontrol.application.OperationalControlStore;
+import com.nexusxva.operationalcontrol.domain.CloseChecklistSettings;
 import com.nexusxva.operationalcontrol.domain.OperationalControlSettings;
 import com.nexusxva.shared.error.ConflictException;
 import java.time.DayOfWeek;
@@ -86,6 +87,7 @@ class PortfolioEodBatchServiceTest {
                 false,
                 LocalTime.of(17, 15),
                 false,
+                CloseChecklistSettings.defaults(),
                 Instant.parse("2026-06-22T20:00:00Z"),
                 null,
                 0

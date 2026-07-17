@@ -175,14 +175,17 @@ Current notes:
 - `POST /api/risk/cva` is implemented as a stateless synchronous CVA endpoint.
 - CVA V1 reuses `ExposureSimulationService`; it does not duplicate path generation or repricing.
 - The formula is `LGD * sum(discountFactor * expectedExposure * defaultProbabilityIncrement)`.
-- V1.1 supports either flat `counterpartyHazardRate`/`discountRate` or request-provided credit/discount curves.
-- Request-provided curves are interpolated linearly and are not persisted.
+- V1.2 supports flat `counterpartyHazardRate`/`discountRate`, request-provided credit/discount curves, or persisted `creditCurveId`/`discountCurveId`.
+- Persisted credit and discount curves live in XVA master data. Inline curves remain useful for ad-hoc tests.
+- Persisted curves are versioned. New curves start as `DRAFT`; ADMIN approval makes one version active and `APPROVED`, superseding the previous active approved version.
+- CVA must only consume active `APPROVED` persisted curves. Draft, rejected and superseded curves are ADMIN history/setup data only.
+- Curve `source` supports `MANUAL`, `IMPORT` and `MARKET_DATA`; actual import/Blemberg-sourced curve ingestion remains future work.
 - Single-portfolio CVA API requests/responses are copied into valuation run history for audit.
 - Counterparty and netting-set reference data is implemented in the `xva` module.
 - ADMIN XVA Setup manages counterparties, netting sets, static collateral, active/inactive status, and portfolio assignment.
 - Netting-set CVA V1 aggregates exposure profiles across assigned portfolios and subtracts static collateral before applying CVA.
-- Netting-set CVA is profile-level only; no path-level legal netting, CSA margining, wrong-way risk, persisted credit curves, or persisted CVA result state yet.
-- Netting-set CVA is not copied into valuation run history yet because `valuation_runs` is currently portfolio-scoped.
+- Netting-set CVA is profile-level only; no path-level legal netting, CSA margining, wrong-way risk or persisted CVA result state yet.
+- Netting-set CVA is copied into valuation run history with `scopeType=NETTING_SET`.
 
 ## Milestone 7: Dashboard
 
@@ -205,14 +208,19 @@ Completion criteria:
 Current notes:
 
 - Dashboard V1 lives in `frontend/`.
-- Dashboard V1 is split into workflow pages: FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA and Run History.
+- Dashboard V1 is split into workflow pages: FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA, Run History and Report History.
 - FO Desk V1 is the operational FO landing page: it aggregates visible portfolios, personal booking counts, booking history and a read-only P&L Snapshot without new persistence.
 - Pre-Trade Analysis V1 lets FO price one hypothetical European option against confirmed positions before preparing the ticket in `u-Pad`; it is stateless and pricing/Greeks-only.
 - Stress Testing V1 lets FO run scenario matrices over confirmed positions, optionally including one hypothetical trade; it is stateless and pricing/Greeks-only.
 - `u-Pad` submits pending bookings; BO Trade Validation decides whether they become confirmed positions.
 - FO Trade Lifecycle V1 lets FO request amendments and cancellations over confirmed positions; BO approval marks positions `CANCELLED` or `AMENDED`, and amendments create replacement `ACTIVE` positions.
 - Notifications V1 persists user inbox events for BO pending work and FO review outcomes.
-- Trade Economics V1 captures optional option premium per unit and reports trade value plus unrealized P&L during portfolio pricing.
+- Trade Economics V1 captures optional option premium per unit and cash equity execution price.
+- Cash equity lots V1 stores `OPENING` lots for approved cash bookings, derives average cost/cost basis, and records realized P&L only for reducing cash-equity amendments with an execution price.
+- Do not treat operational cancellation without exit price as realized P&L.
+- Operational Control owns the formal Close Checklist for scheduled/manual close. ExecuteScript V1 is separate: ADMIN defines reusable diagnostic playbooks, BO runs them as `DRY_RUN` or `REAL_RUN`, and outputs live in `execute_script_runs`.
+- `DRY_RUN` must not create EOD closes, valuation runs, or report snapshots; it is for testing reporting/risk/EOD readiness before the formal close.
+- `REAL_RUN` may create report snapshots, valuation runs, and EOD captures only when the selected controlled step type does that explicitly.
 - EOD V1 persists immutable portfolio/position closes and calculates Daily P&L from prior close or same-day execution reference.
 - Manual EOD capture is exposed only to BO through EOD Control and runs globally across portfolios with per-book results; FO consumes the close in Pricing.
 - `u-Pad` shows the active FO user's remaining capacity; BO Trading Limits manages preventive policies.
@@ -220,6 +228,7 @@ Current notes:
 - The frontend consumes NexusXVA backend APIs for calculations. FO market-watch widgets may call `/blemberg-api/*` for cached snapshot display, but pricing, exposure, CVA, and stress calculations stay in NexusXVA backend services.
 - The frontend must not reimplement Black-Scholes, Monte Carlo, exposure aggregation, or CVA.
 - Run History V1 is implemented for pricing, exposure and CVA. It stores input/result/summary JSON plus user/group metadata for audit, not for downstream pricing.
+- Report History V1 is implemented for FO P&L Snapshot, BO Operations Reporting and BO Lifecycle Reporting. It stores saved workstation views in `report_snapshots`; it is not a calculation source, EOD source, accounting ledger or market-data store.
 - Audit Trail V1 is implemented with `audit_events`, ADMIN Audit Logs, correlation ids, and explicit business events for auth, workflow, access-control, EOD, valuation and FO analysis actions.
 - Technical logs are configured through Logback with rotated system, error, auth, market-data and EOD files under `logs/backend/*` or `/app/logs` in Docker.
 - CVA UI supports both flat inputs and request-scoped credit/discount curve inputs. Curves are not persisted as master data.

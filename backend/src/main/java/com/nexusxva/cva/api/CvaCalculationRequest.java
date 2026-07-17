@@ -29,6 +29,8 @@ public record CvaCalculationRequest(
         @DecimalMin("0.0")
         Double counterpartyHazardRate,
         Double discountRate,
+        UUID creditCurveId,
+        UUID discountCurveId,
         List<@Valid CreditCurvePointRequest> creditCurve,
         List<@Valid DiscountCurvePointRequest> discountCurve
 ) {
@@ -50,6 +52,23 @@ public record CvaCalculationRequest(
         );
     }
 
+    CvaCalculationCommand toCommand(List<CreditCurvePoint> resolvedCreditCurve, List<DiscountCurvePoint> resolvedDiscountCurve) {
+        return new CvaCalculationCommand(
+                portfolioId,
+                valuationDate,
+                horizonDays,
+                timeSteps,
+                paths,
+                seed,
+                pfeConfidenceLevel,
+                lossGivenDefault,
+                counterpartyHazardRate,
+                discountRate,
+                resolvedCreditCurve,
+                resolvedDiscountCurve
+        );
+    }
+
     private List<CreditCurvePoint> toCreditCurve() {
         if (creditCurve == null) {
             return List.of();
@@ -57,6 +76,22 @@ public record CvaCalculationRequest(
         return creditCurve.stream()
                 .map(CreditCurvePointRequest::toDomain)
                 .toList();
+    }
+
+    boolean hasInlineCreditCurve() {
+        return creditCurve != null && !creditCurve.isEmpty();
+    }
+
+    boolean hasInlineDiscountCurve() {
+        return discountCurve != null && !discountCurve.isEmpty();
+    }
+
+    List<CreditCurvePoint> inlineCreditCurve() {
+        return toCreditCurve();
+    }
+
+    List<DiscountCurvePoint> inlineDiscountCurve() {
+        return toDiscountCurve();
     }
 
     private List<DiscountCurvePoint> toDiscountCurve() {

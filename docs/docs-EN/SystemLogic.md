@@ -3,6 +3,8 @@
 This document explains how the system logic works as we build it.
 It does not replace the README or the tests: it is a living map so other developers can understand why the code is organized this way and which decisions we made at each stage.
 
+For a compact summary of the latest implemented slices, see [`RecentRecap.md`](RecentRecap.md).
+
 ## Chosen Path
 
 NexusXVA is being built as a modular monolith.
@@ -250,7 +252,20 @@ FO netting-set CVA request
   -> HTTP response
 ```
 
-V1 netting is intentionally simple: it aggregates exposure profiles across assigned portfolios and subtracts static collateral from positive exposure buckets. It is not path-level netting, CSA margining, collateral calls, wrong-way risk, or persisted credit curve master data. Netting-set CVA is written to valuation run history with `scopeType=NETTING_SET`, so it is auditable like portfolio-level runs.
+V1 netting is intentionally simple: it aggregates exposure profiles across assigned portfolios and subtracts static collateral from positive exposure buckets. It is not path-level netting, CSA margining, collateral calls or wrong-way risk. Credit and discount curve master data now lives in the XVA module and can be referenced by CVA runs. Netting-set CVA is written to valuation run history with `scopeType=NETTING_SET`, so it is auditable like portfolio-level runs.
+
+Persisted curve lifecycle:
+
+```text
+ADMIN creates curve
+  -> DRAFT version
+  -> ADMIN approves or rejects
+  -> APPROVED curve becomes active
+  -> previous active approved version becomes SUPERSEDED
+  -> CVA can reference only active APPROVED curves
+```
+
+Draft curves can be edited before approval. Approved, rejected and superseded curves remain immutable history; changing a production curve means creating a new draft version and approving it. Curve `source` supports `MANUAL`, `IMPORT` and `MARKET_DATA`. ADMIN can import CSV files, and discount curves can be fetched from Blemberg as inactive market-data drafts. Every imported version requires explicit approval before CVA can use it.
 
 ## How Valuation Run History Flows
 
@@ -265,6 +280,22 @@ pricing / exposure / CVA request
 ```
 
 The stored run contains input JSON, result JSON, a compact summary, model, valuation date, scope (`PORTFOLIO` or `NETTING_SET`), optional portfolio, user, active group and status. This is valuation execution history only. Pricing, Exposure and CVA do not read old runs to produce new values, and Run History is not an EOD close or official market-data store.
+
+## How Report History Flows
+
+Report History records saved workstation views:
+
+```text
+FO/BO report request
+  -> reporting screen service
+  -> response API
+  -> reporting.application
+  -> report_snapshots
+```
+
+Current saved reports are FO P&L Snapshot, BO Operations Reporting and BO Lifecycle Reporting. The stored snapshot contains filters JSON, full result JSON, compact summary JSON, user, active group, business date and timestamp.
+
+Report History is not a recalculation engine. It is useful for audit and review: “what did FO/BO see at that time?” EOD remains the official close reference and Valuation Run History remains the calculation audit for pricing, exposure and CVA.
 
 ## How Audit Trail Flows
 
@@ -286,7 +317,7 @@ Technical logs remain separate and are written to rotated files under `logs/back
 
 Dashboard V1 is a Next.js frontend in `frontend/`.
 It does not implement financial formulas.
-The UI is split by active group. FO uses FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA and Run History. BO uses Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control and Run History. ADMIN uses Administration for memberships, FO feature permissions and portfolio visibility, Operational Control for trading hours/EOD scheduling, XVA Setup for counterparties/netting/collateral, plus Workflows, Audit Logs and Run History for monitoring.
+The UI is split by active group. FO uses FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA, Run History and Report History. BO uses Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control, Run History and Report History. ADMIN uses Administration for memberships, FO feature permissions and portfolio visibility, Operational Control for trading hours/EOD scheduling, XVA Setup for counterparties/netting/collateral, plus Workflows, Audit Logs, Run History and Report History for monitoring.
 The header includes a persisted notification inbox. Notifications belong to the user, not to the active group, so multi-group users keep one inbox while switching between FO, BO and ADMIN.
 
 The frontend flow is:
@@ -326,7 +357,28 @@ For local development, the frontend calls `/nexus-api/*`, which Next.js proxies 
 
 Operational Control is a global ADMIN policy. V1 uses a New York Monday-Friday calendar by default. ADMIN can configure the window as two independent controls: one blocks FO bookings and FO lifecycle requests, and the other blocks risk runs such as pricing, Pre-Trade Analysis, Stress, Delta Hedge, Exposure and CVA. Either control can also stay advisory only. BO validation/corrections plus ADMIN setup remain available. The backend is the source of authority; frontend disabled buttons are only a convenience.
 
-EOD is a separate audited control owned by BO or the system scheduler. FO consumes the close but cannot create it. The normal process closes active portfolios and reports an independent `CAPTURED`, `SKIPPED`, or `FAILED` result for each book. It snapshots portfolio and position market values without changing execution economics. BO corrections use `VOIDED` and `SUPERSEDED` runs rather than physical deletion; latest close and Daily P&L use only `ACTIVE` runs. Scheduled EOD is configured from ADMIN Operational Control and is disabled by default.
+Operational Control now also configures the Close Checklist:
+
+```text
+PRE_EOD report/risk steps
+  -> EOD step
+  -> POST_EOD report/risk steps
+```
+
+ADMIN selects portfolios, step order, critical flags and global risk defaults. BO executes the checklist from EOD Control, while the scheduler can execute it automatically after the configured EOD time. Report steps write Report History, pricing/exposure/CVA steps write Run History, and the EOD step writes normal EOD snapshots. If a critical `PRE_EOD` step fails, EOD and later steps are skipped.
+
+ExecuteScript is the manual diagnostics/playbook layer:
+
+```text
+ADMIN ExecuteScript template
+  -> BO chooses DRY_RUN or REAL_RUN
+  -> controlled report/risk/EOD-readiness steps
+  -> ExecuteScript history
+```
+
+It is intentionally separate from Close Checklist. BO uses `DRY_RUN` to test BO Operations Reporting, Lifecycle Reporting, FO P&L, pricing, exposure, CVA curves and EOD readiness without creating official closes or valuation/report snapshots. `REAL_RUN` can create those audit artifacts when the selected step type allows it. `EOD_VALIDATE` is the safe way to test close readiness; `EOD_CAPTURE` is the real EOD step and only has operational effect in `REAL_RUN`.
+
+EOD is a separate audited control owned by BO or the system scheduler. FO consumes the close but cannot create it. The normal process snapshots portfolio and position market values without changing execution economics. BO corrections use `VOIDED` and `SUPERSEDED` runs rather than physical deletion; latest close and Daily P&L use only `ACTIVE` runs. Scheduled EOD is configured from ADMIN Operational Control and is disabled by default. Plain EOD can still be run manually, but the Close Checklist is the richer close workflow when configured.
 
 Optional large demo portfolios live in `backend/src/main/resources/db/demo/demo_portfolios.sql`. They are not Flyway migrations; developers load them explicitly when they want realistic local books for dashboard demos, pricing, exposure, CVA, pre-trade analysis and stress testing. See `docs/docs-EN/DemoPortfolios.md`.
 
@@ -374,6 +426,17 @@ FO books cash equity in u-Pad
 ```
 
 Cash equities use a separate table and are not modeled as options with null fields. Delta Hedge is stateless analysis: it does not auto-book hedges. If FO wants to execute the suggestion, the cash equity trade must go through `u-Pad` and BO validation.
+
+Cash equity positions now also keep execution lots:
+
+```text
+cash equity booking approved by BO
+  -> portfolio_cash_equity_positions
+  -> cash_equity_lots OPENING
+  -> pricing average cost / cost basis / P&L
+```
+
+V1 still uses aggregate cash equity positions for pricing and delta hedge. Lots provide average cost, cost basis and first realized P&L history. A cash-equity amendment that reduces a position and includes an execution price records an `AMENDMENT_CLOSE` lot and calculates realized P&L. Operational cancellation without an exit execution price does not create realized P&L.
 
 ## How Position Lifecycle Flows
 
@@ -667,16 +730,17 @@ For CVA V1 we decided to:
 
 - Reuse Exposure V1 instead of creating a separate simulation flow.
 - Use expected exposure, not PFE, for the CVA contribution.
-- Support either a flat annual counterparty hazard rate or request-provided credit curves.
-- Support either a flat continuously compounded discount rate or request-provided discount curves.
+- Support either a flat annual counterparty hazard rate, request-provided credit curves, or an active persisted `creditCurveId`.
+- Support either a flat continuously compounded discount rate, request-provided discount curves, or an active persisted `discountCurveId`.
+- Treat persisted curve IDs as production master data only when the curve is `APPROVED` and active.
 - Linearly interpolate curve values for exposure dates inside the curve range.
 - Use `lossGivenDefault` directly, with values between `0.0` and `1.0`.
 - Keep CVA synchronous; persist valuation run audit snapshots for portfolio CVA, while XVA setup data lives separately in the `xva` module.
-- Keep credit and discount curves request-scoped until persisted curve master data is implemented.
+- Keep inline credit and discount curves available for ad-hoc runs, while ADMIN-owned persisted curves are reusable master data.
 - Report single-portfolio CVA in the portfolio `baseCurrency`; keep European-options-only through the reused exposure flow.
 
 This is intentionally simplified.
-It is enough to prove the XVA path from portfolio to exposure to credit adjustment while keeping netting-set CVA profile-level and static-collateral-only. Persisted counterparties and netting sets now exist, but persisted credit curves, path-level legal netting, CSA margining, wrong-way risk and persisted CVA result state are still future work.
+It is enough to prove the XVA path from portfolio to exposure to credit adjustment while keeping netting-set CVA profile-level and static-collateral-only. Persisted counterparties, netting sets and reusable curves now exist, but path-level legal netting, CSA margining, wrong-way risk and persisted CVA result state are still future work.
 
 ## Error Policy
 

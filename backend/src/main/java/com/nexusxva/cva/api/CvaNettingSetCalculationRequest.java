@@ -27,6 +27,8 @@ public record CvaNettingSetCalculationRequest(
         @DecimalMin("0.0")
         Double counterpartyHazardRate,
         Double discountRate,
+        UUID creditCurveId,
+        UUID discountCurveId,
         List<@Valid CreditCurvePointRequest> creditCurve,
         List<@Valid DiscountCurvePointRequest> discountCurve
 ) {
@@ -48,6 +50,23 @@ public record CvaNettingSetCalculationRequest(
         );
     }
 
+    CvaNettingSetCalculationCommand toCommand(List<CreditCurvePoint> resolvedCreditCurve, List<DiscountCurvePoint> resolvedDiscountCurve) {
+        return new CvaNettingSetCalculationCommand(
+                nettingSetId,
+                valuationDate,
+                horizonDays,
+                timeSteps,
+                paths,
+                seed,
+                pfeConfidenceLevel,
+                lossGivenDefault,
+                counterpartyHazardRate,
+                discountRate,
+                resolvedCreditCurve,
+                resolvedDiscountCurve
+        );
+    }
+
     private List<CreditCurvePoint> toCreditCurve() {
         if (creditCurve == null) {
             return List.of();
@@ -60,6 +79,22 @@ public record CvaNettingSetCalculationRequest(
             return List.of();
         }
         return discountCurve.stream().map(DiscountCurvePointRequest::toDomain).toList();
+    }
+
+    boolean hasInlineCreditCurve() {
+        return creditCurve != null && !creditCurve.isEmpty();
+    }
+
+    boolean hasInlineDiscountCurve() {
+        return discountCurve != null && !discountCurve.isEmpty();
+    }
+
+    List<CreditCurvePoint> inlineCreditCurve() {
+        return toCreditCurve();
+    }
+
+    List<DiscountCurvePoint> inlineDiscountCurve() {
+        return toDiscountCurve();
     }
 
     public record CreditCurvePointRequest(

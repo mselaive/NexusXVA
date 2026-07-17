@@ -11,8 +11,11 @@ public record CashEquityPositionPricingResponse(
         double spot,
         double marketValue,
         Double executionPrice,
+        Double averageCost,
+        Double costBasis,
         Double tradeValue,
         Double unrealizedPnl,
+        double realizedPnl,
         PortfolioGreeksResponse positionGreeks,
         PortfolioPositionMarketDataResponse marketData
 ) {
@@ -26,8 +29,11 @@ public record CashEquityPositionPricingResponse(
                 result.spot(),
                 result.marketValue(),
                 result.executionPrice(),
+                result.averageCost(),
+                result.costBasis(),
                 result.tradeValue(),
                 result.unrealizedPnl(),
+                result.realizedPnl(),
                 PortfolioGreeksResponse.from(result.positionGreeks()),
                 PortfolioPositionMarketDataResponse.from(result.marketData())
         );

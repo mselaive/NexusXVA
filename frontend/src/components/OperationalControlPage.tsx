@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import { CalendarClock, CheckCircle2, Save, XCircle } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, CheckCircle2, Plus, Save, Trash2, XCircle } from "lucide-react";
 import { nexusApi } from "@/lib/api";
-import type { OperationalControlSettings, UpdateOperationalControlRequest } from "@/lib/types";
+import type { AdminPortfolioSummary, CloseChecklistStepDefinition, CreditCurve, DiscountCurve, ExecuteScriptTemplate, OperationalControlSettings, UpdateOperationalControlRequest } from "@/lib/types";
 import { useOperationalControlStatus } from "@/lib/operationalControl";
 import { AppShell } from "./AppShell";
 
@@ -27,6 +27,10 @@ export function OperationalControlPage() {
   const { status, refresh } = useOperationalControlStatus();
   const [settings, setSettings] = React.useState<OperationalControlSettings | null>(null);
   const [form, setForm] = React.useState<UpdateOperationalControlRequest | null>(null);
+  const [portfolios, setPortfolios] = React.useState<AdminPortfolioSummary[]>([]);
+  const [creditCurves, setCreditCurves] = React.useState<CreditCurve[]>([]);
+  const [discountCurves, setDiscountCurves] = React.useState<DiscountCurve[]>([]);
+  const [scriptTemplates, setScriptTemplates] = React.useState<ExecuteScriptTemplate[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
@@ -39,9 +43,19 @@ export function OperationalControlPage() {
   async function load() {
     try {
       setLoading(true);
-      const next = await nexusApi.getOperationalControlSettings();
+      const [next, nextPortfolios, nextCreditCurves, nextDiscountCurves, nextTemplates] = await Promise.all([
+        nexusApi.getOperationalControlSettings(),
+        nexusApi.listAdminPortfolios(),
+        nexusApi.listCreditCurves(undefined, false),
+        nexusApi.listDiscountCurves(undefined, false),
+        nexusApi.listAdminExecuteScriptTemplates(),
+      ]);
       setSettings(next);
       setForm(toForm(next));
+      setPortfolios(nextPortfolios);
+      setCreditCurves(nextCreditCurves);
+      setDiscountCurves(nextDiscountCurves);
+      setScriptTemplates(nextTemplates.filter((template) => template.active && !template.steps.some((step) => step.enabled && step.stepType === "EOD_CAPTURE")));
       setError(null);
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Operational control unavailable");
@@ -84,6 +98,64 @@ export function OperationalControlPage() {
         ? form.businessDays.filter((candidate) => candidate !== day)
         : [...form.businessDays, day],
     });
+  }
+
+  function patchChecklist(patchValue: Partial<UpdateOperationalControlRequest["closeChecklist"]>) {
+    if (!form) return;
+    patch({ closeChecklist: { ...form.closeChecklist, ...patchValue } });
+  }
+
+  function togglePortfolio(portfolioId: string) {
+    if (!form) return;
+    const current = form.closeChecklist.portfolioIds;
+    patchChecklist({
+      portfolioIds: current.includes(portfolioId)
+        ? current.filter((id) => id !== portfolioId)
+        : [...current, portfolioId],
+    });
+  }
+
+  function updateStep(index: number, patchValue: Partial<CloseChecklistStepDefinition>) {
+    if (!form) return;
+    patchChecklist({
+      steps: form.closeChecklist.steps.map((step, stepIndex) => stepIndex === index ? { ...step, ...patchValue } : step),
+    });
+  }
+
+  function addScriptBlock() {
+    if (!form || scriptTemplates.length === 0) return;
+    const eodIndex = form.closeChecklist.steps.findIndex((step) => step.stepType === "EOD");
+    const insertAt = eodIndex >= 0 ? eodIndex : form.closeChecklist.steps.length;
+    const next = [...form.closeChecklist.steps];
+    next.splice(insertAt, 0, {
+      phase: "PRE_EOD",
+      stepType: "SCRIPT_TEMPLATE",
+      templateId: scriptTemplates[0].id,
+      scriptMode: "DRY_RUN",
+      enabled: true,
+      critical: false,
+      order: 1,
+    });
+    patchChecklist({ steps: normalizeSequence(next) });
+  }
+
+  function moveStep(index: number, direction: -1 | 1) {
+    if (!form) return;
+    const target = index + direction;
+    if (target < 0 || target >= form.closeChecklist.steps.length) return;
+    const next = [...form.closeChecklist.steps];
+    [next[index], next[target]] = [next[target], next[index]];
+    patchChecklist({ steps: normalizeSequence(next) });
+  }
+
+  function removeStep(index: number) {
+    if (!form || form.closeChecklist.steps[index].stepType === "EOD") return;
+    patchChecklist({ steps: normalizeSequence(form.closeChecklist.steps.filter((_, stepIndex) => stepIndex !== index)) });
+  }
+
+  function patchRiskDefaults(patchValue: Partial<UpdateOperationalControlRequest["closeChecklist"]["riskDefaults"]>) {
+    if (!form) return;
+    patchChecklist({ riskDefaults: { ...form.closeChecklist.riskDefaults, ...patchValue } });
   }
 
   return (
@@ -204,6 +276,147 @@ export function OperationalControlPage() {
         )}
       </section>
 
+      {form ? (
+        <section className="panel section">
+          <div className="section-heading ops-control-heading">
+            <div>
+              <span className="page-eyebrow">Close checklist</span>
+              <h2>Before EOD, EOD and after EOD runs</h2>
+              <p className="muted">ADMIN configures the playbook. BO can run it manually from EOD Control, and the scheduler uses it when enabled.</p>
+            </div>
+          </div>
+
+          <div className="ops-control-layout">
+            <div className="ops-form-card">
+              <h3>Checklist scope</h3>
+              <label className="ops-toggle-row">
+                <span>
+                  <strong>Enable close checklist</strong>
+                  <small>When enabled, scheduled close runs the configured checklist instead of plain EOD.</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={form.closeChecklist.enabled}
+                  onChange={(event) => patchChecklist({ enabled: event.target.checked })}
+                />
+              </label>
+              <div className="checklist-portfolio-list">
+                {portfolios.map((portfolio) => (
+                  <label className="checklist-portfolio-option" key={portfolio.id}>
+                    <input
+                      type="checkbox"
+                      checked={form.closeChecklist.portfolioIds.includes(portfolio.id)}
+                      onChange={() => togglePortfolio(portfolio.id)}
+                    />
+                    <span>{portfolio.name}</span>
+                    <small>{portfolio.baseCurrency} · {portfolio.positionCount} positions</small>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="ops-form-card">
+              <h3>Risk defaults</h3>
+              <div className="ops-time-grid">
+                <label>
+                  <span>Horizon days</span>
+                  <input type="number" min="1" value={form.closeChecklist.riskDefaults.horizonDays} onChange={(event) => patchRiskDefaults({ horizonDays: Number(event.target.value) })} />
+                </label>
+                <label>
+                  <span>Time steps</span>
+                  <input type="number" min="1" value={form.closeChecklist.riskDefaults.timeSteps} onChange={(event) => patchRiskDefaults({ timeSteps: Number(event.target.value) })} />
+                </label>
+                <label>
+                  <span>Paths</span>
+                  <input type="number" min="1" value={form.closeChecklist.riskDefaults.paths} onChange={(event) => patchRiskDefaults({ paths: Number(event.target.value) })} />
+                </label>
+                <label>
+                  <span>Seed</span>
+                  <input type="number" value={form.closeChecklist.riskDefaults.seed} onChange={(event) => patchRiskDefaults({ seed: Number(event.target.value) })} />
+                </label>
+                <label>
+                  <span>PFE confidence</span>
+                  <input type="number" min="0.01" max="0.99" step="0.01" value={form.closeChecklist.riskDefaults.pfeConfidenceLevel} onChange={(event) => patchRiskDefaults({ pfeConfidenceLevel: Number(event.target.value) })} />
+                </label>
+                <label>
+                  <span>LGD</span>
+                  <input type="number" min="0" max="1" step="0.01" value={form.closeChecklist.riskDefaults.lossGivenDefault} onChange={(event) => patchRiskDefaults({ lossGivenDefault: Number(event.target.value) })} />
+                </label>
+              </div>
+              <label>
+                <span>Credit curve</span>
+                <select value={form.closeChecklist.riskDefaults.creditCurveId ?? ""} onChange={(event) => patchRiskDefaults({ creditCurveId: event.target.value || null })}>
+                  <option value="">Select approved credit curve</option>
+                  {creditCurves.map((curve) => (
+                    <option key={curve.id} value={curve.id}>{curve.counterpartyName} · {curve.name} v{curve.version}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Discount curve</span>
+                <select value={form.closeChecklist.riskDefaults.discountCurveId ?? ""} onChange={(event) => patchRiskDefaults({ discountCurveId: event.target.value || null })}>
+                  <option value="">Select approved discount curve</option>
+                  {discountCurves.map((curve) => (
+                    <option key={curve.id} value={curve.id}>{curve.currency} · {curve.name} v{curve.version}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="close-sequence-panel">
+            <div className="section-header">
+              <div>
+                <h3>Close sequence</h3>
+                <p className="muted">Scripts above Official EOD are pre-close checks. Scripts below it run after the official close.</p>
+              </div>
+              <button className="btn secondary" type="button" onClick={addScriptBlock} disabled={scriptTemplates.length === 0}>
+                <Plus size={16} /> Add script
+              </button>
+            </div>
+            {scriptTemplates.length === 0 ? <div className="alert">Create and activate an ExecuteScript template without EOD Capture before adding it here.</div> : null}
+            <div className="close-sequence-list">
+            {form.closeChecklist.steps.map((step, index) => (
+              <React.Fragment key={`${step.stepType}-${step.templateId ?? "official"}-${index}`}>
+                {index > 0 ? <div className="close-sequence-connector"><ArrowDown size={18} /></div> : null}
+                <div className={`close-sequence-block ${step.stepType === "EOD" ? "official" : "script"}`}>
+                  <div className="close-sequence-order">{index + 1}</div>
+                  <div className="close-sequence-main">
+                    <span className="page-eyebrow">{step.stepType === "EOD" ? "OFFICIAL CLOSE" : step.phase.replaceAll("_", " ")}</span>
+                    <strong>{step.stepType === "EOD" ? "Official EOD" : step.stepType === "SCRIPT_TEMPLATE" ? templateName(scriptTemplates, step.templateId) : stepLabel(step.stepType)}</strong>
+                    <small>{step.stepType === "EOD" ? "Creates the official close used by Daily P&L." : step.stepType === "SCRIPT_TEMPLATE" ? "Reusable ExecuteScript template" : "Legacy checklist action; replace it with a script template when ready."}</small>
+                  </div>
+                  {step.stepType === "SCRIPT_TEMPLATE" ? (
+                    <label className="close-sequence-template">
+                      <span>Script</span>
+                      <select value={step.templateId ?? ""} onChange={(event) => updateStep(index, { templateId: event.target.value })}>
+                        {scriptTemplates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                      </select>
+                    </label>
+                  ) : null}
+                  {step.stepType === "SCRIPT_TEMPLATE" ? (
+                    <label className="close-sequence-mode">
+                      <span>Mode</span>
+                      <select value={step.scriptMode ?? "DRY_RUN"} onChange={(event) => updateStep(index, { scriptMode: event.target.value as "DRY_RUN" | "REAL_RUN" })}>
+                        <option value="DRY_RUN">Dry run</option>
+                        <option value="REAL_RUN">Real run</option>
+                      </select>
+                    </label>
+                  ) : null}
+                  <label className="inline-check"><input type="checkbox" checked={step.critical} onChange={(event) => updateStep(index, { critical: event.target.checked })} /> Critical</label>
+                  <div className="close-sequence-actions">
+                    <button className="icon-btn" type="button" title="Move up" disabled={index === 0} onClick={() => moveStep(index, -1)}><ArrowUp size={17} /></button>
+                    <button className="icon-btn" type="button" title="Move down" disabled={index === form.closeChecklist.steps.length - 1} onClick={() => moveStep(index, 1)}><ArrowDown size={17} /></button>
+                    {step.stepType !== "EOD" ? <button className="icon-btn danger" type="button" title="Remove script" onClick={() => removeStep(index)}><Trash2 size={17} /></button> : null}
+                  </div>
+                </div>
+              </React.Fragment>
+            ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <section className="panel muted-panel">
         <CalendarClock size={18} />
         <span>
@@ -234,5 +447,50 @@ function toForm(settings: OperationalControlSettings): UpdateOperationalControlR
     eodEnabled: settings.eodEnabled,
     eodRunTime: settings.eodRunTime,
     eodAllowStaleMarketData: settings.eodAllowStaleMarketData,
+    closeChecklist: settings.closeChecklist ?? defaultCloseChecklist(),
   };
+}
+
+function defaultCloseChecklist(): UpdateOperationalControlRequest["closeChecklist"] {
+  return {
+    enabled: false,
+    portfolioIds: [],
+    steps: [
+      { phase: "PRE_EOD", stepType: "BO_OPERATIONS_REPORT", enabled: true, critical: true, order: 10 },
+      { phase: "PRE_EOD", stepType: "BO_LIFECYCLE_REPORT", enabled: true, critical: false, order: 20 },
+      { phase: "EOD", stepType: "EOD", enabled: true, critical: true, order: 30 },
+      { phase: "POST_EOD", stepType: "PORTFOLIO_PRICING", enabled: true, critical: false, order: 40 },
+      { phase: "POST_EOD", stepType: "EXPOSURE", enabled: false, critical: false, order: 50 },
+      { phase: "POST_EOD", stepType: "CVA", enabled: false, critical: false, order: 60 },
+      { phase: "POST_EOD", stepType: "FO_PNL_REPORT", enabled: true, critical: false, order: 70 },
+    ],
+    riskDefaults: {
+      horizonDays: 365,
+      timeSteps: 12,
+      paths: 1000,
+      seed: 12345,
+      pfeConfidenceLevel: 0.95,
+      lossGivenDefault: 0.6,
+      creditCurveId: null,
+      discountCurveId: null,
+    },
+  };
+}
+
+function stepLabel(stepType: string) {
+  return stepType.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function normalizeSequence(steps: CloseChecklistStepDefinition[]): CloseChecklistStepDefinition[] {
+  const eodIndex = steps.findIndex((step) => step.stepType === "EOD");
+  return steps.map((step, index) => ({
+    ...step,
+    enabled: true,
+    order: (index + 1) * 10,
+    phase: step.stepType === "EOD" ? "EOD" : index < eodIndex ? "PRE_EOD" : "POST_EOD",
+  }));
+}
+
+function templateName(templates: ExecuteScriptTemplate[], templateId?: string | null) {
+  return templates.find((template) => template.id === templateId)?.name ?? "Select script template";
 }

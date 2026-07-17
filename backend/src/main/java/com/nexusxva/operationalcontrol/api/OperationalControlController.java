@@ -9,6 +9,7 @@ import com.nexusxva.operationalcontrol.application.OperationalControlService;
 import com.nexusxva.operationalcontrol.domain.OperationalControlSettings;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.LinkedHashMap;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,6 +41,18 @@ public class OperationalControlController {
                 request.toSettings(),
                 session == null ? null : session.user().id()
         );
+        var metadata = new LinkedHashMap<String, Object>();
+        metadata.put("timezone", updated.timezone().getId());
+        metadata.put("businessDays", updated.businessDays().stream().map(Enum::name).toList());
+        metadata.put("tradingOpenTime", updated.tradingOpenTime());
+        metadata.put("tradingCloseTime", updated.tradingCloseTime());
+        metadata.put("enforceOperationalWindow", updated.enforceOperationalWindow());
+        metadata.put("blockTradeBookingsOutsideWindow", updated.blockTradeBookingsOutsideWindow());
+        metadata.put("blockRiskRunsOutsideWindow", updated.blockRiskRunsOutsideWindow());
+        metadata.put("eodEnabled", updated.eodEnabled());
+        metadata.put("eodRunTime", updated.eodRunTime());
+        metadata.put("closeChecklistEnabled", updated.closeChecklist().enabled());
+        metadata.put("closeChecklistPortfolioCount", updated.closeChecklist().portfolioIds().size());
         auditService.record(new AuditEventCommand(
                 "OPERATIONAL_CONTROL_UPDATED",
                 "ADMIN",
@@ -51,17 +64,7 @@ public class OperationalControlController {
                 "OPERATIONAL_CONTROL",
                 "1",
                 "Operational control settings updated",
-                auditService.metadata(java.util.Map.of(
-                        "timezone", updated.timezone().getId(),
-                        "businessDays", updated.businessDays().stream().map(Enum::name).toList(),
-                        "tradingOpenTime", updated.tradingOpenTime(),
-                        "tradingCloseTime", updated.tradingCloseTime(),
-                        "enforceOperationalWindow", updated.enforceOperationalWindow(),
-                        "blockTradeBookingsOutsideWindow", updated.blockTradeBookingsOutsideWindow(),
-                        "blockRiskRunsOutsideWindow", updated.blockRiskRunsOutsideWindow(),
-                        "eodEnabled", updated.eodEnabled(),
-                        "eodRunTime", updated.eodRunTime()
-                ))
+                auditService.metadata(metadata)
         ));
         return OperationalControlResponse.from(updated);
     }

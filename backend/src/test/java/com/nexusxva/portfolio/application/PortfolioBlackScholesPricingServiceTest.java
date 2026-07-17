@@ -289,5 +289,10 @@ class PortfolioBlackScholesPricingServiceTest {
         public void markCashEquityPositionAmended(UUID positionId) {
             throw new UnsupportedOperationException();
         }
+
+        @Override
+        public void recordCashEquityAmendmentClose(UUID positionId, AddCashEquityPositionCommand requestedTerms) {
+            throw new UnsupportedOperationException();
+        }
     }
 }

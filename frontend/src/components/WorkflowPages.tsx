@@ -29,6 +29,8 @@ import type {
   CreateOptionStrategyBookingRequest,
   CvaCalculationResponse,
   CvaNettingSetCalculationResponse,
+  CreditCurve,
+  DiscountCurve,
   ExposureSimulationResponse,
   OptionType,
   OptionStrategyType,
@@ -70,6 +72,7 @@ function isCashEquityPosition(position: LifecyclePosition) {
 
 type CvaMode = "flat" | "curves";
 type CvaScope = "portfolio" | "nettingSet";
+type CvaCurveSource = "masterData" | "inline";
 type CreditCurveInputMode = "survivalProbability" | "cumulativeDefaultProbability";
 
 type CreditCurveFormRow = {
@@ -1434,9 +1437,14 @@ export function CvaPage() {
   const [selectedNettingSetId, setSelectedNettingSetId] = useState("");
   const [form, setForm] = useState(defaultRunForm);
   const [cvaMode, setCvaMode] = useState<CvaMode>("flat");
+  const [curveSource, setCurveSource] = useState<CvaCurveSource>("masterData");
   const [creditCurveMode, setCreditCurveMode] = useState<CreditCurveInputMode>("survivalProbability");
   const [creditCurve, setCreditCurve] = useState(defaultCreditCurveRows);
   const [discountCurve, setDiscountCurve] = useState(defaultDiscountCurveRows);
+  const [creditCurves, setCreditCurves] = useState<CreditCurve[]>([]);
+  const [discountCurves, setDiscountCurves] = useState<DiscountCurve[]>([]);
+  const [selectedCreditCurveId, setSelectedCreditCurveId] = useState("");
+  const [selectedDiscountCurveId, setSelectedDiscountCurveId] = useState("");
   const [cva, setCva] = useState<CvaCalculationResponse | CvaNettingSetCalculationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1455,6 +1463,21 @@ export function CvaPage() {
       .catch(() => undefined);
   }, [selectedNettingSetId]);
 
+  useEffect(() => {
+    nexusApi.listCreditCurves(undefined, false)
+      .then((items) => {
+        setCreditCurves(items);
+        setSelectedCreditCurveId((current) => current || items[0]?.id || "");
+      })
+      .catch(() => undefined);
+    nexusApi.listDiscountCurves(undefined, false)
+      .then((items) => {
+        setDiscountCurves(items);
+        setSelectedDiscountCurveId((current) => current || items[0]?.id || "");
+      })
+      .catch(() => undefined);
+  }, []);
+
   async function runCva() {
     if (closedMessage) {
       setError(closedMessage);
@@ -1468,13 +1491,37 @@ export function CvaPage() {
       setError("Select a netting set first.");
       return;
     }
+    if (cvaMode === "curves" && curveSource === "masterData" && (!selectedCreditCurveId || !selectedDiscountCurveId)) {
+      setError("Select both a credit curve and a discount curve, or switch to inline curve mode.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       if (cvaScope === "nettingSet") {
-        setCva(await nexusApi.runNettingSetCva(toCvaNettingSetRequest(selectedNettingSetId, form, cvaMode, creditCurveMode, creditCurve, discountCurve)));
+        setCva(await nexusApi.runNettingSetCva(toCvaNettingSetRequest(
+          selectedNettingSetId,
+          form,
+          cvaMode,
+          curveSource,
+          selectedCreditCurveId,
+          selectedDiscountCurveId,
+          creditCurveMode,
+          creditCurve,
+          discountCurve,
+        )));
       } else {
-        setCva(await nexusApi.runCva(toCvaRequest(selectedId, form, cvaMode, creditCurveMode, creditCurve, discountCurve)));
+        setCva(await nexusApi.runCva(toCvaRequest(
+          selectedId,
+          form,
+          cvaMode,
+          curveSource,
+          selectedCreditCurveId,
+          selectedDiscountCurveId,
+          creditCurveMode,
+          creditCurve,
+          discountCurve,
+        )));
       }
     } catch (caught) {
       setError(errorMessage(caught));
@@ -1510,6 +1557,14 @@ export function CvaPage() {
       <CvaCurveModePanel
         mode={cvaMode}
         setMode={setCvaMode}
+        curveSource={curveSource}
+        setCurveSource={setCurveSource}
+        creditCurves={creditCurves}
+        discountCurves={discountCurves}
+        selectedCreditCurveId={selectedCreditCurveId}
+        setSelectedCreditCurveId={setSelectedCreditCurveId}
+        selectedDiscountCurveId={selectedDiscountCurveId}
+        setSelectedDiscountCurveId={setSelectedDiscountCurveId}
         creditCurveMode={creditCurveMode}
         setCreditCurveMode={setCreditCurveMode}
         creditCurve={creditCurve}
@@ -1586,6 +1641,14 @@ function CvaScopePanel({
 function CvaCurveModePanel({
   mode,
   setMode,
+  curveSource,
+  setCurveSource,
+  creditCurves,
+  discountCurves,
+  selectedCreditCurveId,
+  setSelectedCreditCurveId,
+  selectedDiscountCurveId,
+  setSelectedDiscountCurveId,
   creditCurveMode,
   setCreditCurveMode,
   creditCurve,
@@ -1596,6 +1659,14 @@ function CvaCurveModePanel({
 }: {
   mode: CvaMode;
   setMode: (mode: CvaMode) => void;
+  curveSource: CvaCurveSource;
+  setCurveSource: (source: CvaCurveSource) => void;
+  creditCurves: CreditCurve[];
+  discountCurves: DiscountCurve[];
+  selectedCreditCurveId: string;
+  setSelectedCreditCurveId: (curveId: string) => void;
+  selectedDiscountCurveId: string;
+  setSelectedDiscountCurveId: (curveId: string) => void;
   creditCurveMode: CreditCurveInputMode;
   setCreditCurveMode: (mode: CreditCurveInputMode) => void;
   creditCurve: CreditCurveFormRow[];
@@ -1612,7 +1683,39 @@ function CvaCurveModePanel({
         <button className={mode === "curves" ? "active" : ""} type="button" onClick={() => setMode("curves")}>Curve mode</button>
       </div>
       {mode === "curves" ? (
-        <div className="curve-editor-grid">
+        <div className="curve-mode-stack">
+          <div className="stress-mode-toggle" role="group" aria-label="CVA curve source">
+            <button className={curveSource === "masterData" ? "active" : ""} type="button" onClick={() => setCurveSource("masterData")}>Master data curves</button>
+            <button className={curveSource === "inline" ? "active" : ""} type="button" onClick={() => setCurveSource("inline")}>Inline curves</button>
+          </div>
+          {curveSource === "masterData" ? (
+            <div className="cva-scope-cards">
+              <label className="field">
+                <span>Credit curve</span>
+                <select className="select" value={selectedCreditCurveId} onChange={(event) => setSelectedCreditCurveId(event.target.value)}>
+                  {creditCurves.length === 0 ? <option value="">No active credit curves</option> : null}
+                  {creditCurves.map((curve) => (
+                    <option key={curve.id} value={curve.id}>
+                      {curve.counterpartyName} / {curve.name} · {curve.curveType.replaceAll("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Discount curve</span>
+                <select className="select" value={selectedDiscountCurveId} onChange={(event) => setSelectedDiscountCurveId(event.target.value)}>
+                  {discountCurves.length === 0 ? <option value="">No active discount curves</option> : null}
+                  {discountCurves.map((curve) => (
+                    <option key={curve.id} value={curve.id}>
+                      {curve.currency} / {curve.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="mini-note">These curves are ADMIN-owned XVA master data. CVA sends only the curve IDs; the backend loads active points and rejects inactive curves.</p>
+            </div>
+          ) : (
+            <div className="curve-editor-grid">
           <section className="curve-editor">
             <div className="curve-editor-head">
               <div>
@@ -1657,6 +1760,8 @@ function CvaCurveModePanel({
               <button className="btn secondary" type="button" onClick={() => setDiscountCurve(defaultDiscountCurveRows(valuationDate))}>Reset discount curve</button>
             </div>
           </section>
+            </div>
+          )}
         </div>
       ) : (
         <p className="mini-note">Flat mode sends LGD, counterparty hazard rate and discount rate. Curves are not included in the request.</p>
@@ -1819,6 +1924,9 @@ function toCvaRequest(
   portfolioId: string,
   form: RunForm,
   mode: CvaMode,
+  curveSource: CvaCurveSource,
+  selectedCreditCurveId: string,
+  selectedDiscountCurveId: string,
   creditCurveMode: CreditCurveInputMode,
   creditCurve: CreditCurveFormRow[],
   discountCurve: DiscountCurveFormRow[],
@@ -1829,6 +1937,13 @@ function toCvaRequest(
   };
 
   if (mode === "curves") {
+    if (curveSource === "masterData") {
+      return {
+        ...baseRequest,
+        creditCurveId: selectedCreditCurveId || undefined,
+        discountCurveId: selectedDiscountCurveId || undefined,
+      };
+    }
     return {
       ...baseRequest,
       creditCurve: creditCurve.map((point) => creditCurveMode === "survivalProbability"
@@ -1852,11 +1967,24 @@ function toCvaNettingSetRequest(
   nettingSetId: string,
   form: RunForm,
   mode: CvaMode,
+  curveSource: CvaCurveSource,
+  selectedCreditCurveId: string,
+  selectedDiscountCurveId: string,
   creditCurveMode: CreditCurveInputMode,
   creditCurve: CreditCurveFormRow[],
   discountCurve: DiscountCurveFormRow[],
 ) {
-  const { portfolioId: _portfolioId, ...request } = toCvaRequest("ignored", form, mode, creditCurveMode, creditCurve, discountCurve);
+  const { portfolioId: _portfolioId, ...request } = toCvaRequest(
+    "ignored",
+    form,
+    mode,
+    curveSource,
+    selectedCreditCurveId,
+    selectedDiscountCurveId,
+    creditCurveMode,
+    creditCurve,
+    discountCurve,
+  );
   return {
     ...request,
     nettingSetId,
@@ -2031,6 +2159,9 @@ function PositionTable({
                 <th>Product</th>
                 <th>Quantity</th>
                 <th>Execution price</th>
+                <th>Average cost</th>
+                <th>Realized P&L</th>
+                <th>Lots</th>
                 <th>Status</th>
                 <th>Updated</th>
                 {onAmend || onCancel ? <th>Actions</th> : null}
@@ -2043,6 +2174,9 @@ function PositionTable({
                   <td>Cash equity</td>
                   <td>{formatNumber(position.quantity, 2)}</td>
                   <td>{position.executionPrice == null ? "Unavailable" : formatNumber(position.executionPrice, 4)}</td>
+                  <td>{position.averageCost == null ? "Unavailable" : formatNumber(position.averageCost, 4)}</td>
+                  <td>{formatNumber(position.realizedPnl, 2)}</td>
+                  <td>{position.lots.length}</td>
                   <td><span className={`lifecycle-status ${(position.lifecycleStatus ?? "ACTIVE").toLowerCase()}`}>{position.lifecycleStatus ?? "ACTIVE"}</span></td>
                   <td>{new Date(position.updatedAt).toLocaleString()}</td>
                   {onAmend || onCancel ? (
@@ -2226,9 +2360,12 @@ function PricingResult({ pricing }: { pricing: PortfolioPricingResponse }) {
               <th>Status</th>
               <th>Qty</th>
               <th>Execution</th>
+              <th>Average cost</th>
+              <th>Cost basis</th>
               <th>Market/unit</th>
               <th>Market value</th>
               <th>Unrealized P&L</th>
+              <th>Realized P&L</th>
               <th>Spot</th>
               <th>Vol</th>
               <th>Rate</th>
@@ -2244,9 +2381,12 @@ function PricingResult({ pricing }: { pricing: PortfolioPricingResponse }) {
                 <td>{position.status}</td>
                 <td>{formatNumber(position.quantity, 2)}</td>
                 <td>{position.executionPrice == null ? "Unavailable" : formatCurrency(position.executionPrice, pricing.baseCurrency)}</td>
+                <td>—</td>
+                <td>{position.tradeValue == null ? "Unavailable" : formatCurrency(position.tradeValue, pricing.baseCurrency)}</td>
                 <td>{formatCurrency(position.unitPrice, pricing.baseCurrency)}</td>
                 <td>{formatCurrency(position.positionPrice, pricing.baseCurrency)}</td>
                 <td>{position.unrealizedPnl == null ? "Unavailable" : formatCurrency(position.unrealizedPnl, pricing.baseCurrency)}</td>
+                <td>—</td>
                 <td>{formatNumber(position.marketData.spot, 2)}</td>
                 <td>{formatPercent(position.marketData.volatility)}</td>
                 <td>{formatPercent(position.marketData.riskFreeRate)}</td>
@@ -2261,9 +2401,12 @@ function PricingResult({ pricing }: { pricing: PortfolioPricingResponse }) {
                 <td>Cash equity</td>
                 <td>{formatNumber(position.quantity, 2)}</td>
                 <td>{position.executionPrice == null ? "Unavailable" : formatCurrency(position.executionPrice, pricing.baseCurrency)}</td>
+                <td>{position.averageCost == null ? "Unavailable" : formatCurrency(position.averageCost, pricing.baseCurrency)}</td>
+                <td>{position.costBasis == null ? "Unavailable" : formatCurrency(position.costBasis, pricing.baseCurrency)}</td>
                 <td>{formatCurrency(position.spot, pricing.baseCurrency)}</td>
                 <td>{formatCurrency(position.marketValue, pricing.baseCurrency)}</td>
                 <td>{position.unrealizedPnl == null ? "Unavailable" : formatCurrency(position.unrealizedPnl, pricing.baseCurrency)}</td>
+                <td>{formatCurrency(position.realizedPnl, pricing.baseCurrency)}</td>
                 <td>{formatNumber(position.marketData.spot, 2)}</td>
                 <td>—</td>
                 <td>—</td>
@@ -2276,7 +2419,7 @@ function PricingResult({ pricing }: { pricing: PortfolioPricingResponse }) {
               <tr key={position.positionId}>
                 <td>{position.positionId.slice(0, 8)}</td>
                 <td>{position.status}</td>
-                <td colSpan={11}>{position.reason}</td>
+                <td colSpan={14}>{position.reason}</td>
               </tr>
             ))}
           </tbody>

@@ -11,16 +11,20 @@ import com.nexusxva.cva.application.CvaCalculationResult;
 import com.nexusxva.cva.application.CvaCalculationService;
 import com.nexusxva.cva.application.CvaNettingSetCalculationResult;
 import com.nexusxva.cva.application.CvaNettingSetCalculationService;
+import com.nexusxva.cva.domain.CreditCurvePoint;
+import com.nexusxva.cva.domain.DiscountCurvePoint;
 import com.nexusxva.operationalcontrol.application.OperationalControlService;
 import com.nexusxva.shared.error.ResourceNotFoundException;
 import com.nexusxva.valuationruns.application.ValuationRunService;
 import com.nexusxva.valuationruns.domain.ValuationRunType;
+import com.nexusxva.xva.application.CvaCurveMasterDataService;
 import com.nexusxva.xva.application.XvaReferenceDataService;
 import com.nexusxva.xva.domain.NettingSet;
 
 import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,6 +41,7 @@ public class CvaController {
     private final UserAccessService userAccessService;
     private final ValuationRunService valuationRunService;
     private final XvaReferenceDataService xvaReferenceDataService;
+    private final CvaCurveMasterDataService curveMasterDataService;
     private final AuditService auditService;
     private final OperationalControlService operationalControlService;
 
@@ -46,6 +51,7 @@ public class CvaController {
             UserAccessService userAccessService,
             ValuationRunService valuationRunService,
             XvaReferenceDataService xvaReferenceDataService,
+            CvaCurveMasterDataService curveMasterDataService,
             AuditService auditService,
             OperationalControlService operationalControlService
     ) {
@@ -54,6 +60,7 @@ public class CvaController {
         this.userAccessService = userAccessService;
         this.valuationRunService = valuationRunService;
         this.xvaReferenceDataService = xvaReferenceDataService;
+        this.curveMasterDataService = curveMasterDataService;
         this.auditService = auditService;
         this.operationalControlService = operationalControlService;
     }
@@ -66,8 +73,10 @@ public class CvaController {
         userAccessService.requireFeature(servletRequest, FeaturePermissionCode.FO_RUN_CVA);
         userAccessService.requirePortfolioAccess(servletRequest, request.portfolioId());
         operationalControlService.ensureRiskRunOpen("RUN_CVA", currentSession(servletRequest), servletRequest);
+        List<CreditCurvePoint> creditCurve = resolveCreditCurve(request);
+        List<DiscountCurvePoint> discountCurve = resolveDiscountCurve(request);
         try {
-            CvaCalculationResult result = cvaCalculationService.calculate(request.toCommand());
+            CvaCalculationResult result = cvaCalculationService.calculate(request.toCommand(creditCurve, discountCurve));
             CvaCalculationResponse response = CvaCalculationResponse.from(result);
             valuationRunService.recordSuccess(
                     currentSession(servletRequest),
@@ -119,8 +128,10 @@ public class CvaController {
         NettingSet nettingSet = xvaReferenceDataService.getOperableNettingSet(request.nettingSetId());
         nettingSet.portfolios()
                 .forEach(portfolio -> userAccessService.requirePortfolioAccess(servletRequest, portfolio.portfolioId()));
+        List<CreditCurvePoint> creditCurve = resolveCreditCurve(request);
+        List<DiscountCurvePoint> discountCurve = resolveDiscountCurve(request);
         try {
-            CvaNettingSetCalculationResult result = cvaNettingSetCalculationService.calculate(request.toCommand());
+            CvaNettingSetCalculationResult result = cvaNettingSetCalculationService.calculate(request.toCommand(creditCurve, discountCurve));
             CvaNettingSetCalculationResponse response = CvaNettingSetCalculationResponse.from(result);
             valuationRunService.recordNettingSetSuccess(
                     currentSession(servletRequest),
@@ -182,6 +193,46 @@ public class CvaController {
         summary.put("discountMethod", response.discountMethod());
         summary.put("points", response.points().size());
         return summary;
+    }
+
+    private List<CreditCurvePoint> resolveCreditCurve(CvaCalculationRequest request) {
+        if (request.creditCurveId() != null && request.hasInlineCreditCurve()) {
+            throw new IllegalArgumentException("Use either creditCurveId or creditCurve, not both");
+        }
+        if (request.creditCurveId() != null) {
+            return curveMasterDataService.activeCreditCurvePoints(request.creditCurveId());
+        }
+        return request.inlineCreditCurve();
+    }
+
+    private List<DiscountCurvePoint> resolveDiscountCurve(CvaCalculationRequest request) {
+        if (request.discountCurveId() != null && request.hasInlineDiscountCurve()) {
+            throw new IllegalArgumentException("Use either discountCurveId or discountCurve, not both");
+        }
+        if (request.discountCurveId() != null) {
+            return curveMasterDataService.activeDiscountCurvePoints(request.discountCurveId());
+        }
+        return request.inlineDiscountCurve();
+    }
+
+    private List<CreditCurvePoint> resolveCreditCurve(CvaNettingSetCalculationRequest request) {
+        if (request.creditCurveId() != null && request.hasInlineCreditCurve()) {
+            throw new IllegalArgumentException("Use either creditCurveId or creditCurve, not both");
+        }
+        if (request.creditCurveId() != null) {
+            return curveMasterDataService.activeCreditCurvePoints(request.creditCurveId());
+        }
+        return request.inlineCreditCurve();
+    }
+
+    private List<DiscountCurvePoint> resolveDiscountCurve(CvaNettingSetCalculationRequest request) {
+        if (request.discountCurveId() != null && request.hasInlineDiscountCurve()) {
+            throw new IllegalArgumentException("Use either discountCurveId or discountCurve, not both");
+        }
+        if (request.discountCurveId() != null) {
+            return curveMasterDataService.activeDiscountCurvePoints(request.discountCurveId());
+        }
+        return request.inlineDiscountCurve();
     }
 
     private AuthSession currentSession(HttpServletRequest request) {

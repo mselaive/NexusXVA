@@ -207,15 +207,14 @@ public class TradeLifecycleService {
             return reviewed;
         }
 
-        portfolioStore.markCashEquityPositionAmended(position.id());
-        CashEquityPosition replacement = portfolioStore.addCashEquityPosition(
-                position.portfolioId(),
-                new AddCashEquityPositionCommand(
-                        request.requestedUnderlyingSymbol(),
-                        request.requestedQuantity(),
-                        request.requestedExecutionPrice()
-                )
+        AddCashEquityPositionCommand requestedTerms = new AddCashEquityPositionCommand(
+                request.requestedUnderlyingSymbol(),
+                request.requestedQuantity(),
+                request.requestedExecutionPrice()
         );
+        portfolioStore.recordCashEquityAmendmentClose(position.id(), requestedTerms);
+        portfolioStore.markCashEquityPositionAmended(position.id());
+        CashEquityPosition replacement = portfolioStore.addCashEquityPosition(position.portfolioId(), requestedTerms);
         TradeLifecycleRequest reviewed = lifecycleStore.approve(requestId, reviewer, replacement.id());
         notificationService.notifyLifecycleReviewed(reviewed);
         return reviewed;

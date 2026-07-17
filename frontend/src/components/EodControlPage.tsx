@@ -4,7 +4,7 @@ import React from "react";
 import { CalendarCheck, CheckCircle2, Clock3, Loader2, RefreshCw, RotateCcw, ShieldCheck, XCircle } from "lucide-react";
 import { nexusApi, NexusApiError } from "@/lib/api";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import type { EodBatchResult, PortfolioEodSnapshot, PortfolioSummary } from "@/lib/types";
+import type { CloseChecklistRun, EodBatchResult, PortfolioEodSnapshot, PortfolioSummary } from "@/lib/types";
 import { AppShell } from "./AppShell";
 
 const howTo = [
@@ -21,6 +21,8 @@ export function EodControlPage() {
   const [latest, setLatest] = React.useState<PortfolioEodSnapshot | null>(null);
   const [history, setHistory] = React.useState<PortfolioEodSnapshot[]>([]);
   const [batchResult, setBatchResult] = React.useState<EodBatchResult | null>(null);
+  const [checklistRuns, setChecklistRuns] = React.useState<CloseChecklistRun[]>([]);
+  const [selectedChecklistRun, setSelectedChecklistRun] = React.useState<CloseChecklistRun | null>(null);
   const [correctionDialog, setCorrectionDialog] = React.useState<{ action: "VOID" | "RECAPTURE"; snapshot: PortfolioEodSnapshot } | null>(null);
   const [correctionReason, setCorrectionReason] = React.useState("");
   const [loading, setLoading] = React.useState(true);
@@ -43,7 +45,10 @@ export function EodControlPage() {
     setError(null);
     try {
       const items = await nexusApi.listBackOfficeEodPortfolios();
+      const runs = await nexusApi.listCloseChecklistRuns(20);
       setPortfolios(items);
+      setChecklistRuns(runs);
+      setSelectedChecklistRun(runs[0] ?? null);
       setSelectedId((current) => current || items[0]?.id || "");
     } catch (caught) {
       setError(errorMessage(caught));
@@ -77,6 +82,29 @@ export function EodControlPage() {
       const result = await nexusApi.runBackOfficeEodBatch(businessDate);
       setBatchResult(result);
       setSuccess(`EOD batch completed: ${result.captured} captured, ${result.skipped} skipped, ${result.failed} failed.`);
+      if (selectedId) {
+        await loadEod(selectedId);
+      }
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setCapturing(false);
+    }
+  }
+
+  async function runChecklist() {
+    if (!window.confirm(`Run Close Checklist on ${businessDate}? This may create reports, valuation runs and EOD closes.`)) {
+      return;
+    }
+    setCapturing(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const run = await nexusApi.runCloseChecklist(businessDate);
+      const runs = await nexusApi.listCloseChecklistRuns(20);
+      setChecklistRuns(runs);
+      setSelectedChecklistRun(run);
+      setSuccess(`Close Checklist ${run.status}: ${run.message ?? "completed"}.`);
       if (selectedId) {
         await loadEod(selectedId);
       }
@@ -135,8 +163,8 @@ export function EodControlPage() {
       <section className="panel section">
         <div className="section-header">
           <div>
-            <h2>Run global EOD</h2>
-            <p className="muted">Close every portfolio for the selected business date. Each book is processed independently and reported below.</p>
+            <h2>Run close process</h2>
+            <p className="muted">Run the configured Close Checklist, or use the plain global EOD fallback when needed.</p>
           </div>
           <ShieldCheck size={22} />
         </div>
@@ -145,10 +173,87 @@ export function EodControlPage() {
             <span>Business date</span>
             <input className="input" type="date" value={businessDate} onChange={(event) => setBusinessDate(event.target.value)} />
           </label>
+          <button className="btn" type="button" onClick={runChecklist} disabled={capturing}>
+            {capturing ? <Loader2 size={16} /> : <ShieldCheck size={16} />}
+            Run Close Checklist
+          </button>
+          <a className="btn secondary" href="/execute-scripts">
+            Test close inputs
+          </a>
           <button className="btn" type="button" onClick={captureAll} disabled={portfolios.length === 0 || capturing}>
             {capturing ? <Loader2 size={16} /> : <CalendarCheck size={16} />}
-            Run EOD for all portfolios
+            Run plain EOD
           </button>
+        </div>
+      </section>
+
+      <section className="panel section">
+        <div className="section-header">
+          <div>
+            <h2>Close Checklist history</h2>
+            <p className="muted">Checklist runs preserve each pre-EOD, EOD and post-EOD step with outputs for audit.</p>
+          </div>
+          <button className="btn secondary icon-only-refresh" type="button" onClick={async () => {
+            const runs = await nexusApi.listCloseChecklistRuns(20);
+            setChecklistRuns(runs);
+            setSelectedChecklistRun(runs[0] ?? null);
+          }} disabled={capturing} title="Refresh checklist runs">
+            <RefreshCw size={16} />
+          </button>
+        </div>
+        <div className="checklist-run-layout">
+          <div className="checklist-run-list">
+            {checklistRuns.length === 0 ? <div className="empty-state">No checklist runs yet.</div> : checklistRuns.map((run) => (
+              <button
+                className={`checklist-run-item ${selectedChecklistRun?.id === run.id ? "active" : ""}`}
+                key={run.id}
+                type="button"
+                onClick={() => setSelectedChecklistRun(run)}
+              >
+                <span>{run.businessDate}</span>
+                <strong>{run.status}</strong>
+                <small>{run.source} · {new Date(run.startedAt).toLocaleString()}</small>
+              </button>
+            ))}
+          </div>
+          <div className="checklist-run-detail">
+            {!selectedChecklistRun ? (
+              <div className="empty-state">Select a checklist run.</div>
+            ) : (
+              <>
+                <div className="detail-grid">
+                  <div className="detail-item"><span>Status</span><strong>{selectedChecklistRun.status}</strong></div>
+                  <div className="detail-item"><span>Business date</span><strong>{selectedChecklistRun.businessDate}</strong></div>
+                  <div className="detail-item"><span>Source</span><strong>{selectedChecklistRun.source}</strong></div>
+                  <div className="detail-item"><span>Completed</span><strong>{selectedChecklistRun.completedAt ? new Date(selectedChecklistRun.completedAt).toLocaleString() : "Running"}</strong></div>
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Phase</th>
+                        <th>Step</th>
+                        <th>Status</th>
+                        <th>Critical</th>
+                        <th>Message</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedChecklistRun.steps.map((step) => (
+                        <tr key={step.id}>
+                          <td>{step.phase.replaceAll("_", " ")}</td>
+                          <td>{step.stepType.replaceAll("_", " ")}</td>
+                          <td><span className={`booking-status ${step.status.toLowerCase()}`}>{step.status}</span></td>
+                          <td>{step.critical ? "Yes" : "No"}</td>
+                          <td>{step.message ?? "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </section>
 

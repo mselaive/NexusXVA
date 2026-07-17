@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexusxva.audit.application.AuditService;
 import com.nexusxva.audit.application.AuditStore;
 import com.nexusxva.auth.application.AuthProperties;
+import com.nexusxva.operationalcontrol.domain.CloseChecklistSettings;
 import com.nexusxva.operationalcontrol.domain.OperationalControlSettings;
 import java.time.Clock;
 import java.time.DayOfWeek;
@@ -137,6 +138,7 @@ class OperationalControlServiceTest {
                 false,
                 LocalTime.of(17, 15),
                 false,
+                CloseChecklistSettings.defaults(),
                 Instant.parse("2026-07-06T12:00:00Z"),
                 null,
                 0

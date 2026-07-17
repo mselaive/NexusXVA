@@ -1,6 +1,7 @@
 package com.nexusxva.operationalcontrol.api;
 
 import com.nexusxva.operationalcontrol.domain.OperationalControlSettings;
+import com.nexusxva.operationalcontrol.domain.CloseChecklistSettings;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -22,7 +23,8 @@ public record UpdateOperationalControlRequest(
         Boolean blockRiskRunsOutsideWindow,
         boolean eodEnabled,
         @NotNull LocalTime eodRunTime,
-        boolean eodAllowStaleMarketData
+        boolean eodAllowStaleMarketData,
+        CloseChecklistSettings closeChecklist
 ) {
 
     OperationalControlSettings toSettings() {
@@ -55,6 +57,7 @@ public record UpdateOperationalControlRequest(
                 eodEnabled,
                 eodRunTime,
                 eodAllowStaleMarketData,
+                closeChecklist,
                 Instant.now(),
                 null,
                 0

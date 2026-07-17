@@ -3,6 +3,7 @@
 import React from "react";
 import { usePathname } from "next/navigation";
 import {
+  Archive,
   Bell,
   BarChart3,
   BriefcaseBusiness,
@@ -23,6 +24,7 @@ import {
   Settings,
   Shield,
   SlidersHorizontal,
+  SquareTerminal,
   Waves,
   SquarePen,
   Wallet,
@@ -57,12 +59,15 @@ const navItems = [
   { href: "/exposure", label: "Exposure", icon: LineChart },
   { href: "/cva", label: "CVA", icon: Shield },
   { href: "/valuation-runs", label: "Run History", icon: History },
+  { href: "/report-history", label: "Report History", icon: Archive },
   { href: "/trade-validation", label: "Trade Validation", icon: ListChecks },
   { href: "/lifecycle-reporting", label: "Lifecycle Reporting", icon: BarChart3 },
   { href: "/operations-reporting", label: "Operations Reporting", icon: CalendarCheck },
   { href: "/trading-limits", label: "Trading Limits", icon: SlidersHorizontal },
   { href: "/eod-control", label: "EOD Control", icon: CalendarCheck },
+  { href: "/execute-scripts", label: "Execute Scripts", icon: SquareTerminal },
   { href: "/admin", label: "Administration", icon: Settings },
+  { href: "/execute-scripts-setup", label: "Execute Scripts Setup", icon: SquareTerminal },
   { href: "/operational-control", label: "Operational Control", icon: CalendarClock },
   { href: "/xva-setup", label: "XVA Setup", icon: Landmark },
   { href: "/workflows", label: "Workflows", icon: GitBranch },

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.nexusxva.eod.domain.EodRunStatus;
 import com.nexusxva.eod.domain.PortfolioEodSnapshot;
 import com.nexusxva.operationalcontrol.application.OperationalControlStore;
+import com.nexusxva.operationalcontrol.domain.CloseChecklistSettings;
 import com.nexusxva.operationalcontrol.domain.OperationalControlSettings;
 import com.nexusxva.portfolio.application.PortfolioBlackScholesPricingResult;
 import com.nexusxva.portfolio.application.PortfolioBlackScholesPricingService;
@@ -135,6 +136,7 @@ class PortfolioEodServiceTest {
                 false,
                 LocalTime.of(17, 15),
                 false,
+                CloseChecklistSettings.defaults(),
                 Instant.parse("2026-06-22T20:00:00Z"),
                 null,
                 0

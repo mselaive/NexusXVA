@@ -3,6 +3,7 @@ package com.nexusxva.eod.infrastructure;
 import com.nexusxva.audit.application.AuditEventCommand;
 import com.nexusxva.audit.application.AuditService;
 import com.nexusxva.audit.domain.AuditOutcome;
+import com.nexusxva.closechecklist.application.CloseChecklistService;
 import com.nexusxva.eod.application.PortfolioEodBatchService;
 import com.nexusxva.operationalcontrol.application.OperationalControlStore;
 import com.nexusxva.operationalcontrol.domain.OperationalControlSettings;
@@ -26,15 +27,18 @@ class PortfolioEodScheduler {
     private final PortfolioEodBatchService batchService;
     private final OperationalControlStore operationalControlStore;
     private final AuditService auditService;
+    private final CloseChecklistService closeChecklistService;
 
     PortfolioEodScheduler(
             PortfolioEodBatchService batchService,
             OperationalControlStore operationalControlStore,
-            AuditService auditService
+            AuditService auditService,
+            CloseChecklistService closeChecklistService
     ) {
         this.batchService = batchService;
         this.operationalControlStore = operationalControlStore;
         this.auditService = auditService;
+        this.closeChecklistService = closeChecklistService;
     }
 
     @Scheduled(fixedDelayString = "${nexusxva.eod.scheduler-tick:60000}")
@@ -53,6 +57,11 @@ class PortfolioEodScheduler {
         UUID runId = UUID.randomUUID();
         Instant startedAt = Instant.now();
         if (!operationalControlStore.tryStartScheduledEod(runId, businessDate, startedAt)) {
+            return;
+        }
+        if (settings.closeChecklist().enabled()) {
+            closeChecklistService.runScheduledIfDue(businessDate);
+            operationalControlStore.completeScheduledEod(runId, 0, 0, 0, "Scheduled close checklist triggered");
             return;
         }
 

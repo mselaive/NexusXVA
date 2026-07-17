@@ -18,6 +18,7 @@ public record OperationalControlSettings(
         boolean eodEnabled,
         LocalTime eodRunTime,
         boolean eodAllowStaleMarketData,
+        CloseChecklistSettings closeChecklist,
         Instant updatedAt,
         UUID updatedByUserId,
         long version
@@ -40,6 +41,7 @@ public record OperationalControlSettings(
             throw new IllegalArgumentException("eodRunTime must be after tradingCloseTime");
         }
         businessDays = EnumSet.copyOf(businessDays);
+        closeChecklist = closeChecklist == null ? CloseChecklistSettings.defaults() : closeChecklist;
     }
 
     public boolean enforceOperationalWindow() {

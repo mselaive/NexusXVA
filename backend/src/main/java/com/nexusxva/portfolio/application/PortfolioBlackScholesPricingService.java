@@ -218,8 +218,12 @@ public class PortfolioBlackScholesPricingService {
         double marketValue = spot * quantity;
         Double executionPrice = position.executionPrice() == null ? null : position.executionPrice().doubleValue();
         Double executionPriceBase = executionPrice == null ? null : executionPrice * fxRateToBase;
-        Double tradeValue = executionPriceBase == null ? null : executionPriceBase * quantity;
-        Double unrealizedPnl = tradeValue == null ? null : marketValue - tradeValue;
+        Double averageCost = position.averageCost() == null ? null : position.averageCost().doubleValue();
+        Double averageCostBase = averageCost == null ? null : averageCost * fxRateToBase;
+        Double costBasis = averageCostBase == null ? null : averageCostBase * quantity;
+        Double tradeValue = costBasis;
+        Double unrealizedPnl = costBasis == null ? null : marketValue - costBasis;
+        double realizedPnl = position.realizedPnl().doubleValue() * fxRateToBase;
         PortfolioGreeks positionGreeks = new PortfolioGreeks(quantity, 0.0, 0.0, 0.0, 0.0);
 
         return new CashEquityPositionPricingResult(
@@ -230,8 +234,11 @@ public class PortfolioBlackScholesPricingService {
                 spot,
                 marketValue,
                 executionPriceBase,
+                averageCostBase,
+                costBasis,
                 tradeValue,
                 unrealizedPnl,
+                realizedPnl,
                 positionGreeks,
                 new PortfolioPositionMarketData(
                         marketData.spot(),

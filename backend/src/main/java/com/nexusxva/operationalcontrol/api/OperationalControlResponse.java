@@ -1,6 +1,7 @@
 package com.nexusxva.operationalcontrol.api;
 
 import com.nexusxva.operationalcontrol.domain.OperationalControlSettings;
+import com.nexusxva.operationalcontrol.domain.CloseChecklistSettings;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -16,6 +17,7 @@ public record OperationalControlResponse(
         boolean eodEnabled,
         LocalTime eodRunTime,
         boolean eodAllowStaleMarketData,
+        CloseChecklistSettings closeChecklist,
         Instant updatedAt,
         String updatedByUserId,
         long version
@@ -33,6 +35,7 @@ public record OperationalControlResponse(
                 settings.eodEnabled(),
                 settings.eodRunTime(),
                 settings.eodAllowStaleMarketData(),
+                settings.closeChecklist(),
                 settings.updatedAt(),
                 settings.updatedByUserId() == null ? null : settings.updatedByUserId().toString(),
                 settings.version()

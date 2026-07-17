@@ -541,7 +541,7 @@ La version actual evita algunos casos a proposito:
 * Payoff exacto en vencimiento.
 * Persistir resultados de valoracion como estado reutilizable de riesgo; Run History hoy es auditoria/reporting.
 * Usar market data real dentro de NexusXVA.
-* Curvas de credito persistidas como master data, netting legal path-level, collateral/margining dinamico y wrong-way risk.
+* Versionado/aprobacion de curvas de credito, netting legal path-level, collateral/margining dinamico y wrong-way risk.
 
 Estos casos no estan olvidados.
 Estan fuera de scope para que el slice actual sea pequeno, correcto y testeable.

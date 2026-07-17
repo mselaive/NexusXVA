@@ -55,4 +55,6 @@ public interface PortfolioStore {
 
     void markCashEquityPositionAmended(UUID positionId);
 
+    void recordCashEquityAmendmentClose(UUID positionId, AddCashEquityPositionCommand requestedTerms);
+
 }

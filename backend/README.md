@@ -2,7 +2,7 @@
 
 Spring Boot backend for NexusXVA.
 
-The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option and cash equity positions, portfolio-level pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, simplified CVA V1.1, XVA reference data for counterparties/netting sets/collateral, cash-equity delta hedge analysis, persisted valuation run history, Audit Trail V1, and rotated technical logs.
+The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option and cash equity positions, portfolio-level pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, simplified CVA V1.2, XVA reference data for counterparties/netting sets/collateral/curves, cash-equity delta hedge analysis, persisted valuation run history, persisted report snapshots, Audit Trail V1, and rotated technical logs.
 
 ## Requirements
 
@@ -165,9 +165,9 @@ Security model:
 
 Current group intent:
 
-- `FO`: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad booking submission, portfolios, pricing, exposure, CVA and valuation run history.
-- `BO`: Trade Validation, Lifecycle Reporting, Operations Reporting, preventive Trading Limits, manual EOD Control, and valuation run history.
-- `ADMIN`: user/group administration, FO feature permissions, portfolio visibility, Operational Control, workflow monitoring, Audit Logs, and valuation run history.
+- `FO`: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad booking submission, portfolios, pricing, exposure, CVA, valuation run history and report history.
+- `BO`: Trade Validation, Lifecycle Reporting, Operations Reporting, preventive Trading Limits, manual EOD Control, valuation run history and report history.
+- `ADMIN`: user/group administration, FO feature permissions, portfolio visibility, Operational Control, workflow monitoring, Audit Logs, valuation run history and report history.
 
 The backend enforces the active group. Frontend navigation is not the security boundary.
 
@@ -202,6 +202,36 @@ Portfolio visibility supports `ALL` or `SELECTED`. The default is permissive (`A
 The workflow map is read-only. It visualizes trade booking requests across `Booked`, `Waiting BO`, `Accepted`, and `Rejected`; it does not approve or reject bookings. BO Trade Validation remains the owner of that maker-checker action.
 
 Operational Control is global in V1. ADMIN configures the timezone, business days, trading open/close, automatic EOD enablement, EOD time and stale-market-data policy. The trading window has two independent blocking switches: one for FO trade bookings/lifecycle requests, and one for risk runs such as pricing, Pre-Trade Analysis, Stress, Delta Hedge, Exposure and CVA. Blocked actions return `409 ApiError` outside the window; disabled switches remain advisory. BO validation/corrections and ADMIN screens remain available.
+
+Operational Control also owns **Close Checklist V1**:
+
+- ADMIN selects the portfolios in scope.
+- ADMIN enables ordered steps across `PRE_EOD`, `EOD` and `POST_EOD`.
+- Step types are `FO_PNL_REPORT`, `BO_OPERATIONS_REPORT`, `BO_LIFECYCLE_REPORT`, `PORTFOLIO_PRICING`, `EXPOSURE`, `CVA` and `EOD`.
+- Exposure/CVA use global defaults stored with Operational Control.
+- CVA checklist runs require approved persisted `creditCurveId` and `discountCurveId`.
+- BO runs the checklist manually from EOD Control through `POST /api/back-office/close-checklist/runs`.
+- The scheduler runs the checklist instead of plain EOD when both EOD scheduling and Close Checklist are enabled.
+- Critical failed `PRE_EOD` steps block EOD and skip later steps.
+
+ExecuteScript V1 is a separate manual diagnostics/playbook module:
+
+- ADMIN creates reusable templates from controlled step types.
+- BO executes templates in `DRY_RUN` or `REAL_RUN`.
+- Step types are `FO_PNL_REPORT`, `BO_OPERATIONS_REPORT`, `BO_LIFECYCLE_REPORT`, `PORTFOLIO_PRICING`, `EXPOSURE`, `CVA`, `EOD_VALIDATE` and `EOD_CAPTURE`.
+- `DRY_RUN` stores only `execute_script_runs` / `execute_script_run_steps`; it does not create EOD closes, valuation runs or report snapshots.
+- `REAL_RUN` may create `report_snapshots`, `valuation_runs` and EOD snapshots when those steps are selected.
+- Critical failed steps skip the rest of the script.
+
+ExecuteScript endpoints:
+
+- `GET /api/admin/execute-scripts/templates`
+- `POST /api/admin/execute-scripts/templates`
+- `PATCH /api/admin/execute-scripts/templates/{templateId}`
+- `GET /api/back-office/execute-scripts/templates`
+- `POST /api/back-office/execute-scripts/runs`
+- `GET /api/back-office/execute-scripts/runs`
+- `GET /api/back-office/execute-scripts/runs/{runId}`
 
 The ADMIN checkbox controls the runtime policy. Backend enforcement also has a technical guard, `NEXUSXVA_OPERATIONAL_CONTROL_ENFORCEMENT_ENABLED=true`, intended only as a controlled local/test escape hatch; production-like runs should keep the env guard enabled.
 
@@ -362,16 +392,45 @@ Important boundaries:
 - Pricing, Exposure and CVA still recompute from current portfolio state and `marketdata` inputs.
 - Failed runs are stored only when the request reaches the valuation controller and fails during calculation.
 
+## Report Snapshot History V1
+
+Report History records saved workstation views without changing any business calculation:
+
+- `GET /api/report-snapshots`
+- `GET /api/report-snapshots/{snapshotId}`
+
+Filters:
+
+- `reportType=FO_PNL_SNAPSHOT|BO_OPERATIONS|BO_LIFECYCLE`
+- `limit=50`
+
+Snapshots are created when users open:
+
+- `GET /api/front-office/reports/desk-pnl`
+- `GET /api/back-office/reports/operations`
+- `GET /api/back-office/lifecycle-report`
+
+Stored fields include report type, title, business date, scope, requesting user/group, filters JSON, full rendered result JSON, compact summary JSON and timestamp.
+
+Important boundaries:
+
+- Report History is a saved view/audit aid, not a source for future pricing, EOD or P&L.
+- EOD snapshots remain the official close reference for Daily P&L.
+- Valuation Run History remains the audit trail for pricing, exposure and CVA calculations.
+- FO sees only their own report snapshots; BO sees BO report snapshots; ADMIN can review all snapshots.
+
 ## Developer Financial Docs
 
 Conceptual financial guides for developers live in:
 
 - Spanish: [`../docs/docs-ES/ConceptosFinancieros.md`](../docs/docs-ES/ConceptosFinancieros.md)
 - System logic ES: [`../docs/docs-ES/LogicaDelSistema.md`](../docs/docs-ES/LogicaDelSistema.md)
+- Recent recap ES: [`../docs/docs-ES/RecapReciente.md`](../docs/docs-ES/RecapReciente.md)
 - Data model ES: [`../docs/docs-ES/DataModel.md`](../docs/docs-ES/DataModel.md)
 - Auth and groups ES: [`../docs/docs-ES/AuthYGrupos.md`](../docs/docs-ES/AuthYGrupos.md)
 - Demo portfolios ES: [`../docs/docs-ES/PortafoliosDemo.md`](../docs/docs-ES/PortafoliosDemo.md)
 - System logic EN: [`../docs/docs-EN/SystemLogic.md`](../docs/docs-EN/SystemLogic.md)
+- Recent recap EN: [`../docs/docs-EN/RecentRecap.md`](../docs/docs-EN/RecentRecap.md)
 - English: [`../docs/docs-EN/FinancialConcepts.md`](../docs/docs-EN/FinancialConcepts.md)
 - Demo portfolios EN: [`../docs/docs-EN/DemoPortfolios.md`](../docs/docs-EN/DemoPortfolios.md)
 - Blemberg needs: [`../docs/docs-EN/BlembergNeeds.md`](../docs/docs-EN/BlembergNeeds.md)
@@ -502,7 +561,7 @@ It derives pending booking count, pending lifecycle count, missing-today EOD por
 
 ### Trade Economics And P&L V1
 
-New European-option bookings may include an optional `executionPrice`, representing the premium negotiated per unit. It is copied into the confirmed position when BO approves the booking. Legacy positions remain valid with `executionPrice = null`.
+New European-option bookings may include an optional `executionPrice`, representing the premium negotiated per unit. Cash-equity bookings may include an optional `executionPrice`, representing the share execution price. It is copied into the confirmed position when BO approves the booking. Legacy positions remain valid with `executionPrice = null`.
 
 Portfolio pricing reports:
 
@@ -513,6 +572,23 @@ unrealizedPnl = marketValue - tradeValue
 ```
 
 If execution price is missing, position P&L is returned as `null` and `positionsWithoutExecutionPrice` is incremented. Strike and underlying spot are never treated as the option premium.
+
+### Cash Equity Lots, Average Cost And Realized P&L V1
+
+Cash equity positions now keep execution lots in `cash_equity_lots`.
+
+Current rules:
+
+- BO approval of a cash equity booking creates an `OPENING` lot when `executionPrice` is present.
+- Existing cash equity positions with execution price are backfilled with one `OPENING` lot.
+- Portfolio pricing reports `averageCost`, `costBasis`, `unrealizedPnl` and `realizedPnl` for cash equity rows.
+- `averageCost` is derived from opening lots and falls back to the position execution price for legacy rows.
+- `costBasis = averageCost * quantity`.
+- `unrealizedPnl = marketValue - costBasis`.
+- A cash-equity amendment that reduces an active position and provides an execution price records an `AMENDMENT_CLOSE` lot on the original position and calculates realized P&L.
+- Operational cancellation without an exit execution price does not invent realized P&L.
+
+This is not a full accounting ledger yet. V1 keeps the current aggregate cash equity position model for pricing and delta hedge, while lots provide cost basis and first realized P&L history. Full buy/sell lots, average-cost netting across multiple executions, realized P&L on sells, and partial cancellations are later accounting slices.
 
 ### EOD Snapshots And Daily P&L
 
@@ -531,7 +607,17 @@ Existing positions use prior EOD market value as the Daily P&L reference. Positi
 
 The normal BO and scheduler process closes all portfolios. Each portfolio runs independently and is reported as `CAPTURED`, `SKIPPED`, or `FAILED`; a failed portfolio does not roll back successful closes from other books.
 
-Scheduled EOD is configured in ADMIN -> Operational Control, not by a fixed cron. The scheduler checks the database every minute and runs once per business date after the configured EOD time. Defaults are New York business days, `09:30` to `16:00` trading, and `17:15` EOD disabled.
+Scheduled EOD is configured in ADMIN -> Operational Control, not by a fixed cron. The scheduler checks the database every minute and runs once per business date after the configured EOD time. Defaults are New York business days, `09:30` to `16:00` trading, and `17:15` EOD disabled. If Close Checklist is enabled, scheduled close executes the configured checklist; otherwise it keeps the previous plain EOD behavior.
+
+Close Checklist endpoints:
+
+- `POST /api/back-office/close-checklist/runs`
+- `GET /api/back-office/close-checklist/runs`
+- `GET /api/back-office/close-checklist/runs/{runId}`
+
+Checklist runs are stored in `close_checklist_runs` and `close_checklist_run_steps`. Report steps create `report_snapshots`; pricing/exposure/CVA steps create `valuation_runs`; the EOD step creates normal EOD snapshots.
+
+ExecuteScript is not scheduled and does not replace Close Checklist. It is used by BO to test close inputs, reporting and risk steps before running the formal close. `EOD_VALIDATE` checks EOD readiness without creating `portfolio_eod_runs`; `EOD_CAPTURE` creates EOD snapshots only in `REAL_RUN`.
 
 The scheduler bean is controlled by `NEXUSXVA_EOD_SCHEDULER_ENABLED=true` and the wake-up interval by `NEXUSXVA_EOD_SCHEDULER_TICK=60000`.
 
@@ -742,9 +828,9 @@ V1 simulation rules:
 - Empty portfolios or all-expired portfolios return zero exposure points.
 - Does not persist market data or simulated paths as reusable state; the API request/response is copied to valuation run history for audit.
 
-### Simplified CVA V1.1
+### Simplified CVA V1.2
 
-CVA V1.1 is synchronous: it reuses Exposure V1, then applies a simple credit valuation adjustment formula over expected exposure by date. NexusXVA stores an audit copy in `valuation_runs`; credit curves and CVA result state are not promoted into persisted master data yet.
+CVA V1.2 is synchronous: it reuses Exposure V1, then applies a simple credit valuation adjustment formula over expected exposure by date. NexusXVA stores an audit copy in `valuation_runs`. ADMIN can now maintain reusable credit and discount curve master data in the XVA module, while CVA result state remains valuation-run audit history rather than operational state.
 
 Endpoint:
 
@@ -792,6 +878,23 @@ Curve-mode request:
 }
 ```
 
+Persisted-curve request:
+
+```json
+{
+  "portfolioId": "6f2d4637-ef84-4bc5-bca3-7c7aee54b4e5",
+  "valuationDate": "2026-06-05",
+  "horizonDays": 365,
+  "timeSteps": 12,
+  "paths": 1000,
+  "seed": 12345,
+  "pfeConfidenceLevel": 0.95,
+  "lossGivenDefault": 0.6,
+  "creditCurveId": "2c2db24a-c1ea-4f3e-a094-9c34de5b89f3",
+  "discountCurveId": "1d33b5b2-2f52-4b63-b59a-27edc2a44c55"
+}
+```
+
 Response shape:
 
 ```json
@@ -826,8 +929,9 @@ Response shape:
 V1 CVA rules:
 
 - Formula: `CVA = LGD * sum(discountFactor_i * expectedExposure_i * defaultProbabilityIncrement_i)`.
-- If `creditCurve` is provided, CVA uses curve-based default probability increments; otherwise it uses `counterpartyHazardRate`.
-- If `discountCurve` is provided, CVA uses curve discount factors; otherwise it uses `discountRate`.
+- If `creditCurveId` is provided, CVA loads an active persisted credit curve; if `creditCurve` is provided, CVA uses inline curve points; otherwise it uses `counterpartyHazardRate`.
+- If `discountCurveId` is provided, CVA loads an active persisted discount curve; if `discountCurve` is provided, CVA uses inline curve points; otherwise it uses `discountRate`.
+- A request must not provide both `creditCurveId` and inline `creditCurve`, or both `discountCurveId` and inline `discountCurve`.
 - `creditCurve` points provide exactly one of `survivalProbability` or `cumulativeDefaultProbability`.
 - Missing exposure dates inside a curve range use simple linear interpolation.
 - Exposure dates outside a provided curve range return `400 Bad Request`.
@@ -835,7 +939,7 @@ V1 CVA rules:
 - CVA reuses Exposure V1 and reports values in the portfolio `baseCurrency`.
 - European-options-only limitations still apply for the simulation leg.
 - Single-portfolio CVA and netting-set CVA both write valuation run audit snapshots. Netting-set runs are stored with `scopeType=NETTING_SET`.
-- Wrong-way risk, path-level netting, margining, CSA rules, persisted credit curves, and persisted CVA result state are still out of scope.
+- Wrong-way risk, path-level netting, margining, CSA rules, dynamic collateral and persisted CVA result state are still out of scope.
 
 ### Counterparties, Netting Sets And Collateral V1
 
@@ -850,8 +954,27 @@ NexusXVA now has a first XVA reference-data slice:
 - `POST /api/xva/netting-sets/{nettingSetId}/portfolios`
 - `DELETE /api/xva/netting-sets/{nettingSetId}/portfolios/{portfolioId}`
 - `PATCH /api/xva/netting-sets/{nettingSetId}/collateral`
+- `GET /api/xva/credit-curves`
+- `POST /api/xva/credit-curves`
+- `PATCH /api/xva/credit-curves/{curveId}`
+- `POST /api/xva/credit-curves/{curveId}/approve`
+- `POST /api/xva/credit-curves/{curveId}/reject`
+- `GET /api/xva/discount-curves`
+- `POST /api/xva/discount-curves`
+- `PATCH /api/xva/discount-curves/{curveId}`
+- `POST /api/xva/discount-curves/{curveId}/approve`
+- `POST /api/xva/discount-curves/{curveId}/reject`
 
-Mutating setup endpoints require an `ADMIN` active group when auth is enabled. Read endpoints default to active/operable records only; ADMIN can pass `includeInactive=true` for setup screens. FO CVA selection consumes only active counterparties and active netting sets.
+Mutating setup endpoints require an `ADMIN` active group when auth is enabled. Read endpoints default to active/operable records only; ADMIN can pass `includeInactive=true` for setup screens. FO CVA selection consumes only active counterparties, active netting sets, active approved credit curves and active approved discount curves.
+
+Curve lifecycle V1:
+
+- Creating a credit or discount curve creates a new `DRAFT` version.
+- Draft curves can be edited, approved or rejected.
+- Approving a draft makes it `APPROVED`, `active=true`, and supersedes the previous active approved version for the same credit curve name/counterparty or discount curve name/currency.
+- Rejected and superseded curves remain in history and are not usable by CVA.
+- Approved, rejected and superseded curves are immutable; create a new version to change curve points.
+- `source` supports `MANUAL`, `IMPORT` and `MARKET_DATA`; V1 creates manual drafts, while imports and Blemberg-sourced curves are planned future ingestion paths.
 
 Admin setup examples:
 

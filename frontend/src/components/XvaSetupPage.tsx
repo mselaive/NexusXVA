@@ -47,6 +47,9 @@ type CurveForm = {
   name: string;
   curveType: CreditCurveType;
   currency: string;
+  valuationDate: string;
+  recoveryRate: string;
+  allowStale: boolean;
 };
 
 const emptyCounterpartyForm: CounterpartyForm = {
@@ -67,6 +70,9 @@ const emptyCurveForm: CurveForm = {
   name: "",
   curveType: "SURVIVAL_PROBABILITY",
   currency: "USD",
+  valuationDate: todayIsoDate(),
+  recoveryRate: "0.40",
+  allowStale: false,
 };
 
 export function XvaSetupPage() {
@@ -282,6 +288,30 @@ export function XvaSetupPage() {
     });
   }
 
+  async function importCreditCurveFromMarketData() {
+    if (!selectedCounterparty) return;
+    const recoveryRate = Number(creditCurveForm.recoveryRate);
+    if (!selectedCounterparty.creditRating?.trim()) {
+      setError("Set a credit rating on the counterparty before importing a market curve.");
+      return;
+    }
+    if (!Number.isFinite(recoveryRate) || recoveryRate < 0 || recoveryRate >= 1) {
+      setError("Recovery rate must be between 0 and 1.");
+      return;
+    }
+    await withSave("import-market-credit-curve", async () => {
+      const created = await nexusApi.importMarketDataCreditCurve({
+        counterpartyId: selectedCounterparty.id,
+        valuationDate: creditCurveForm.valuationDate,
+        recoveryRate,
+        name: creditCurveForm.name.trim() || null,
+        allowStale: creditCurveForm.allowStale,
+      });
+      setSuccess(`Market credit proxy "${created.name}" imported as DRAFT. Review it before approval.`);
+      await load(selectedCounterparty.id, selectedNettingSetId);
+    });
+  }
+
   async function importDiscountCurve(file: File) {
     if (!discountCurveForm.name.trim()) {
       setError("Enter a discount curve name before importing.");
@@ -310,9 +340,9 @@ export function XvaSetupPage() {
     await withSave("import-market-discount-curve", async () => {
       const created = await nexusApi.importMarketDataDiscountCurve({
         currency,
-        valuationDate: todayIsoDate(),
+        valuationDate: discountCurveForm.valuationDate,
         name: discountCurveForm.name.trim() || null,
-        allowStale: false,
+        allowStale: discountCurveForm.allowStale,
       });
       setSuccess(`Market-data curve "${created.name}" imported as DRAFT. Review it before approval.`);
       await load(selectedCounterpartyId, selectedNettingSetId);
@@ -582,7 +612,21 @@ export function XvaSetupPage() {
                           <option value="CUMULATIVE_DEFAULT_PROBABILITY">Cumulative default probability</option>
                         </select>
                       </label>
+                      <label className="field">
+                        <span>Valuation date</span>
+                        <input className="input" type="date" value={creditCurveForm.valuationDate} onChange={(event) => setCreditCurveForm({ ...creditCurveForm, valuationDate: event.target.value })} />
+                      </label>
+                      <TextInput label="Recovery rate" value={creditCurveForm.recoveryRate} type="number" onChange={(recoveryRate) => setCreditCurveForm({ ...creditCurveForm, recoveryRate })} />
                     </div>
+                    <div className="xva-market-import-summary">
+                      <span>Market rating</span>
+                      <strong>{selectedCounterparty.creditRating || "Not configured"}</strong>
+                      <small>Blemberg maps investment-grade ratings to a USD OAS proxy. Imported curves stay in DRAFT.</small>
+                    </div>
+                    <label className="inline-check curve-stale-toggle">
+                      <input type="checkbox" checked={creditCurveForm.allowStale} onChange={(event) => setCreditCurveForm({ ...creditCurveForm, allowStale: event.target.checked })} />
+                      Allow stale market credit curve import
+                    </label>
                     <div className="toolbar">
                       <button className="btn secondary" type="button" onClick={createCreditCurve} disabled={saving === "create-credit-curve" || !selectedCounterparty.active || !creditCurveForm.name.trim()}>
                         {saving === "create-credit-curve" ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
@@ -592,6 +636,10 @@ export function XvaSetupPage() {
                         <Upload size={16} /> Import CSV
                         <input type="file" accept=".csv,text/csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importCreditCurve(file); event.target.value = ""; }} />
                       </label>
+                      <button className="btn secondary" type="button" onClick={importCreditCurveFromMarketData} disabled={saving === "import-market-credit-curve" || !selectedCounterparty.active || !selectedCounterparty.creditRating}>
+                        {saving === "import-market-credit-curve" ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
+                        Import market draft
+                      </button>
                     </div>
                     <CurveList
                       curves={selectedCreditCurves.map((curve) => ({
@@ -599,6 +647,9 @@ export function XvaSetupPage() {
                         label: `${curve.name} v${curve.version} · ${curve.curveType.replaceAll("_", " ")}`,
                         status: curve.status,
                         active: curve.active,
+                        detail: curve.source === "MARKET_DATA"
+                          ? `${curve.marketProxy ? "Market proxy" : "Market data"} · ${curve.sourceRatingBucket ?? curve.sourceCreditRating ?? "rating unavailable"} · OAS ${curve.sourceSpread == null ? "unknown" : `${(curve.sourceSpread * 10000).toFixed(1)} bp`} · recovery ${curve.sourceRecoveryRate == null ? "unknown" : `${(curve.sourceRecoveryRate * 100).toFixed(0)}%`} · hazard ${curve.sourceHazardRate == null ? "unknown" : curve.sourceHazardRate.toFixed(6)} · ${curve.sourceSeriesId ?? "series unavailable"} · observed ${curve.sourceObservationDate ?? "unknown"}${curve.sourceStale ? " · STALE" : ""}`
+                          : curve.source,
                       }))}
                       emptyText="No credit curves for this counterparty."
                       saving={saving}
@@ -611,7 +662,15 @@ export function XvaSetupPage() {
                     <div className="form-grid">
                       <TextInput label="Name" value={discountCurveForm.name} onChange={(name) => setDiscountCurveForm({ ...discountCurveForm, name })} />
                       <TextInput label="Currency" value={discountCurveForm.currency} onChange={(currency) => setDiscountCurveForm({ ...discountCurveForm, currency })} />
+                      <label className="field">
+                        <span>Valuation date</span>
+                        <input className="input" type="date" value={discountCurveForm.valuationDate} onChange={(event) => setDiscountCurveForm({ ...discountCurveForm, valuationDate: event.target.value })} />
+                      </label>
                     </div>
+                    <label className="inline-check curve-stale-toggle">
+                      <input type="checkbox" checked={discountCurveForm.allowStale} onChange={(event) => setDiscountCurveForm({ ...discountCurveForm, allowStale: event.target.checked })} />
+                      Allow stale market curve import
+                    </label>
                     <div className="toolbar">
                       <button className="btn secondary" type="button" onClick={createDiscountCurve} disabled={saving === "create-discount-curve" || !discountCurveForm.name.trim()}>
                         {saving === "create-discount-curve" ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
@@ -632,6 +691,9 @@ export function XvaSetupPage() {
                         label: `${curve.currency} · ${curve.name} v${curve.version}`,
                         status: curve.status,
                         active: curve.active,
+                        detail: curve.source === "MARKET_DATA"
+                          ? `${curve.source}${curve.sourceStale ? " · STALE" : ""} · ${curve.constructionMethod ?? "method unavailable"} · as of ${curve.sourceAsOf ? new Date(curve.sourceAsOf).toLocaleString() : "unknown"}`
+                          : curve.source,
                       }))}
                       emptyText="No discount curves configured."
                       saving={saving}
@@ -658,7 +720,7 @@ function CurveList({
   onApprove,
   onReject,
 }: {
-  curves: Array<{ id: string; label: string; status: string; active: boolean }>;
+  curves: Array<{ id: string; label: string; status: string; active: boolean; detail?: string }>;
   emptyText: string;
   saving: string | null;
   onApprove: (curveId: string) => void;
@@ -671,7 +733,10 @@ function CurveList({
     <div className="xva-curve-list">
       {curves.map((curve) => (
         <div className="xva-curve-pill" key={curve.id}>
-          <span>{curve.label} · {curve.status}{curve.active ? " · Active" : ""}</span>
+          <div className="xva-curve-identity">
+            <span>{curve.label} · {curve.status}{curve.active ? " · Active" : ""}</span>
+            {curve.detail ? <small>{curve.detail}</small> : null}
+          </div>
           {curve.status === "DRAFT" ? (
             <div className="row-actions">
               <button className="text-action" type="button" onClick={() => onApprove(curve.id)} disabled={saving === `approve-credit-${curve.id}` || saving === `approve-discount-${curve.id}`}>

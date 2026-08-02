@@ -24,6 +24,20 @@ public record CreditCurveResponse(
         Instant approvedAt,
         UUID approvedByUserId,
         String rejectionReason,
+        Instant sourceAsOf,
+        String sourceReference,
+        String sourceSeriesId,
+        String constructionMethod,
+        boolean sourceStale,
+        String sourceCurrency,
+        String sourceCreditRating,
+        String sourceRatingBucket,
+        Double sourceRecoveryRate,
+        Double sourceSpread,
+        String sourceSpreadUnit,
+        Double sourceHazardRate,
+        LocalDate sourceObservationDate,
+        boolean marketProxy,
         List<PointResponse> points
 ) {
     static CreditCurveResponse from(CreditCurve curve) {
@@ -43,6 +57,20 @@ public record CreditCurveResponse(
                 curve.approvedAt(),
                 curve.approvedByUserId(),
                 curve.rejectionReason(),
+                curve.sourceAsOf(),
+                curve.sourceReference(),
+                curve.sourceSeriesId(),
+                curve.constructionMethod(),
+                curve.sourceStale(),
+                curve.sourceCurrency(),
+                curve.sourceCreditRating(),
+                curve.sourceRatingBucket(),
+                curve.sourceRecoveryRate(),
+                curve.sourceSpread(),
+                curve.sourceSpreadUnit(),
+                curve.sourceHazardRate(),
+                curve.sourceObservationDate(),
+                curve.marketProxy(),
                 curve.points().stream().map(PointResponse::from).toList()
         );
     }

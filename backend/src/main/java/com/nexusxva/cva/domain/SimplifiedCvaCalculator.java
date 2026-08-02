@@ -55,7 +55,7 @@ public class SimplifiedCvaCalculator {
         if (creditCurve.isEmpty()) {
             return Math.exp(-input.counterpartyHazardRate() * timeYears);
         }
-        return interpolateCreditCurve(creditCurve, exposurePoint.date());
+        return interpolateCreditCurve(creditCurve, input.valuationDate(), exposurePoint.date());
     }
 
     private double discountFactor(
@@ -67,14 +67,27 @@ public class SimplifiedCvaCalculator {
         if (discountCurve.isEmpty()) {
             return Math.exp(-input.discountRate() * timeYears);
         }
-        return interpolateDiscountCurve(discountCurve, exposurePoint.date());
+        return interpolateDiscountCurve(discountCurve, input.valuationDate(), exposurePoint.date());
     }
 
-    private double interpolateCreditCurve(List<CreditCurvePoint> curve, java.time.LocalDate date) {
+    private double interpolateCreditCurve(
+            List<CreditCurvePoint> curve,
+            java.time.LocalDate valuationDate,
+            java.time.LocalDate date
+    ) {
+        CreditCurvePoint first = curve.getFirst();
+        if (date.isBefore(first.date())) {
+            return interpolate(
+                    valuationDate,
+                    1.0,
+                    first.date(),
+                    first.resolvedSurvivalProbability(),
+                    date
+            );
+        }
         if (curve.size() == 1) {
-            CreditCurvePoint point = curve.getFirst();
-            if (point.date().isEqual(date)) {
-                return point.resolvedSurvivalProbability();
+            if (first.date().isEqual(date)) {
+                return first.resolvedSurvivalProbability();
             }
             throw new IllegalArgumentException("creditCurve does not cover exposure date");
         }
@@ -86,9 +99,6 @@ public class SimplifiedCvaCalculator {
         if (exactOrRight.date().isEqual(date)) {
             return exactOrRight.resolvedSurvivalProbability();
         }
-        if (index == 0) {
-            throw new IllegalArgumentException("creditCurve does not cover exposure date");
-        }
         CreditCurvePoint left = curve.get(index - 1);
         return interpolate(
                 left.date(),
@@ -99,11 +109,18 @@ public class SimplifiedCvaCalculator {
         );
     }
 
-    private double interpolateDiscountCurve(List<DiscountCurvePoint> curve, java.time.LocalDate date) {
+    private double interpolateDiscountCurve(
+            List<DiscountCurvePoint> curve,
+            java.time.LocalDate valuationDate,
+            java.time.LocalDate date
+    ) {
+        DiscountCurvePoint first = curve.getFirst();
+        if (date.isBefore(first.date())) {
+            return interpolate(valuationDate, 1.0, first.date(), first.discountFactor(), date);
+        }
         if (curve.size() == 1) {
-            DiscountCurvePoint point = curve.getFirst();
-            if (point.date().isEqual(date)) {
-                return point.discountFactor();
+            if (first.date().isEqual(date)) {
+                return first.discountFactor();
             }
             throw new IllegalArgumentException("discountCurve does not cover exposure date");
         }
@@ -114,9 +131,6 @@ public class SimplifiedCvaCalculator {
         DiscountCurvePoint exactOrRight = curve.get(index);
         if (exactOrRight.date().isEqual(date)) {
             return exactOrRight.discountFactor();
-        }
-        if (index == 0) {
-            throw new IllegalArgumentException("discountCurve does not cover exposure date");
         }
         DiscountCurvePoint left = curve.get(index - 1);
         return interpolate(left.date(), left.discountFactor(), exactOrRight.date(), exactOrRight.discountFactor(), date);

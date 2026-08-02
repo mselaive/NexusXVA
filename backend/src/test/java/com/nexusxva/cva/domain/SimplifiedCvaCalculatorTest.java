@@ -180,12 +180,36 @@ class SimplifiedCvaCalculatorTest {
     }
 
     @Test
-    void rejectsCreditCurveOutsideExposureDateRange() {
+    void interpolatesFromValuationDateAnchorBeforeFirstCurvePoint() {
+        LocalDate valuationDate = LocalDate.parse("2026-06-05");
+
+        CvaResult result = calculator.calculate(new CvaInput(
+                valuationDate,
+                List.of(new ExposurePoint(valuationDate.plusDays(30), 100.0, 0.0, 120.0)),
+                0.60,
+                null,
+                null,
+                List.of(
+                        new CreditCurvePoint(valuationDate.plusDays(60), 0.99, null),
+                        new CreditCurvePoint(valuationDate.plusDays(90), 0.98, null)
+                ),
+                List.of(
+                        new DiscountCurvePoint(valuationDate.plusDays(60), 0.98),
+                        new DiscountCurvePoint(valuationDate.plusDays(90), 0.97)
+                )
+        ));
+
+        assertThat(result.points().getFirst().survivalProbability()).isCloseTo(0.995, withinTolerance());
+        assertThat(result.points().getFirst().discountFactor()).isCloseTo(0.99, withinTolerance());
+    }
+
+    @Test
+    void rejectsCreditCurveAfterLastCurvePoint() {
         LocalDate valuationDate = LocalDate.parse("2026-06-05");
 
         assertThatThrownBy(() -> calculator.calculate(new CvaInput(
                 valuationDate,
-                List.of(new ExposurePoint(valuationDate.plusDays(30), 100.0, 0.0, 120.0)),
+                List.of(new ExposurePoint(valuationDate.plusDays(120), 100.0, 0.0, 120.0)),
                 0.60,
                 null,
                 0.05,

@@ -3,6 +3,7 @@ package com.nexusxva.xva.application;
 import com.nexusxva.xva.domain.CreditCurve;
 import com.nexusxva.xva.domain.CreditCurveType;
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -12,10 +13,31 @@ public record SaveCreditCurveCommand(
         CreditCurveType curveType,
         boolean active,
         List<CreditCurve.Point> points,
-        com.nexusxva.xva.domain.CurveSource source
+        com.nexusxva.xva.domain.CurveSource source,
+        Instant sourceAsOf,
+        String sourceReference,
+        String sourceSeriesId,
+        String constructionMethod,
+        boolean sourceStale,
+        String sourceCurrency,
+        String sourceCreditRating,
+        String sourceRatingBucket,
+        Double sourceRecoveryRate,
+        Double sourceSpread,
+        String sourceSpreadUnit,
+        Double sourceHazardRate,
+        LocalDate sourceObservationDate,
+        boolean marketProxy
 ) {
     public SaveCreditCurveCommand(UUID counterpartyId, String name, CreditCurveType curveType, boolean active, List<CreditCurve.Point> points) {
-        this(counterpartyId, name, curveType, active, points, com.nexusxva.xva.domain.CurveSource.MANUAL);
+        this(counterpartyId, name, curveType, active, points, com.nexusxva.xva.domain.CurveSource.MANUAL,
+                null, null, null, null, false, null, null, null, null, null, null, null, null, false);
+    }
+
+    public SaveCreditCurveCommand(UUID counterpartyId, String name, CreditCurveType curveType, boolean active,
+                                  List<CreditCurve.Point> points, com.nexusxva.xva.domain.CurveSource source) {
+        this(counterpartyId, name, curveType, active, points, source,
+                null, null, null, null, false, null, null, null, null, null, null, null, null, false);
     }
 
     public SaveCreditCurveCommand {
@@ -29,6 +51,13 @@ public record SaveCreditCurveCommand(
             throw new IllegalArgumentException("curveType is required");
         }
         source = source == null ? com.nexusxva.xva.domain.CurveSource.MANUAL : source;
+        sourceReference = normalize(sourceReference, 240, "sourceReference");
+        sourceSeriesId = normalize(sourceSeriesId, 80, "sourceSeriesId");
+        constructionMethod = normalize(constructionMethod, 120, "constructionMethod");
+        sourceCurrency = normalize(sourceCurrency, 3, "sourceCurrency");
+        sourceCreditRating = normalize(sourceCreditRating, 16, "sourceCreditRating");
+        sourceRatingBucket = normalize(sourceRatingBucket, 8, "sourceRatingBucket");
+        sourceSpreadUnit = normalize(sourceSpreadUnit, 16, "sourceSpreadUnit");
         points = points == null ? List.of() : points.stream()
                 .sorted(java.util.Comparator.comparing(CreditCurve.Point::date))
                 .toList();
@@ -36,6 +65,13 @@ public record SaveCreditCurveCommand(
             throw new IllegalArgumentException("credit curve must contain at least one point");
         }
         validatePoints(curveType, points);
+    }
+
+    private static String normalize(String value, int maxLength, String field) {
+        if (value == null || value.isBlank()) return null;
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) throw new IllegalArgumentException(field + " is too long");
+        return normalized;
     }
 
     private static void validatePoints(CreditCurveType curveType, List<CreditCurve.Point> points) {

@@ -4,6 +4,7 @@ import com.nexusxva.cva.domain.CreditCurvePoint;
 import com.nexusxva.cva.domain.DiscountCurvePoint;
 import com.nexusxva.shared.error.ConflictException;
 import com.nexusxva.shared.error.ResourceNotFoundException;
+import com.nexusxva.shared.error.ServiceUnavailableException;
 import com.nexusxva.xva.domain.Counterparty;
 import com.nexusxva.xva.domain.CreditCurve;
 import com.nexusxva.xva.domain.CurveLifecycleStatus;
@@ -42,6 +43,70 @@ public class CvaCurveMasterDataService {
         return createCreditCurve(new SaveCreditCurveCommand(
                 command.counterpartyId(), command.name(), command.curveType(), false, command.points(),
                 com.nexusxva.xva.domain.CurveSource.IMPORT));
+    }
+
+    @Transactional
+    public CreditCurve importMarketCreditCurve(UUID counterpartyId, java.time.LocalDate valuationDate,
+                                                Double recoveryRate, String requestedName, boolean allowStale) {
+        if (counterpartyId == null) throw new IllegalArgumentException("counterpartyId is required");
+        if (valuationDate == null) throw new IllegalArgumentException("valuationDate is required");
+        double normalizedRecoveryRate = recoveryRate == null ? 0.40 : recoveryRate;
+        if (!Double.isFinite(normalizedRecoveryRate) || normalizedRecoveryRate < 0.0 || normalizedRecoveryRate >= 1.0) {
+            throw new IllegalArgumentException("recoveryRate must be between 0 and 1");
+        }
+        Counterparty counterparty = xvaStore.findCounterparty(counterpartyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Counterparty not found"));
+        if (!counterparty.active()) throw new ConflictException("Counterparty must be active");
+        String rating = normalizeSupportedRating(counterparty.creditRating());
+        var marketCurve = marketDataCurveGateway.getCreditCurve(rating, "USD", valuationDate, normalizedRecoveryRate);
+        if (!valuationDate.equals(marketCurve.valuationDate()) || !"USD".equals(marketCurve.currency())
+                || !ratingBucket(rating).equals(marketCurve.ratingBucket())) {
+            throw new ServiceUnavailableException("Market data service returned an inconsistent credit curve");
+        }
+        if (marketCurve.stale() && !allowStale) {
+            throw new ConflictException("Market credit curve is stale; enable allowStale to import it as draft");
+        }
+        String name = requestedName == null || requestedName.isBlank() ? marketCurve.name() : requestedName.trim();
+        return createCreditCurve(new SaveCreditCurveCommand(
+                counterpartyId,
+                name,
+                com.nexusxva.xva.domain.CreditCurveType.CUMULATIVE_DEFAULT_PROBABILITY,
+                false,
+                marketCurve.points().stream()
+                        .map(point -> new CreditCurve.Point(point.date(), null, point.cumulativeDefaultProbability()))
+                        .toList(),
+                com.nexusxva.xva.domain.CurveSource.MARKET_DATA,
+                marketCurve.asOf(),
+                marketCurve.source(),
+                marketCurve.sourceSeriesId(),
+                marketCurve.method(),
+                marketCurve.stale(),
+                marketCurve.currency(),
+                marketCurve.creditRating(),
+                marketCurve.ratingBucket(),
+                marketCurve.recoveryRate(),
+                marketCurve.spread(),
+                marketCurve.spreadUnit(),
+                marketCurve.hazardRate(),
+                marketCurve.observationDate(),
+                marketCurve.marketProxy()
+        ));
+    }
+
+    private String normalizeSupportedRating(String rating) {
+        if (rating == null || rating.isBlank()) throw new IllegalArgumentException("Counterparty creditRating is required");
+        String normalized = rating.trim().toUpperCase();
+        if (!normalized.matches("^(AAA|AA[+-]?|A[+-]?|BBB[+-]?)$")) {
+            throw new IllegalArgumentException("Counterparty creditRating is not supported by market data");
+        }
+        return normalized;
+    }
+
+    private String ratingBucket(String rating) {
+        if (rating.startsWith("BBB")) return "BBB";
+        if (rating.startsWith("AAA")) return "AAA";
+        if (rating.startsWith("AA")) return "AA";
+        return "A";
     }
 
     @Transactional
@@ -89,7 +154,17 @@ public class CvaCurveMasterDataService {
 
     @Transactional
     public DiscountCurve importMarketDiscountCurve(String currency, java.time.LocalDate valuationDate, String requestedName, boolean allowStale) {
-        var marketCurve = marketDataCurveGateway.getDiscountCurve(currency, valuationDate);
+        if (currency == null || !currency.trim().toUpperCase().matches("^[A-Z]{3}$")) {
+            throw new IllegalArgumentException("currency must be a 3-letter code");
+        }
+        if (valuationDate == null) {
+            throw new IllegalArgumentException("valuationDate is required");
+        }
+        String normalizedCurrency = currency.trim().toUpperCase();
+        var marketCurve = marketDataCurveGateway.getDiscountCurve(normalizedCurrency, valuationDate);
+        if (!normalizedCurrency.equals(marketCurve.currency()) || !valuationDate.equals(marketCurve.valuationDate())) {
+            throw new IllegalArgumentException("Market discount curve does not match requested currency and valuationDate");
+        }
         if (marketCurve.stale() && !allowStale) {
             throw new ConflictException("Market discount curve is stale; enable allowStale to import it as draft");
         }
@@ -101,7 +176,11 @@ public class CvaCurveMasterDataService {
                 marketCurve.points().stream()
                         .map(point -> new DiscountCurve.Point(point.date(), point.discountFactor()))
                         .toList(),
-                com.nexusxva.xva.domain.CurveSource.MARKET_DATA
+                com.nexusxva.xva.domain.CurveSource.MARKET_DATA,
+                marketCurve.asOf(),
+                marketCurve.source(),
+                marketCurve.method(),
+                marketCurve.stale()
         ));
     }
 

@@ -277,6 +277,27 @@ public class XvaReferenceDataController {
         return response;
     }
 
+    @PostMapping("/credit-curves/imports/market-data")
+    public CreditCurveResponse importMarketCreditCurve(
+            @Valid @RequestBody ImportMarketCreditCurveRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        requireAdmin(servletRequest);
+        CreditCurveResponse response = CreditCurveResponse.from(curveService.importMarketCreditCurve(
+                request.counterpartyId(), request.valuationDate(), request.recoveryRate(), request.name(), request.allowStale()));
+        auditService.record(AuditEventCommand.of(
+                "XVA_CREDIT_CURVE_MARKET_DATA_IMPORTED", "XVA", "IMPORT_MARKET_DATA_CREDIT_CURVE", AuditOutcome.SUCCESS,
+                currentSession(servletRequest), servletRequest, 200, "CREDIT_CURVE", response.id(),
+                "Market-data credit curve imported as draft",
+                auditService.metadata(java.util.Map.of(
+                        "name", response.name(), "counterpartyId", response.counterpartyId(),
+                        "rating", response.sourceCreditRating(), "ratingBucket", response.sourceRatingBucket(),
+                        "sourceSeriesId", response.sourceSeriesId(), "observationDate", response.sourceObservationDate(),
+                        "stale", response.sourceStale(), "points", response.points().size()))
+        ));
+        return response;
+    }
+
     @PatchMapping("/credit-curves/{curveId}")
     public CreditCurveResponse updateCreditCurve(
             @PathVariable UUID curveId,

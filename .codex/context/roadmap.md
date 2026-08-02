@@ -179,7 +179,8 @@ Current notes:
 - Persisted credit and discount curves live in XVA master data. Inline curves remain useful for ad-hoc tests.
 - Persisted curves are versioned. New curves start as `DRAFT`; ADMIN approval makes one version active and `APPROVED`, superseding the previous active approved version.
 - CVA must only consume active `APPROVED` persisted curves. Draft, rejected and superseded curves are ADMIN history/setup data only.
-- Curve `source` supports `MANUAL`, `IMPORT` and `MARKET_DATA`; actual import/Blemberg-sourced curve ingestion remains future work.
+- Blemberg supplies discount curves and USD investment-grade rating OAS credit proxies as market-data drafts. Issuer-specific CDS/bond calibration remains future work.
+- Curve `source` supports `MANUAL`, `IMPORT` and `MARKET_DATA`. CSV imports and Blemberg-sourced discount-curve drafts are implemented; imported versions require explicit ADMIN approval.
 - Single-portfolio CVA API requests/responses are copied into valuation run history for audit.
 - Counterparty and netting-set reference data is implemented in the `xva` module.
 - ADMIN XVA Setup manages counterparties, netting sets, static collateral, active/inactive status, and portfolio assignment.

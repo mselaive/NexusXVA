@@ -19,6 +19,10 @@ public record DiscountCurve(
         Instant approvedAt,
         UUID approvedByUserId,
         String rejectionReason,
+        Instant sourceAsOf,
+        String sourceReference,
+        String constructionMethod,
+        boolean sourceStale,
         List<Point> points
 ) {
     public DiscountCurve {

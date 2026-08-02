@@ -265,7 +265,7 @@ ADMIN creates curve
   -> CVA can reference only active APPROVED curves
 ```
 
-Draft curves can be edited before approval. Approved, rejected and superseded curves remain immutable history; changing a production curve means creating a new draft version and approving it. Curve `source` supports `MANUAL`, `IMPORT` and `MARKET_DATA`. ADMIN can import CSV files, and discount curves can be fetched from Blemberg as inactive market-data drafts. Every imported version requires explicit approval before CVA can use it.
+Draft curves can be edited before approval. Approved, rejected and superseded curves remain immutable history; changing a production curve means creating a new draft version and approving it. Curve `source` supports `MANUAL`, `IMPORT` and `MARKET_DATA`. ADMIN can import CSV files, while discount curves and USD investment-grade rating OAS credit proxies can be fetched from Blemberg as inactive market-data drafts. Credit proxy lineage preserves rating, spread, recovery, hazard method, source series, observation date and staleness. Every imported version requires explicit approval before CVA can use it.
 
 ## How Valuation Run History Flows
 

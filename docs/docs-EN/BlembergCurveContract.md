@@ -6,6 +6,14 @@ NexusXVA owns CVA curve lifecycle, versions, approvals and usage. Blemberg owns 
 
 Market-data curves received from Blemberg must always become `DRAFT` curves in NexusXVA. They are never approved or activated automatically.
 
+NexusXVA persists the imported curve lineage:
+
+- `source=MARKET_DATA`
+- provider/cache reference from `source`
+- provider `asOf`
+- construction `method`
+- provider `stale` flag
+
 ## Required V1 Endpoint
 
 ```http
@@ -41,17 +49,43 @@ Rules:
 - Blemberg should derive discount factors from its cached risk-free term structure, not call an upstream provider during the NexusXVA request.
 - Missing inputs return a clean `404`; provider/cache failures return a clean `503`.
 
-## Credit Curves
+## NexusXVA Import
 
-Credit curves require counterparty credit observations such as CDS spreads, bond spreads or an explicitly configured internal rating model. Blemberg must not fabricate them from equity prices or Treasury rates.
-
-A future endpoint may be added when a defensible source exists:
+ADMIN imports a discount curve from **XVA Setup** by selecting currency, valuation date and whether stale data is explicitly allowed.
 
 ```http
-GET /api/market-data/curves/credit?externalId=DPB-001&valuationDate=2026-07-17
+POST /api/xva/discount-curves/imports/market-data
+Content-Type: application/json
+
+{
+  "currency": "USD",
+  "valuationDate": "2026-07-31",
+  "name": "USD Risk-Free Discount Curve",
+  "allowStale": false
+}
 ```
 
-The response must identify the observation type, recovery/LGD assumption, construction method and source. Until then, credit curves enter NexusXVA through reviewed CSV imports or manual drafts.
+The endpoint calls Blemberg, validates the response and creates an inactive `DRAFT`. A stale response returns `409` unless `allowStale=true`. ADMIN must separately approve the draft before CVA can select it.
+
+## Credit Curves
+
+Blemberg provides a USD investment-grade market proxy built from cached FRED ICE BofA corporate OAS observations by rating bucket:
+
+```http
+GET /api/market-data/curves/credit?creditRating=A&currency=USD&valuationDate=2026-08-02&recoveryRate=0.40
+```
+
+The response uses `CUMULATIVE_DEFAULT_PROBABILITY` and includes the requested rating, normalized rating bucket, recovery assumption, OAS spread, flat hazard proxy, observation date, FRED series, construction method, stale flag and seven curve points. Supported buckets are AAA, AA, A and BBB; `+` and `-` variants map to their broad bucket.
+
+ADMIN imports it through:
+
+```http
+POST /api/xva/credit-curves/imports/market-data
+```
+
+NexusXVA obtains the rating from its counterparty and creates an inactive `DRAFT` with `source=MARKET_DATA`. A stale response requires explicit `allowStale=true`. The curve is never approved automatically.
+
+This is a rating-level corporate bond OAS proxy, not issuer-specific CDS or bond calibration. It is suitable for the current internal/demo CVA workflow only; lineage must remain visible during review.
 
 ## File Formats Supported by NexusXVA
 

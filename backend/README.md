@@ -956,6 +956,8 @@ NexusXVA now has a first XVA reference-data slice:
 - `PATCH /api/xva/netting-sets/{nettingSetId}/collateral`
 - `GET /api/xva/credit-curves`
 - `POST /api/xva/credit-curves`
+- `POST /api/xva/credit-curves/imports`
+- `POST /api/xva/credit-curves/imports/market-data`
 - `PATCH /api/xva/credit-curves/{curveId}`
 - `POST /api/xva/credit-curves/{curveId}/approve`
 - `POST /api/xva/credit-curves/{curveId}/reject`
@@ -974,7 +976,8 @@ Curve lifecycle V1:
 - Approving a draft makes it `APPROVED`, `active=true`, and supersedes the previous active approved version for the same credit curve name/counterparty or discount curve name/currency.
 - Rejected and superseded curves remain in history and are not usable by CVA.
 - Approved, rejected and superseded curves are immutable; create a new version to change curve points.
-- `source` supports `MANUAL`, `IMPORT` and `MARKET_DATA`; V1 creates manual drafts, while imports and Blemberg-sourced curves are planned future ingestion paths.
+- `source` supports `MANUAL`, `IMPORT` and `MARKET_DATA`. CSV imports and Blemberg-sourced discount/credit curves create inactive drafts that require explicit ADMIN approval.
+- Market credit imports use the counterparty rating and Blemberg's USD investment-grade OAS proxy. The stored lineage includes rating bucket, recovery assumption, spread, hazard proxy, observation date, source series, construction method and stale flag.
 
 Admin setup examples:
 

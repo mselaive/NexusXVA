@@ -9,10 +9,18 @@ public record SaveDiscountCurveCommand(
         String currency,
         boolean active,
         List<DiscountCurve.Point> points,
-        com.nexusxva.xva.domain.CurveSource source
+        com.nexusxva.xva.domain.CurveSource source,
+        java.time.Instant sourceAsOf,
+        String sourceReference,
+        String constructionMethod,
+        boolean sourceStale
 ) {
     public SaveDiscountCurveCommand(String name, String currency, boolean active, List<DiscountCurve.Point> points) {
-        this(name, currency, active, points, com.nexusxva.xva.domain.CurveSource.MANUAL);
+        this(name, currency, active, points, com.nexusxva.xva.domain.CurveSource.MANUAL, null, null, null, false);
+    }
+
+    public SaveDiscountCurveCommand(String name, String currency, boolean active, List<DiscountCurve.Point> points, com.nexusxva.xva.domain.CurveSource source) {
+        this(name, currency, active, points, source, null, null, null, false);
     }
 
     public SaveDiscountCurveCommand {
@@ -24,6 +32,8 @@ public record SaveDiscountCurveCommand(
         }
         currency = currency.trim().toUpperCase();
         source = source == null ? com.nexusxva.xva.domain.CurveSource.MANUAL : source;
+        sourceReference = normalize(sourceReference, 240, "sourceReference");
+        constructionMethod = normalize(constructionMethod, 120, "constructionMethod");
         points = points == null ? List.of() : points.stream()
                 .sorted(java.util.Comparator.comparing(DiscountCurve.Point::date))
                 .toList();
@@ -43,5 +53,12 @@ public record SaveDiscountCurveCommand(
             }
             previousDate = point.date();
         }
+    }
+
+    private static String normalize(String value, int maxLength, String field) {
+        if (value == null || value.isBlank()) return null;
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) throw new IllegalArgumentException(field + " is too long");
+        return normalized;
     }
 }

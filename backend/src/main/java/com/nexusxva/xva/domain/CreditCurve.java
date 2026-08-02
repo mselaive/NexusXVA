@@ -21,6 +21,20 @@ public record CreditCurve(
         Instant approvedAt,
         UUID approvedByUserId,
         String rejectionReason,
+        Instant sourceAsOf,
+        String sourceReference,
+        String sourceSeriesId,
+        String constructionMethod,
+        boolean sourceStale,
+        String sourceCurrency,
+        String sourceCreditRating,
+        String sourceRatingBucket,
+        Double sourceRecoveryRate,
+        Double sourceSpread,
+        String sourceSpreadUnit,
+        Double sourceHazardRate,
+        LocalDate sourceObservationDate,
+        boolean marketProxy,
         List<Point> points
 ) {
     public CreditCurve {

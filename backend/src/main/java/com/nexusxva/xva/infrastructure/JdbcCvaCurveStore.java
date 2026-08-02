@@ -36,9 +36,12 @@ class JdbcCvaCurveStore implements CvaCurveStore {
                 """
                 INSERT INTO credit_curves (
                     id, counterparty_id, name, curve_type, version, status, source, active,
-                    created_at, updated_at, submitted_at
+                    created_at, updated_at, submitted_at, source_as_of, source_reference,
+                    source_series_id, construction_method, source_stale, source_currency,
+                    source_credit_rating, source_rating_bucket, source_recovery_rate, source_spread,
+                    source_spread_unit, source_hazard_rate, source_observation_date, market_proxy
                 )
-                VALUES (?, ?, ?, ?, ?, 'DRAFT', ?, FALSE, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, 'DRAFT', ?, FALSE, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 id,
                 command.counterpartyId(),
@@ -48,7 +51,21 @@ class JdbcCvaCurveStore implements CvaCurveStore {
                 command.source().name(),
                 Timestamp.from(now),
                 Timestamp.from(now),
-                Timestamp.from(now)
+                Timestamp.from(now),
+                command.sourceAsOf() == null ? null : Timestamp.from(command.sourceAsOf()),
+                command.sourceReference(),
+                command.sourceSeriesId(),
+                command.constructionMethod(),
+                command.sourceStale(),
+                command.sourceCurrency(),
+                command.sourceCreditRating(),
+                command.sourceRatingBucket(),
+                command.sourceRecoveryRate(),
+                command.sourceSpread(),
+                command.sourceSpreadUnit(),
+                command.sourceHazardRate(),
+                command.sourceObservationDate(),
+                command.marketProxy()
         );
         replaceCreditPoints(id, command.points());
         return findCreditCurve(id).orElseThrow();
@@ -153,9 +170,10 @@ class JdbcCvaCurveStore implements CvaCurveStore {
                 """
                 INSERT INTO discount_curves (
                     id, name, currency, version, status, source, active,
-                    created_at, updated_at, submitted_at
+                    created_at, updated_at, submitted_at, source_as_of, source_reference,
+                    construction_method, source_stale
                 )
-                VALUES (?, ?, ?, ?, 'DRAFT', ?, FALSE, ?, ?, ?)
+                VALUES (?, ?, ?, ?, 'DRAFT', ?, FALSE, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 id,
                 command.name().trim(),
@@ -164,7 +182,11 @@ class JdbcCvaCurveStore implements CvaCurveStore {
                 command.source().name(),
                 Timestamp.from(now),
                 Timestamp.from(now),
-                Timestamp.from(now)
+                Timestamp.from(now),
+                command.sourceAsOf() == null ? null : Timestamp.from(command.sourceAsOf()),
+                command.sourceReference(),
+                command.constructionMethod(),
+                command.sourceStale()
         );
         replaceDiscountPoints(id, command.points());
         return findDiscountCurve(id).orElseThrow();
@@ -286,6 +308,20 @@ class JdbcCvaCurveStore implements CvaCurveStore {
                 nullableInstant(rs, "approved_at"),
                 rs.getObject("approved_by_user_id", UUID.class),
                 rs.getString("rejection_reason"),
+                nullableInstant(rs, "source_as_of"),
+                rs.getString("source_reference"),
+                rs.getString("source_series_id"),
+                rs.getString("construction_method"),
+                rs.getBoolean("source_stale"),
+                rs.getString("source_currency"),
+                rs.getString("source_credit_rating"),
+                rs.getString("source_rating_bucket"),
+                nullableDouble(rs, "source_recovery_rate"),
+                nullableDouble(rs, "source_spread"),
+                rs.getString("source_spread_unit"),
+                nullableDouble(rs, "source_hazard_rate"),
+                rs.getObject("source_observation_date", LocalDate.class),
+                rs.getBoolean("market_proxy"),
                 creditPoints(id)
         );
     }
@@ -306,6 +342,10 @@ class JdbcCvaCurveStore implements CvaCurveStore {
                 nullableInstant(rs, "approved_at"),
                 rs.getObject("approved_by_user_id", UUID.class),
                 rs.getString("rejection_reason"),
+                nullableInstant(rs, "source_as_of"),
+                rs.getString("source_reference"),
+                rs.getString("construction_method"),
+                rs.getBoolean("source_stale"),
                 discountPoints(id)
         );
     }

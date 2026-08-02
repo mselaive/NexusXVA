@@ -25,6 +25,21 @@ public record MarketDiscountCurve(
         if (points.isEmpty()) {
             throw new IllegalArgumentException("Market discount curve contains no points");
         }
+        LocalDate previousDate = valuationDate;
+        double previousFactor = 1.0;
+        for (Point point : points) {
+            if (point.date() == null || !point.date().isAfter(previousDate)) {
+                throw new IllegalArgumentException("Market discount curve dates must be strictly increasing after valuationDate");
+            }
+            if (!Double.isFinite(point.discountFactor()) || point.discountFactor() <= 0.0 || point.discountFactor() > 1.0) {
+                throw new IllegalArgumentException("Market discount factors must be finite and in (0, 1]");
+            }
+            if (point.discountFactor() > previousFactor) {
+                throw new IllegalArgumentException("Market discount factors must not increase");
+            }
+            previousDate = point.date();
+            previousFactor = point.discountFactor();
+        }
     }
 
     public record Point(LocalDate date, double discountFactor) {}

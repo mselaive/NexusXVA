@@ -21,6 +21,10 @@ public record DiscountCurveResponse(
         Instant approvedAt,
         UUID approvedByUserId,
         String rejectionReason,
+        Instant sourceAsOf,
+        String sourceReference,
+        String constructionMethod,
+        boolean sourceStale,
         List<PointResponse> points
 ) {
     static DiscountCurveResponse from(DiscountCurve curve) {
@@ -38,6 +42,10 @@ public record DiscountCurveResponse(
                 curve.approvedAt(),
                 curve.approvedByUserId(),
                 curve.rejectionReason(),
+                curve.sourceAsOf(),
+                curve.sourceReference(),
+                curve.constructionMethod(),
+                curve.sourceStale(),
                 curve.points().stream().map(PointResponse::from).toList()
         );
     }

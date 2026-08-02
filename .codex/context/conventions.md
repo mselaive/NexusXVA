@@ -56,8 +56,9 @@
 - `valuation_runs` is calculation execution history; `audit_events` is user/security activity history. Do not collapse these two concepts into one table.
 - CVA V1 should consume exposure profiles through `exposure.application`; do not duplicate simulation logic in `cva`.
 - Counterparties and netting sets live in the `xva` module. Do not store them inside portfolio, exposure, or CVA tables.
-- CVA credit and discount curves are request-scoped for now; do not persist curve master data or CVA result state until explicitly planned.
-- CVA curve inputs remain request-scoped. `valuation_runs` may store the submitted request/response for audit, but it must not become counterparty, curve, or market-data master data.
+- CVA supports inline request curves and persisted curve master data. CVA may only consume persisted versions that are both `APPROVED` and active.
+- Blemberg market-data curves always enter XVA master data as inactive `DRAFT` versions. The current credit source is a USD investment-grade rating OAS proxy, not issuer-specific CDS; preserve its full lineage and require ADMIN approval.
+- External curve imports always create inactive `DRAFT` versions. Preserve source, provider `asOf`, construction method and stale status; never auto-approve provider data.
 - Netting-set CVA V1 is profile-level netting with static collateral. Do not describe it as path-level netting, CSA margining, legal close-out netting, or collateral call simulation.
 - A portfolio can belong to only one netting set in V1.
 - Netting-set setup mutations are ADMIN-owned; FO may consume configured netting sets for CVA when authorized.

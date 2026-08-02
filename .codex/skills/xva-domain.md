@@ -34,7 +34,8 @@ Project assumptions for MVP:
 - Ignore wrong-way risk initially.
 - Netting-set CVA V1 may use persisted counterparties/netting sets from the `xva` module.
 - Treat current netting as profile-level aggregation with static collateral only, not path-level legal netting or CSA margining.
-- Keep credit/discount curves request-scoped until persisted curve master data is explicitly planned.
+- Support inline request curves and persisted versioned curve master data. Only active `APPROVED` versions can be consumed by CVA.
+- File/provider imports must create inactive drafts and retain source lineage. Blemberg discount curves and rating-OAS credit proxies must pass through the `marketdata` boundary and must never be approved automatically.
 
 ## DVA
 

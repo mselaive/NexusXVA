@@ -499,6 +499,18 @@ export const nexusApi = {
       body: JSON.stringify(body),
     }),
 
+  importMarketDataCreditCurve: (body: {
+    counterpartyId: string;
+    valuationDate: string;
+    recoveryRate: number;
+    name: string | null;
+    allowStale: boolean;
+  }) =>
+    request<CreditCurve>("/xva/credit-curves/imports/market-data", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   updateCreditCurve: (curveId: string, body: SaveCreditCurveRequest) =>
     request<CreditCurve>(`/xva/credit-curves/${curveId}`, {
       method: "PATCH",

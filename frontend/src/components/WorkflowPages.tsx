@@ -1534,6 +1534,18 @@ export function CvaPage() {
     <AppShell title="CVA" eyebrow="Credit valuation adjustment" howTo={howTo.cva}>
       <Alert message={error} />
       <OperationalClosedBanner message={closedMessage} />
+      <CvaRunCommandBar
+        scope={cvaScope}
+        selectedNettingSet={nettingSets.find((item) => item.id === selectedNettingSetId)}
+        portfolioSelected={Boolean(selectedId)}
+        form={form}
+        mode={cvaMode}
+        selectedCreditCurve={creditCurves.find((item) => item.id === selectedCreditCurveId)}
+        selectedDiscountCurve={discountCurves.find((item) => item.id === selectedDiscountCurveId)}
+        loading={loading}
+        disabled={tradingClosed}
+        onRun={runCva}
+      />
       <CvaScopePanel
         scope={cvaScope}
         setScope={(scope) => {
@@ -1553,6 +1565,7 @@ export function CvaPage() {
         includeCva
         cvaMode={cvaMode}
         showPortfolioPicker={cvaScope === "portfolio"}
+        title="2. Simulation assumptions"
       />
       <CvaCurveModePanel
         mode={cvaMode}
@@ -1572,16 +1585,61 @@ export function CvaPage() {
         discountCurve={discountCurve}
         setDiscountCurve={setDiscountCurve}
         valuationDate={form.valuationDate}
+        horizonDays={form.horizonDays}
       />
       <div className="panel">
         <SectionTitle title="CVA contribution" info="Flat mode uses hazard rate and discount rate. Curve mode sends credit and discount curves to the backend and those curves take precedence." />
-        <button className="btn warning section-action" type="button" onClick={runCva} disabled={loading || tradingClosed}>
-          {loading ? <Loader2 size={16} /> : <Shield size={16} />}
-          Run {cvaScope === "nettingSet" ? "Netting Set CVA" : "CVA"}
-        </button>
         {cva ? <CvaResult cva={cva} /> : <EmptyState text="Run CVA to see adjustment and bucket-level contributions." />}
       </div>
     </AppShell>
+  );
+}
+
+function CvaRunCommandBar({
+  scope,
+  selectedNettingSet,
+  portfolioSelected,
+  form,
+  mode,
+  selectedCreditCurve,
+  selectedDiscountCurve,
+  loading,
+  disabled,
+  onRun,
+}: {
+  scope: CvaScope;
+  selectedNettingSet?: NettingSet;
+  portfolioSelected: boolean;
+  form: RunForm;
+  mode: CvaMode;
+  selectedCreditCurve?: CreditCurve;
+  selectedDiscountCurve?: DiscountCurve;
+  loading: boolean;
+  disabled: boolean;
+  onRun: () => void;
+}) {
+  const scopeValue = scope === "nettingSet"
+    ? selectedNettingSet?.name ?? "Choose netting set"
+    : portfolioSelected ? "Selected portfolio" : "Choose portfolio";
+  const modelValue = mode === "flat"
+    ? "Flat hazard + rate"
+    : selectedCreditCurve && selectedDiscountCurve
+      ? `${selectedCreditCurve.name} + ${selectedDiscountCurve.name}`
+      : "Choose both curves";
+
+  return (
+    <div className="cva-run-command">
+      <div className="cva-command-summary">
+        <span><small>Scope</small><strong>{scopeValue}</strong></span>
+        <span><small>Simulation</small><strong>{form.horizonDays}d · {form.timeSteps} buckets · {Number(form.paths).toLocaleString()} paths</strong></span>
+        <span><small>Credit model</small><strong>{modelValue}</strong></span>
+        <span><small>LGD</small><strong>{formatPercent(Number(form.lossGivenDefault))}</strong></span>
+      </div>
+      <button className="btn warning" type="button" onClick={onRun} disabled={loading || disabled}>
+        {loading ? <Loader2 size={16} /> : <Shield size={16} />}
+        {loading ? "Running CVA" : "Run CVA"}
+      </button>
+    </div>
   );
 }
 
@@ -1601,7 +1659,7 @@ function CvaScopePanel({
   const selected = nettingSets.find((candidate) => candidate.id === selectedNettingSetId);
   return (
     <div className="panel section">
-      <SectionTitle title="CVA scope" info="Single portfolio CVA uses one portfolio. Netting set CVA aggregates portfolios assigned to a counterparty netting set and applies static collateral before CVA." />
+      <SectionTitle title="1. CVA scope" info="Single portfolio CVA uses one portfolio. Netting set CVA aggregates portfolios assigned to a counterparty netting set and applies static collateral before CVA." />
       <div className="stress-mode-toggle" role="group" aria-label="CVA scope">
         <button className={scope === "portfolio" ? "active" : ""} type="button" onClick={() => setScope("portfolio")}>Single portfolio</button>
         <button className={scope === "nettingSet" ? "active" : ""} type="button" onClick={() => setScope("nettingSet")}>Netting set</button>
@@ -1656,6 +1714,7 @@ function CvaCurveModePanel({
   discountCurve,
   setDiscountCurve,
   valuationDate,
+  horizonDays,
 }: {
   mode: CvaMode;
   setMode: (mode: CvaMode) => void;
@@ -1674,10 +1733,23 @@ function CvaCurveModePanel({
   discountCurve: DiscountCurveFormRow[];
   setDiscountCurve: (rows: DiscountCurveFormRow[]) => void;
   valuationDate: string;
+  horizonDays: string;
 }) {
+  const selectedCreditCurve = creditCurves.find((curve) => curve.id === selectedCreditCurveId);
+  const selectedDiscountCurve = discountCurves.find((curve) => curve.id === selectedDiscountCurveId);
+  const requiredEndDate = addDays(valuationDate, Number(horizonDays));
+  const creditEndDate = lastPointDate(selectedCreditCurve?.points ?? []);
+  const discountEndDate = lastPointDate(selectedDiscountCurve?.points ?? []);
+  const masterDataCoverageMissing = curveSource === "masterData" && (
+    !creditEndDate
+    || !discountEndDate
+    || creditEndDate < requiredEndDate
+    || discountEndDate < requiredEndDate
+  );
+
   return (
     <div className="panel section cva-curve-panel">
-      <SectionTitle title="Credit and discount model" info="Flat mode uses one hazard rate and one discount rate. Curve mode lets you provide dated credit probabilities and discount factors." />
+      <SectionTitle title="3. Credit and discount model" info="Flat mode uses one hazard rate and one discount rate. Curve mode lets you provide dated credit probabilities and discount factors." />
       <div className="stress-mode-toggle" role="group" aria-label="CVA model mode">
         <button className={mode === "flat" ? "active" : ""} type="button" onClick={() => setMode("flat")}>Flat rates</button>
         <button className={mode === "curves" ? "active" : ""} type="button" onClick={() => setMode("curves")}>Curve mode</button>
@@ -1712,6 +1784,12 @@ function CvaCurveModePanel({
                   ))}
                 </select>
               </label>
+              <div className={`curve-coverage-note ${masterDataCoverageMissing ? "warning" : "ready"}`}>
+                <strong>{masterDataCoverageMissing ? "Curve coverage needs attention" : "Curve coverage is compatible"}</strong>
+                <span>Exposure needs coverage through {requiredEndDate || "the horizon end"}.</span>
+                <span>Credit ends {creditEndDate || "unknown"}; discount ends {discountEndDate || "unknown"}.</span>
+                <span>Dates before the first point interpolate from the valuation-date anchor at 1.0.</span>
+              </div>
               <p className="mini-note">These curves are ADMIN-owned XVA master data. CVA sends only the curve IDs; the backend loads active points and rejects inactive curves.</p>
             </div>
           ) : (
@@ -1839,6 +1917,7 @@ function RunSetup({
   includeCva = false,
   cvaMode = "flat",
   showPortfolioPicker = true,
+  title = "Run setup",
 }: {
   selectedId: string;
   setSelectedId: (value: string) => void;
@@ -1848,6 +1927,7 @@ function RunSetup({
   includeCva?: boolean;
   cvaMode?: CvaMode;
   showPortfolioPicker?: boolean;
+  title?: string;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -1861,7 +1941,7 @@ function RunSetup({
 
   return (
     <div className="panel section">
-      <SectionTitle title="Run setup" info="These values are sent to the backend simulation/CVA endpoint. The frontend does not calculate paths or valuation adjustments." />
+      <SectionTitle title={title} info="These values are sent to the backend simulation/CVA endpoint. The frontend does not calculate paths or valuation adjustments." />
       {showPortfolioPicker ? <PortfolioPicker value={selectedId} onChange={setSelectedId} onError={onError} /> : null}
       <div className="preset-grid" aria-label="Simulation presets">
         {runPresets.map((preset) => (
@@ -2039,6 +2119,19 @@ function addMonths(date: string, months: number) {
   const next = new Date(`${date}T00:00:00Z`);
   next.setUTCMonth(next.getUTCMonth() + months);
   return next.toISOString().slice(0, 10);
+}
+
+function addDays(date: string, days: number) {
+  if (!date || !Number.isFinite(days)) {
+    return "";
+  }
+  const next = new Date(`${date}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next.toISOString().slice(0, 10);
+}
+
+function lastPointDate(points: Array<{ date: string }>) {
+  return points.map((point) => point.date).sort().at(-1) ?? "";
 }
 
 function SectionTitle({ title, info }: { title: string; info: string }) {
@@ -2609,6 +2702,13 @@ function ExposureTable({ points, currency }: { points: ExposureSimulationRespons
 
 function CvaResult({ cva }: { cva: CvaCalculationResponse | CvaNettingSetCalculationResponse }) {
   const isNettingSet = "nettingSetId" in cva;
+  const maximumExpectedExposure = Math.max(0, ...cva.points.map((point) => point.expectedExposure));
+  const totalDefaultProbability = cva.points.length === 0
+    ? 0
+    : 1 - cva.points.at(-1)!.survivalProbability;
+  const largestContribution = Math.max(0, ...cva.points.map((point) => point.cvaContribution));
+  const hasNoResidualExposure = maximumExpectedExposure < 0.005;
+
   return (
     <div className="table-spacing">
       <div className="summary-strip">
@@ -2621,6 +2721,28 @@ function CvaResult({ cva }: { cva: CvaCalculationResponse | CvaNettingSetCalcula
         <Metric label="LGD" value={formatPercent(cva.lossGivenDefault)} />
         {isNettingSet ? <Metric label="Collateral" value={`${formatCurrency(cva.collateralAmount)} ${cva.collateralCurrency}`} /> : null}
       </div>
+      <section className={`cva-result-interpretation ${hasNoResidualExposure ? "neutral" : "risk"}`}>
+        <div>
+          <span className="eyebrow">What this run means</span>
+          <h3>{hasNoResidualExposure ? "No residual positive exposure was simulated" : "Residual counterparty exposure remains"}</h3>
+          <p>
+            {hasNoResidualExposure
+              ? isNettingSet && cva.collateralAmount > 0
+                ? `Static collateral of ${formatCurrency(cva.collateralAmount, cva.collateralCurrency)} absorbs the modeled positive exposure in every bucket, so CVA is zero.`
+                : "Every simulated expected-exposure bucket is zero, so there is no amount to which default probability and LGD can be applied."
+              : `The model found positive exposure up to ${formatCurrency(maximumExpectedExposure, cva.baseCurrency)}. Credit loss is distributed across the dated contributions below.`}
+          </p>
+          {hasNoResidualExposure && isNettingSet && cva.collateralAmount > 0 ? (
+            <p className="cva-next-action">To learn from this demo, set collateral to 0 in ADMIN XVA Setup and run again. Then restore collateral and compare.</p>
+          ) : null}
+        </div>
+        <div className="cva-insight-grid">
+          <Metric label="Peak residual EE" value={formatCurrency(maximumExpectedExposure, cva.baseCurrency)} />
+          <Metric label="Horizon default probability" value={formatPercent(totalDefaultProbability)} />
+          <Metric label="Largest bucket loss" value={formatCurrency(largestContribution, cva.baseCurrency)} />
+          <Metric label="Total CVA" value={formatCurrency(cva.cva, cva.baseCurrency)} />
+        </div>
+      </section>
       {isNettingSet && cva.profileLevelNettingApproximation ? (
         <p className="mini-note">Netting set CVA V1 aggregates portfolio exposure profiles and subtracts static collateral. Path-level netting and margin calls come later.</p>
       ) : null}

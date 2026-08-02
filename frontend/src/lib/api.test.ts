@@ -42,6 +42,7 @@ describe("nexusApi", () => {
       status: 400,
     });
   });
+
 });
 
 describe("blembergApi", () => {
@@ -88,6 +89,31 @@ describe("blembergApi", () => {
       expect.any(Object),
     );
     expect(result.symbols?.[0].symbol).toBe("AAPL");
+  });
+
+  it("imports a market-data credit curve as an ADMIN draft", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "curve-1", status: "DRAFT", source: "MARKET_DATA" }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const body = {
+      counterpartyId: "counterparty-1",
+      valuationDate: "2026-08-02",
+      recoveryRate: 0.4,
+      name: null,
+      allowStale: false,
+    };
+
+    await nexusApi.importMarketDataCreditCurve(body);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/nexus-api/xva/credit-curves/imports/market-data",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: expect.objectContaining({ "X-CSRF-Token": "csrf-token" }),
+      }),
+    );
   });
 });
 

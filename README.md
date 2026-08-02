@@ -276,6 +276,18 @@ This creates three synthetic heavy books:
 
 Together they include roughly 512 European option positions, 32 cash equity positions, plus 99 workflow-visible booking requests and 81 lifecycle requests in pending, accepted/confirmed and rejected states.
 
+## XVA Credit Curve Lab
+
+To create a compact scenario for learning counterparty, netting, collateral and Blemberg market-curve imports:
+
+```bash
+docker compose exec -T postgres psql -U nexusxva -d nexusxva < backend/src/main/resources/db/demo/demo_xva_credit_lab.sql
+```
+
+This creates `XVA Demo - Prime Broker Credit Lab`, twelve confirmed options, a rating-A demo counterparty and a USD netting set. Collateral starts at zero so the first CVA run remains visible; raise it later to demonstrate exposure mitigation. Credit and discount curves are deliberately imported and approved from **ADMIN > XVA Setup**, rather than seeded, so their market-data lineage remains visible.
+
+Step-by-step guide: [docs/docs-ES/LaboratorioCvaBlemberg.md](docs/docs-ES/LaboratorioCvaBlemberg.md).
+
 ## Run Everything
 
 ```bash
@@ -307,5 +319,5 @@ Common URLs:
 
 Natural next candidates are:
 
-* Complete market-data sourced discount-curve drafts after Blemberg implements the curve endpoint.
+* Extend market-sourced credit curves beyond the current USD investment-grade rating OAS proxy when issuer-specific CDS or bond-spread sources become available.
 * Full cash equity buy/sell lot accounting with realized P&L across reductions and partial closes.

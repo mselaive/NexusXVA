@@ -267,7 +267,7 @@ ADMIN crea curva
   -> CVA solo puede usar curvas activas y APPROVED
 ```
 
-Las curvas draft pueden editarse antes de aprobarse. Las curvas aprobadas, rechazadas o superseded quedan como historial inmutable; para cambiar una curva productiva se crea una nueva version draft y se aprueba. El campo `source` soporta `MANUAL`, `IMPORT` y `MARKET_DATA`. ADMIN puede importar archivos CSV y traer discount curves desde Blemberg como drafts inactivos. Toda version importada requiere aprobación explícita antes de ser usada por CVA.
+Las curvas draft pueden editarse antes de aprobarse. Las curvas aprobadas, rechazadas o superseded quedan como historial inmutable; para cambiar una curva productiva se crea una nueva version draft y se aprueba. El campo `source` soporta `MANUAL`, `IMPORT` y `MARKET_DATA`. ADMIN puede importar archivos CSV y traer desde Blemberg discount curves y proxies crediticios OAS USD investment-grade por rating como drafts inactivos. La trazabilidad crediticia conserva rating, spread, recovery, hazard method, serie fuente, fecha de observación y staleness. Toda version importada requiere aprobación explícita antes de ser usada por CVA.
 
 ## Como fluye Run History
 

@@ -908,6 +908,20 @@ export type CreditCurve = {
   approvedAt: string | null;
   approvedByUserId: string | null;
   rejectionReason: string | null;
+  sourceAsOf: string | null;
+  sourceReference: string | null;
+  sourceSeriesId: string | null;
+  constructionMethod: string | null;
+  sourceStale: boolean;
+  sourceCurrency: string | null;
+  sourceCreditRating: string | null;
+  sourceRatingBucket: string | null;
+  sourceRecoveryRate: number | null;
+  sourceSpread: number | null;
+  sourceSpreadUnit: string | null;
+  sourceHazardRate: number | null;
+  sourceObservationDate: string | null;
+  marketProxy: boolean;
   points: Array<{
     date: string;
     survivalProbability?: number | null;
@@ -941,6 +955,10 @@ export type DiscountCurve = {
   approvedAt: string | null;
   approvedByUserId: string | null;
   rejectionReason: string | null;
+  sourceAsOf: string | null;
+  sourceReference: string | null;
+  constructionMethod: string | null;
+  sourceStale: boolean;
   points: Array<{
     date: string;
     discountFactor: number;

@@ -49,6 +49,7 @@ import type {
 } from "@/lib/types";
 import { AppShell } from "./AppShell";
 import { ExposureChart } from "./ExposureChart";
+import { CvaRiskCharts } from "./CvaRiskCharts";
 import { InfoButton } from "./InfoButton";
 import { PortfolioPicker } from "./PortfolioPicker";
 
@@ -74,6 +75,9 @@ type CvaMode = "flat" | "curves";
 type CvaScope = "portfolio" | "nettingSet";
 type CvaCurveSource = "masterData" | "inline";
 type CreditCurveInputMode = "survivalProbability" | "cumulativeDefaultProbability";
+type CvaViewMode = "setup" | "results";
+type CvaResultTab = "overview" | "buckets";
+type CvaStepState = "READY" | "INCOMPLETE" | "ERROR";
 
 type CreditCurveFormRow = {
   id: string;
@@ -1448,9 +1452,38 @@ export function CvaPage() {
   const [cva, setCva] = useState<CvaCalculationResponse | CvaNettingSetCalculationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [viewMode, setViewMode] = useState<CvaViewMode>("setup");
+  const [resultTab, setResultTab] = useState<CvaResultTab>("overview");
+  const [runFingerprint, setRunFingerprint] = useState<string | null>(null);
   const { status: operationalStatus } = useOperationalControlStatus();
   const closedMessage = operationalRiskClosedMessage(operationalStatus);
   const tradingClosed = Boolean(closedMessage);
+  const setupValidation = validateCvaSetup({
+    scope: cvaScope,
+    selectedPortfolioId: selectedId,
+    selectedNettingSetId,
+    form,
+    mode: cvaMode,
+    curveSource,
+    selectedCreditCurveId,
+    selectedDiscountCurveId,
+    creditCurve,
+    discountCurve,
+  });
+  const currentFingerprint = cvaConfigurationFingerprint({
+    cvaScope,
+    selectedId,
+    selectedNettingSetId,
+    form,
+    cvaMode,
+    curveSource,
+    selectedCreditCurveId,
+    selectedDiscountCurveId,
+    creditCurveMode,
+    creditCurve,
+    discountCurve,
+  });
+  const resultOutdated = Boolean(cva && runFingerprint && runFingerprint !== currentFingerprint);
 
   useEffect(() => {
     nexusApi.listNettingSets()
@@ -1483,23 +1516,19 @@ export function CvaPage() {
       setError(closedMessage);
       return;
     }
-    if (cvaScope === "portfolio" && !selectedId) {
-      setError("Select a portfolio first.");
-      return;
-    }
-    if (cvaScope === "nettingSet" && !selectedNettingSetId) {
-      setError("Select a netting set first.");
-      return;
-    }
-    if (cvaMode === "curves" && curveSource === "masterData" && (!selectedCreditCurveId || !selectedDiscountCurveId)) {
-      setError("Select both a credit curve and a discount curve, or switch to inline curve mode.");
+    const invalidStep = setupValidation.find((step) => step.state !== "READY");
+    if (invalidStep) {
+      setError(invalidStep.message);
+      setViewMode("setup");
+      focusCvaStep(invalidStep.id);
       return;
     }
     setLoading(true);
     setError(null);
     try {
+      let response: CvaCalculationResponse | CvaNettingSetCalculationResponse;
       if (cvaScope === "nettingSet") {
-        setCva(await nexusApi.runNettingSetCva(toCvaNettingSetRequest(
+        response = await nexusApi.runNettingSetCva(toCvaNettingSetRequest(
           selectedNettingSetId,
           form,
           cvaMode,
@@ -1509,9 +1538,9 @@ export function CvaPage() {
           creditCurveMode,
           creditCurve,
           discountCurve,
-        )));
+        ));
       } else {
-        setCva(await nexusApi.runCva(toCvaRequest(
+        response = await nexusApi.runCva(toCvaRequest(
           selectedId,
           form,
           cvaMode,
@@ -1521,10 +1550,17 @@ export function CvaPage() {
           creditCurveMode,
           creditCurve,
           discountCurve,
-        )));
+        ));
       }
+      setCva(response);
+      setRunFingerprint(currentFingerprint);
+      setResultTab("overview");
+      setViewMode("results");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (caught) {
       setError(errorMessage(caught));
+      setViewMode("setup");
+      focusCvaStep(errorMessage(caught).toLowerCase().includes("curve") ? "model" : "simulation");
     } finally {
       setLoading(false);
     }
@@ -1534,65 +1570,226 @@ export function CvaPage() {
     <AppShell title="CVA" eyebrow="Credit valuation adjustment" howTo={howTo.cva}>
       <Alert message={error} />
       <OperationalClosedBanner message={closedMessage} />
-      <CvaRunCommandBar
-        scope={cvaScope}
-        selectedNettingSet={nettingSets.find((item) => item.id === selectedNettingSetId)}
-        portfolioSelected={Boolean(selectedId)}
-        form={form}
-        mode={cvaMode}
-        selectedCreditCurve={creditCurves.find((item) => item.id === selectedCreditCurveId)}
-        selectedDiscountCurve={discountCurves.find((item) => item.id === selectedDiscountCurveId)}
-        loading={loading}
-        disabled={tradingClosed}
-        onRun={runCva}
-      />
-      <CvaScopePanel
-        scope={cvaScope}
-        setScope={(scope) => {
-          setCvaScope(scope);
-          setCva(null);
-        }}
-        nettingSets={nettingSets}
-        selectedNettingSetId={selectedNettingSetId}
-        setSelectedNettingSetId={setSelectedNettingSetId}
-      />
-      <RunSetup
-        selectedId={selectedId}
-        setSelectedId={setSelectedId}
-        form={form}
-        setForm={setForm}
-        onError={setError}
-        includeCva
-        cvaMode={cvaMode}
-        showPortfolioPicker={cvaScope === "portfolio"}
-        title="2. Simulation assumptions"
-      />
-      <CvaCurveModePanel
-        mode={cvaMode}
-        setMode={setCvaMode}
-        curveSource={curveSource}
-        setCurveSource={setCurveSource}
-        creditCurves={creditCurves}
-        discountCurves={discountCurves}
-        selectedCreditCurveId={selectedCreditCurveId}
-        setSelectedCreditCurveId={setSelectedCreditCurveId}
-        selectedDiscountCurveId={selectedDiscountCurveId}
-        setSelectedDiscountCurveId={setSelectedDiscountCurveId}
-        creditCurveMode={creditCurveMode}
-        setCreditCurveMode={setCreditCurveMode}
-        creditCurve={creditCurve}
-        setCreditCurve={setCreditCurve}
-        discountCurve={discountCurve}
-        setDiscountCurve={setDiscountCurve}
-        valuationDate={form.valuationDate}
-        horizonDays={form.horizonDays}
-      />
-      <div className="panel">
-        <SectionTitle title="CVA contribution" info="Flat mode uses hazard rate and discount rate. Curve mode sends credit and discount curves to the backend and those curves take precedence." />
-        {cva ? <CvaResult cva={cva} /> : <EmptyState text="Run CVA to see adjustment and bucket-level contributions." />}
-      </div>
+      {viewMode === "setup" ? (
+        <>
+          <CvaSetupProgress steps={setupValidation} />
+          <CvaRunCommandBar
+            scope={cvaScope}
+            selectedNettingSet={nettingSets.find((item) => item.id === selectedNettingSetId)}
+            portfolioSelected={Boolean(selectedId)}
+            form={form}
+            mode={cvaMode}
+            selectedCreditCurve={creditCurves.find((item) => item.id === selectedCreditCurveId)}
+            selectedDiscountCurve={discountCurves.find((item) => item.id === selectedDiscountCurveId)}
+            loading={loading}
+            disabled={tradingClosed}
+            previousResult={Boolean(cva)}
+            previousResultOutdated={resultOutdated}
+            onViewPrevious={() => setViewMode("results")}
+            onRun={runCva}
+          />
+          <div id="cva-step-scope">
+            <CvaScopePanel
+              scope={cvaScope}
+              setScope={setCvaScope}
+              nettingSets={nettingSets}
+              selectedNettingSetId={selectedNettingSetId}
+              setSelectedNettingSetId={setSelectedNettingSetId}
+            />
+          </div>
+          <div id="cva-step-simulation">
+            <RunSetup
+              selectedId={selectedId}
+              setSelectedId={setSelectedId}
+              form={form}
+              setForm={setForm}
+              onError={setError}
+              includeCva
+              cvaMode={cvaMode}
+              showPortfolioPicker={cvaScope === "portfolio"}
+              title="2. Simulation assumptions"
+            />
+          </div>
+          <div id="cva-step-model">
+            <CvaCurveModePanel
+              mode={cvaMode}
+              setMode={setCvaMode}
+              curveSource={curveSource}
+              setCurveSource={setCurveSource}
+              creditCurves={creditCurves}
+              discountCurves={discountCurves}
+              selectedCreditCurveId={selectedCreditCurveId}
+              setSelectedCreditCurveId={setSelectedCreditCurveId}
+              selectedDiscountCurveId={selectedDiscountCurveId}
+              setSelectedDiscountCurveId={setSelectedDiscountCurveId}
+              creditCurveMode={creditCurveMode}
+              setCreditCurveMode={setCreditCurveMode}
+              creditCurve={creditCurve}
+              setCreditCurve={setCreditCurve}
+              discountCurve={discountCurve}
+              setDiscountCurve={setDiscountCurve}
+              valuationDate={form.valuationDate}
+              horizonDays={form.horizonDays}
+            />
+          </div>
+        </>
+      ) : cva ? (
+        <CvaResultsWorkspace
+          cva={cva}
+          outdated={resultOutdated}
+          tab={resultTab}
+          setTab={setResultTab}
+          scopeLabel={cvaScope === "nettingSet" ? nettingSets.find((item) => item.id === selectedNettingSetId)?.name ?? "Netting set" : "Single portfolio"}
+          form={form}
+          loading={loading}
+          disabled={tradingClosed}
+          onEdit={() => setViewMode("setup")}
+          onRun={runCva}
+        />
+      ) : null}
     </AppShell>
   );
+}
+
+function CvaSetupProgress({ steps }: { steps: Array<{ id: string; label: string; state: CvaStepState; message: string }> }) {
+  return (
+    <nav className="cva-setup-progress" aria-label="CVA setup progress">
+      {steps.map((step, index) => (
+        <button key={step.id} type="button" onClick={() => focusCvaStep(step.id)}>
+          <span>{index + 1}</span>
+          <strong>{step.label}</strong>
+          <small className={step.state.toLowerCase()}>{step.state.toLowerCase()}</small>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function CvaResultsWorkspace({
+  cva,
+  outdated,
+  tab,
+  setTab,
+  scopeLabel,
+  form,
+  loading,
+  disabled,
+  onEdit,
+  onRun,
+}: {
+  cva: CvaCalculationResponse | CvaNettingSetCalculationResponse;
+  outdated: boolean;
+  tab: CvaResultTab;
+  setTab: (tab: CvaResultTab) => void;
+  scopeLabel: string;
+  form: RunForm;
+  loading: boolean;
+  disabled: boolean;
+  onEdit: () => void;
+  onRun: () => void;
+}) {
+  return (
+    <div className="cva-results-workspace">
+      <header className="cva-results-header">
+        <div>
+          <span className={`status-badge ${outdated ? "warning" : "success"}`}>{outdated ? "OUTDATED" : "CURRENT"}</span>
+          <h2>{scopeLabel}</h2>
+          <p>{form.horizonDays} days · {form.timeSteps} buckets · {Number(form.paths).toLocaleString()} paths · LGD {formatPercent(Number(form.lossGivenDefault))}</p>
+        </div>
+        <div className="cva-results-actions">
+          <button className="btn secondary" type="button" onClick={onEdit}><SquarePen size={16} />Edit setup</button>
+          <button className="btn warning" type="button" onClick={onRun} disabled={loading || disabled}>
+            {loading ? <Loader2 size={16} /> : <RefreshCw size={16} />}
+            {loading ? "Running" : outdated ? "Run updated setup" : "Run again"}
+          </button>
+        </div>
+      </header>
+      {outdated ? <p className="cva-outdated-note">The saved result uses the previous configuration. Run the updated setup before using it for a decision.</p> : null}
+      <div className="stress-mode-toggle cva-result-tabs" role="tablist" aria-label="CVA result views">
+        <button className={tab === "overview" ? "active" : ""} role="tab" aria-selected={tab === "overview"} type="button" onClick={() => setTab("overview")}>Overview</button>
+        <button className={tab === "buckets" ? "active" : ""} role="tab" aria-selected={tab === "buckets"} type="button" onClick={() => setTab("buckets")}>Bucket details</button>
+      </div>
+      <CvaResult cva={cva} tab={tab} />
+    </div>
+  );
+}
+
+function validateCvaSetup(input: {
+  scope: CvaScope;
+  selectedPortfolioId: string;
+  selectedNettingSetId: string;
+  form: RunForm;
+  mode: CvaMode;
+  curveSource: CvaCurveSource;
+  selectedCreditCurveId: string;
+  selectedDiscountCurveId: string;
+  creditCurve: CreditCurveFormRow[];
+  discountCurve: DiscountCurveFormRow[];
+}) {
+  const scopeReady = input.scope === "portfolio" ? Boolean(input.selectedPortfolioId) : Boolean(input.selectedNettingSetId);
+  const requiredNumbers = [
+    Number(input.form.horizonDays),
+    Number(input.form.timeSteps),
+    Number(input.form.paths),
+    Number(input.form.pfeConfidenceLevel),
+    Number(input.form.lossGivenDefault),
+  ];
+  const simulationComplete = Boolean(input.form.valuationDate) && requiredNumbers.every(Number.isFinite);
+  const simulationValid = simulationComplete
+    && requiredNumbers[0] > 0
+    && requiredNumbers[1] > 0
+    && requiredNumbers[1] <= requiredNumbers[0]
+    && requiredNumbers[2] > 0
+    && requiredNumbers[3] > 0
+    && requiredNumbers[3] < 1
+    && requiredNumbers[4] >= 0
+    && requiredNumbers[4] <= 1;
+  const flatModelReady = input.mode === "flat"
+    && Number.isFinite(Number(input.form.counterpartyHazardRate))
+    && Number(input.form.counterpartyHazardRate) >= 0
+    && Number.isFinite(Number(input.form.discountRate));
+  const masterDataReady = input.mode === "curves"
+    && input.curveSource === "masterData"
+    && Boolean(input.selectedCreditCurveId)
+    && Boolean(input.selectedDiscountCurveId);
+  const inlineReady = input.mode === "curves"
+    && input.curveSource === "inline"
+    && input.creditCurve.length > 0
+    && input.discountCurve.length > 0
+    && input.creditCurve.every((point) => Boolean(point.date) && Number.isFinite(Number(point.value)))
+    && input.discountCurve.every((point) => Boolean(point.date) && Number.isFinite(Number(point.discountFactor)));
+  const modelReady = flatModelReady || masterDataReady || inlineReady;
+
+  return [
+    {
+      id: "scope",
+      label: "Scope",
+      state: scopeReady ? "READY" as const : "INCOMPLETE" as const,
+      message: input.scope === "portfolio" ? "Select a portfolio first." : "Select a netting set first.",
+    },
+    {
+      id: "simulation",
+      label: "Simulation",
+      state: simulationValid ? "READY" as const : simulationComplete ? "ERROR" as const : "INCOMPLETE" as const,
+      message: simulationComplete ? "Review horizon, buckets, paths, confidence and LGD." : "Complete the simulation assumptions.",
+    },
+    {
+      id: "model",
+      label: "Credit model",
+      state: modelReady ? "READY" as const : "INCOMPLETE" as const,
+      message: input.mode === "curves" ? "Select valid credit and discount curves." : "Complete the flat credit assumptions.",
+    },
+  ];
+}
+
+function cvaConfigurationFingerprint(value: unknown) {
+  return JSON.stringify(value);
+}
+
+function focusCvaStep(step: string) {
+  window.requestAnimationFrame(() => {
+    document.getElementById(`cva-step-${step}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 function CvaRunCommandBar({
@@ -1605,6 +1802,9 @@ function CvaRunCommandBar({
   selectedDiscountCurve,
   loading,
   disabled,
+  previousResult,
+  previousResultOutdated,
+  onViewPrevious,
   onRun,
 }: {
   scope: CvaScope;
@@ -1616,6 +1816,9 @@ function CvaRunCommandBar({
   selectedDiscountCurve?: DiscountCurve;
   loading: boolean;
   disabled: boolean;
+  previousResult: boolean;
+  previousResultOutdated: boolean;
+  onViewPrevious: () => void;
   onRun: () => void;
 }) {
   const scopeValue = scope === "nettingSet"
@@ -1635,10 +1838,17 @@ function CvaRunCommandBar({
         <span><small>Credit model</small><strong>{modelValue}</strong></span>
         <span><small>LGD</small><strong>{formatPercent(Number(form.lossGivenDefault))}</strong></span>
       </div>
-      <button className="btn warning" type="button" onClick={onRun} disabled={loading || disabled}>
-        {loading ? <Loader2 size={16} /> : <Shield size={16} />}
-        {loading ? "Running CVA" : "Run CVA"}
-      </button>
+      <div className="cva-command-actions">
+        {previousResult ? (
+          <button className="btn secondary" type="button" onClick={onViewPrevious}>
+            {previousResultOutdated ? "View previous result" : "View result"}
+          </button>
+        ) : null}
+        <button className="btn warning" type="button" onClick={onRun} disabled={loading || disabled}>
+          {loading ? <Loader2 size={16} /> : <Shield size={16} />}
+          {loading ? "Running CVA" : "Run CVA"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -2700,27 +2910,34 @@ function ExposureTable({ points, currency }: { points: ExposureSimulationRespons
   );
 }
 
-function CvaResult({ cva }: { cva: CvaCalculationResponse | CvaNettingSetCalculationResponse }) {
+function CvaResult({ cva, tab }: { cva: CvaCalculationResponse | CvaNettingSetCalculationResponse; tab: CvaResultTab }) {
   const isNettingSet = "nettingSetId" in cva;
+  const maximumGrossExposure = Math.max(0, ...cva.points.map((point) => point.grossExpectedExposure));
   const maximumExpectedExposure = Math.max(0, ...cva.points.map((point) => point.expectedExposure));
   const totalDefaultProbability = cva.points.length === 0
     ? 0
     : 1 - cva.points.at(-1)!.survivalProbability;
   const largestContribution = Math.max(0, ...cva.points.map((point) => point.cvaContribution));
+  const largestContributionPoint = cva.points.reduce<(typeof cva.points)[number] | null>(
+    (largest, point) => !largest || point.cvaContribution > largest.cvaContribution ? point : largest,
+    null,
+  );
   const hasNoResidualExposure = maximumExpectedExposure < 0.005;
+  const uncollateralizedCva = isNettingSet ? cva.uncollateralizedCva : cva.cva;
+  const collateralBenefit = isNettingSet ? cva.collateralBenefit : 0;
+  const collateralBenefitPercent = isNettingSet ? cva.collateralBenefitPercent : 0;
 
-  return (
-    <div className="table-spacing">
-      <div className="summary-strip">
-        <Metric label="CVA" value={formatCurrency(cva.cva)} />
-        <Metric label="Currency" value={cva.baseCurrency} />
-        {isNettingSet ? <Metric label="Counterparty" value={cva.counterpartyName} /> : null}
-        {isNettingSet ? <Metric label="Netting set" value={cva.nettingSetName} /> : null}
-        <Metric label="Credit method" value={cva.creditMethod} />
-        <Metric label="Discount method" value={cva.discountMethod} />
-        <Metric label="LGD" value={formatPercent(cva.lossGivenDefault)} />
-        {isNettingSet ? <Metric label="Collateral" value={`${formatCurrency(cva.collateralAmount)} ${cva.collateralCurrency}`} /> : null}
-      </div>
+  if (tab === "overview") {
+    return (
+      <div className="cva-overview">
+        <div className="cva-kpi-grid">
+          <CvaKpi tone="cost" label="CVA charge" value={formatCurrency(cva.cva, cva.baseCurrency)} detail="Residual expected credit loss" />
+          <CvaKpi tone="exposure" label="Peak gross EE" value={formatCurrency(maximumGrossExposure, cva.baseCurrency)} detail="Before static collateral" />
+          <CvaKpi tone="exposure" label="Peak residual EE" value={formatCurrency(maximumExpectedExposure, cva.baseCurrency)} detail="Exposure used by CVA" />
+          <CvaKpi tone="default" label="Horizon default probability" value={formatPercent(totalDefaultProbability)} detail={`LGD ${formatPercent(cva.lossGivenDefault)}`} />
+          <CvaKpi tone="neutral" label="Uncollateralized CVA" value={formatCurrency(uncollateralizedCva, cva.baseCurrency)} detail="Same paths without collateral" />
+          <CvaKpi tone="benefit" label="Collateral benefit" value={formatCurrency(collateralBenefit, cva.baseCurrency)} detail={`${formatPercent(collateralBenefitPercent)} CVA reduction`} />
+        </div>
       <section className={`cva-result-interpretation ${hasNoResidualExposure ? "neutral" : "risk"}`}>
         <div>
           <span className="eyebrow">What this run means</span>
@@ -2730,31 +2947,40 @@ function CvaResult({ cva }: { cva: CvaCalculationResponse | CvaNettingSetCalcula
               ? isNettingSet && cva.collateralAmount > 0
                 ? `Static collateral of ${formatCurrency(cva.collateralAmount, cva.collateralCurrency)} absorbs the modeled positive exposure in every bucket, so CVA is zero.`
                 : "Every simulated expected-exposure bucket is zero, so there is no amount to which default probability and LGD can be applied."
-              : `The model found positive exposure up to ${formatCurrency(maximumExpectedExposure, cva.baseCurrency)}. Credit loss is distributed across the dated contributions below.`}
+              : `The model found residual exposure up to ${formatCurrency(maximumExpectedExposure, cva.baseCurrency)}. The largest credit-loss bucket is ${largestContributionPoint?.date ?? "not available"}.`}
           </p>
           {hasNoResidualExposure && isNettingSet && cva.collateralAmount > 0 ? (
             <p className="cva-next-action">To learn from this demo, set collateral to 0 in ADMIN XVA Setup and run again. Then restore collateral and compare.</p>
           ) : null}
         </div>
         <div className="cva-insight-grid">
-          <Metric label="Peak residual EE" value={formatCurrency(maximumExpectedExposure, cva.baseCurrency)} />
-          <Metric label="Horizon default probability" value={formatPercent(totalDefaultProbability)} />
           <Metric label="Largest bucket loss" value={formatCurrency(largestContribution, cva.baseCurrency)} />
+          <Metric label="Largest loss date" value={largestContributionPoint?.date ?? "-"} />
+          <Metric label="Collateral" value={isNettingSet ? formatCurrency(cva.collateralAmount, cva.collateralCurrency) : formatCurrency(0, cva.baseCurrency)} />
           <Metric label="Total CVA" value={formatCurrency(cva.cva, cva.baseCurrency)} />
         </div>
       </section>
+        <CvaRiskCharts points={cva.points} currency={cva.baseCurrency} />
       {isNettingSet && cva.profileLevelNettingApproximation ? (
         <p className="mini-note">Netting set CVA V1 aggregates portfolio exposure profiles and subtracts static collateral. Path-level netting and margin calls come later.</p>
       ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="cva-bucket-details">
       <p className="mini-note cva-contribution-note">
-        CVA contribution is the bucket-level expected loss: discounted expected exposure multiplied by LGD and the default probability increment for that bucket. The table contributions add up to total CVA.
+        Gross EE is exposure before collateral. Residual EE is the amount used by CVA. Contribution equals discounted residual EE multiplied by LGD and the bucket default increment.
       </p>
-      <div className="table-wrap table-spacing">
-        <table>
+      <div className="table-wrap table-spacing cva-bucket-table">
+        <table className="sticky-table-head">
           <thead>
             <tr>
               <th>Date</th>
-              <th>EE</th>
+              <th>Gross EE</th>
+              <th>Collateral applied</th>
+              <th>Residual EE</th>
               <th>Discount factor</th>
               <th>Survival</th>
               <th>Default increment</th>
@@ -2764,8 +2990,10 @@ function CvaResult({ cva }: { cva: CvaCalculationResponse | CvaNettingSetCalcula
           </thead>
           <tbody>
             {cva.points.map((point) => (
-              <tr key={point.date}>
+              <tr key={point.date} className={point === largestContributionPoint ? "largest-contribution" : ""}>
                 <td>{point.date}</td>
+                <td>{formatCurrency(point.grossExpectedExposure, cva.baseCurrency)}</td>
+                <td className="positive">{formatCurrency(point.collateralApplied, cva.baseCurrency)}</td>
                 <td>{formatCurrency(point.expectedExposure, cva.baseCurrency)}</td>
                 <td>{formatNumber(point.discountFactor)}</td>
                 <td>{formatPercent(point.survivalProbability)}</td>
@@ -2778,6 +3006,16 @@ function CvaResult({ cva }: { cva: CvaCalculationResponse | CvaNettingSetCalcula
         </table>
       </div>
     </div>
+  );
+}
+
+function CvaKpi({ tone, label, value, detail }: { tone: "cost" | "exposure" | "default" | "benefit" | "neutral"; label: string; value: string; detail: string }) {
+  return (
+    <article className={`cva-kpi ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </article>
   );
 }
 

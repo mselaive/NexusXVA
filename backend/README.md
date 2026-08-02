@@ -2,7 +2,7 @@
 
 Spring Boot backend for NexusXVA.
 
-The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option and cash equity positions, portfolio-level pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, simplified CVA V1.2, XVA reference data for counterparties/netting sets/collateral/curves, cash-equity delta hedge analysis, persisted valuation run history, persisted report snapshots, Audit Trail V1, and rotated technical logs.
+The backend currently includes the project foundation, stateless European option pricing with the Black-Scholes model and Greeks, persisted portfolio management for European option and cash equity positions, portfolio-level pricing using market-data pricing inputs, Exposure V1 with simple GBM Monte Carlo simulation, simplified CVA V1.2, Historical VaR V1, asynchronous Risk Packs, XVA reference data for counterparties/netting sets/collateral/curves, cash-equity delta hedge analysis, persisted valuation run history, persisted report snapshots, Audit Trail V1, and rotated technical logs.
 
 ## Requirements
 
@@ -1036,7 +1036,12 @@ V1 rules:
 - Netting-set CVA V1 supports one base currency per netting set and requires collateral currency to match that base currency.
 - `collateralAmount` is a static amount in the netting set currency.
 - Netting-set CVA aggregates portfolio exposure profiles, subtracts static collateral from positive expected exposure/PFE by bucket, then applies the same CVA calculator.
+- The response reports both `uncollateralizedCva` and residual `cva`. `collateralBenefit` is their non-negative difference and `collateralBenefitPercent` is that reduction divided by uncollateralized CVA.
+- Every bucket exposes `grossExpectedExposure`, `collateralApplied`, and residual `expectedExposure`; the invariant is `grossExpectedExposure - collateralApplied = expectedExposure`.
+- Portfolio-level CVA remains compatible: gross and residual EE are equal, while collateral applied and collateral benefit are zero.
 - This is profile-level netting, not path-level legal netting or CSA margining.
+
+The frontend CVA workflow separates setup from results. After a successful run it collapses the three setup steps and opens an Overview with credit-cost, exposure, default-probability and collateral-reduction metrics plus charts. `Bucket details` retains the technical calculation table. Colors describe metric type; they are not configurable risk limits or trading P&L classifications.
 
 Implementation shape:
 
@@ -1128,6 +1133,13 @@ com.nexusxva
     application
     domain
     infrastructure
+  marketrisk
+    application
+  riskcockpit
+    api
+    application
+    domain
+    infrastructure
   pricing
     api
     application
@@ -1155,3 +1167,35 @@ com.nexusxva
 ```
 
 Controllers should stay thin, application services should own use-case orchestration, domain packages should contain financial concepts and invariants, and infrastructure packages should contain persistence or external adapters when those are introduced.
+
+## Risk Cockpit and Risk Packs
+
+`/api/risk-cockpit` provides a persisted, asynchronous portfolio risk pack for FO and a read-only control view for BO. A pack uses one valuation date and runs five independently observable components:
+
+```text
+Pricing -> Stress + Historical VaR -> Exposure -> CVA
+```
+
+- `POST /api/risk-cockpit/portfolios/{portfolioId}/runs` queues a run and returns `202` immediately.
+- `GET /api/risk-cockpit/runs/{runId}` supports frontend polling until `SUCCESS`, `PARTIAL`, or `FAILED`.
+- Only one `QUEUED`/`RUNNING` pack is allowed per portfolio.
+- Results and sanitized diagnostics are persisted in `risk_pack_runs` and `risk_pack_run_components`.
+- FO can execute visible portfolios. BO can inspect active portfolios and results but cannot execute packs.
+- A component failure does not hide successful outputs. If Exposure fails, CVA is explicitly `SKIPPED`.
+
+Historical VaR uses `HISTORICAL_FULL_REVALUATION_SPOT_V1`. Nexus requests 260 daily closes from Blemberg and requires at least 250 returns aligned across every active symbol. Historical spot-return vectors are applied jointly; options are fully repriced with current volatility, rates and dividend yield, while cash equities revalue linearly. FX is held current. The result includes one-day 99% VaR, Expected Shortfall, worst scenarios, a P&L histogram and symbol contributions for the selected VaR scenario.
+
+This VaR is deliberately incomplete market risk. Historical changes in volatility, rates, dividend yield and FX are not modelled and are reported as limitations. Missing history for any active symbol fails only the VaR component rather than silently understating risk.
+
+Blemberg prerequisite:
+
+```http
+POST /api/market-data/daily-bars/batch
+Content-Type: application/json
+
+{"symbols":["AAPL","MSFT"],"observations":260}
+```
+
+NexusXVA persists derived Risk Pack results for audit, never Blemberg daily bars as market-data source of truth.
+Blemberg returns `200` with an empty `series` and populated `missingSymbols` when no requested symbol has the complete window. Nexus does not retry against an external provider: VaR fails cleanly, the pack becomes `PARTIAL`, and the next Blemberg daily refresh can complete coverage. `historicalVarReady` starts at 251 closes, but the normal Nexus batch request still expects all 260 observations requested.
+Historical batch calls use a separate `BLEMBERG_HISTORICAL_TIMEOUT`, default `15s`, because their payload is materially larger than a single instrument or pricing-input lookup.

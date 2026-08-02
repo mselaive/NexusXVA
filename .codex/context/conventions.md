@@ -63,6 +63,9 @@
 - A portfolio can belong to only one netting set in V1.
 - Netting-set setup mutations are ADMIN-owned; FO may consume configured netting sets for CVA when authorized.
 - Inactive counterparties or inactive netting sets are historical reference data only. Hide/block them from FO CVA selection, new portfolio assignment, and netting-set CVA runs.
+- Historical daily bars remain owned by Blemberg. NexusXVA may persist derived Risk Pack and VaR results for audit, but must not duplicate historical bars as market-data source of truth.
+- Historical VaR must align dated returns across every active symbol and fail its component when any symbol lacks sufficient history. Never omit missing symbols silently because that understates risk.
+- Risk Packs are component-based and may finish `PARTIAL`; preserve successful component outputs and make failed or skipped components explicit. CVA must reuse the pack Exposure result rather than launch a second simulation.
 
 ## API Design
 

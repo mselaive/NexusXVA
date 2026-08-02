@@ -53,6 +53,8 @@ import type {
   PortfolioSummary,
   ReportSnapshot,
   ReportSnapshotType,
+  RiskPackRun,
+  StartRiskPackResponse,
   TradeBooking,
   TradeBookingPage,
   TradeBookingStatus,
@@ -153,6 +155,22 @@ async function readErrorBody(response: Response): Promise<ApiError | string | nu
 }
 
 export const nexusApi = {
+  listRiskCockpitPortfolios: () => request<PortfolioSummary[]>("/risk-cockpit/portfolios"),
+
+  getLatestRiskPack: (portfolioId: string) =>
+    request<RiskPackRun | undefined>(`/risk-cockpit/portfolios/${portfolioId}/latest`),
+
+  listRiskPackRuns: (portfolioId: string, limit = 20) =>
+    request<RiskPackRun[]>(`/risk-cockpit/portfolios/${portfolioId}/runs?limit=${limit}`),
+
+  startRiskPack: (portfolioId: string, valuationDate: string) =>
+    request<StartRiskPackResponse>(`/risk-cockpit/portfolios/${portfolioId}/runs`, {
+      method: "POST",
+      body: JSON.stringify({ valuationDate }),
+    }),
+
+  getRiskPack: (runId: string) => request<RiskPackRun>(`/risk-cockpit/runs/${runId}`),
+
   listNotifications: (unreadOnly = false, page = 0, size = 20) => {
     const query = new URLSearchParams({ unreadOnly: String(unreadOnly), page: String(page), size: String(size) });
     return request<NotificationPage>(`/notifications?${query.toString()}`);

@@ -27,6 +27,44 @@ class CvaNettingSetCalculationServiceTest {
 
     @Test
     void aggregatesPortfolioExposureProfilesAndSubtractsStaticCollateral() {
+        CvaNettingSetCalculationResult result = calculateWithCollateral(25.0);
+
+        assertThat(result.portfolioCount()).isEqualTo(2);
+        assertThat(result.points()).hasSize(1);
+        assertThat(result.points().getFirst().grossExpectedExposure()).isEqualTo(150.0);
+        assertThat(result.points().getFirst().collateralApplied()).isEqualTo(25.0);
+        assertThat(result.points().getFirst().expectedExposure()).isEqualTo(125.0);
+        assertThat(result.uncollateralizedCva()).isGreaterThan(result.cva());
+        assertThat(result.collateralBenefit()).isPositive();
+        assertThat(result.collateralBenefitPercent()).isBetween(0.0, 1.0);
+    }
+
+    @Test
+    void zeroCollateralKeepsGrossAndResidualCvaEqual() {
+        CvaNettingSetCalculationResult result = calculateWithCollateral(0.0);
+
+        assertThat(result.points().getFirst().grossExpectedExposure()).isEqualTo(150.0);
+        assertThat(result.points().getFirst().collateralApplied()).isZero();
+        assertThat(result.points().getFirst().expectedExposure()).isEqualTo(150.0);
+        assertThat(result.cva()).isEqualTo(result.uncollateralizedCva());
+        assertThat(result.collateralBenefit()).isZero();
+        assertThat(result.collateralBenefitPercent()).isZero();
+    }
+
+    @Test
+    void fullCollateralEliminatesResidualCvaButPreservesGrossCva() {
+        CvaNettingSetCalculationResult result = calculateWithCollateral(200.0);
+
+        assertThat(result.points().getFirst().grossExpectedExposure()).isEqualTo(150.0);
+        assertThat(result.points().getFirst().collateralApplied()).isEqualTo(150.0);
+        assertThat(result.points().getFirst().expectedExposure()).isZero();
+        assertThat(result.uncollateralizedCva()).isPositive();
+        assertThat(result.cva()).isZero();
+        assertThat(result.collateralBenefit()).isEqualTo(result.uncollateralizedCva());
+        assertThat(result.collateralBenefitPercent()).isEqualTo(1.0);
+    }
+
+    private CvaNettingSetCalculationResult calculateWithCollateral(double collateralAmount) {
         UUID nettingSetId = UUID.randomUUID();
         UUID counterpartyId = UUID.randomUUID();
         UUID firstPortfolioId = UUID.randomUUID();
@@ -41,7 +79,7 @@ class CvaNettingSetCalculationServiceTest {
                 true,
                 "Equity Options CSA",
                 "USD",
-                BigDecimal.valueOf(25),
+                BigDecimal.valueOf(collateralAmount),
                 "USD",
                 true,
                 Instant.parse("2026-06-30T10:00:00Z"),
@@ -56,7 +94,7 @@ class CvaNettingSetCalculationServiceTest {
                 new StubExposureSimulationService(valuationDate, exposureDate, firstPortfolioId, secondPortfolioId)
         );
 
-        CvaNettingSetCalculationResult result = service.calculate(new CvaNettingSetCalculationCommand(
+        return service.calculate(new CvaNettingSetCalculationCommand(
                 nettingSetId,
                 valuationDate,
                 30,
@@ -70,11 +108,6 @@ class CvaNettingSetCalculationServiceTest {
                 List.of(),
                 List.of()
         ));
-
-        assertThat(result.portfolioCount()).isEqualTo(2);
-        assertThat(result.points()).hasSize(1);
-        assertThat(result.points().getFirst().expectedExposure()).isEqualTo(125.0);
-        assertThat(result.cva()).isPositive();
     }
 
     private ExposureSimulationCommand portfolioCommand(UUID portfolioId, LocalDate valuationDate) {

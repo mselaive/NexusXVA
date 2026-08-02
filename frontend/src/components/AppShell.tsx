@@ -50,6 +50,7 @@ export type HowToItem = {
 const navItems = [
   { href: "/", label: "Overview", icon: Gauge },
   { href: "/fo-desk", label: "FO Desk", icon: BriefcaseBusiness },
+  { href: "/risk-cockpit", label: "Risk Cockpit", icon: BarChart3 },
   { href: "/pre-trade-analysis", label: "Pre-Trade Analysis", icon: FlaskConical },
   { href: "/stress-testing", label: "Stress Testing", icon: Waves },
   { href: "/delta-hedge", label: "Delta Hedge", icon: GitCompareArrows },

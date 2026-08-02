@@ -40,6 +40,8 @@ FO analyzes and books
 * Curve lifecycle for CVA master data: versioned draft curves, ADMIN approval/rejection and superseded history.
 * ADMIN XVA Setup for counterparties, netting sets, portfolio assignments, active/inactive controls, static collateral and reusable CVA curves.
 * Netting-set CVA V1 using active XVA setup records.
+* Risk Cockpit V1 for FO/BO with persisted asynchronous Risk Packs covering Pricing, Stress, Historical VaR, Exposure and CVA.
+* Historical full-revaluation VaR V1 using aligned daily equity spot returns supplied by Blemberg.
 * Market data integration through the `marketdata` boundary, using either Blemberg or a local provider.
 
 ## Architecture
@@ -53,8 +55,10 @@ flowchart LR
     API --> Pricing[Pricing Domain]
     API --> Exposure[Exposure / Monte Carlo]
     API --> CVA[CVA]
+    API --> MarketRisk[Historical VaR / Risk Packs]
     API --> XVA[Counterparties / Netting Sets]
     API --> MarketData[Marketdata Port]
+    MarketRisk --> MarketData
     MarketData --> Blemberg[Blemberg Service]
     Portfolio --> DB[(PostgreSQL)]
     XVA --> DB
@@ -83,8 +87,8 @@ flowchart TD
 
 ## Groups
 
-* **FO**: FO Desk, Pre-Trade Analysis, Stress Testing, u-Pad, Portfolios, Pricing, Exposure, CVA, Run History, and Report History.
-* **BO**: Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control, Run History, and Report History.
+* **FO**: FO Desk, Risk Cockpit, Pre-Trade Analysis, Stress Testing, u-Pad, Portfolios, Pricing, Exposure, CVA, Run History, and Report History.
+* **BO**: Risk Cockpit read-only supervision, Trade Validation, Lifecycle Reporting, Operations Reporting, Trading Limits, EOD Control, Run History, and Report History.
 * **ADMIN**: users, groups, FO permissions, portfolio visibility, Operational Control, workflow map, XVA Setup, Audit Logs, Run History, and Report History.
 
 A user can belong to multiple groups. After login, the user chooses the active group for the session.

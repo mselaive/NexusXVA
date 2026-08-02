@@ -10,6 +10,7 @@ public class BlembergProperties {
     private String baseUrl = "http://localhost:8081";
     private Duration timeout = Duration.ofSeconds(2);
     private Duration refreshTimeout = Duration.ofSeconds(60);
+    private Duration historicalTimeout = Duration.ofSeconds(15);
 
     public String getBaseUrl() {
         return baseUrl;
@@ -33,5 +34,13 @@ public class BlembergProperties {
 
     public void setRefreshTimeout(Duration refreshTimeout) {
         this.refreshTimeout = refreshTimeout;
+    }
+
+    public Duration getHistoricalTimeout() {
+        return historicalTimeout;
+    }
+
+    public void setHistoricalTimeout(Duration historicalTimeout) {
+        this.historicalTimeout = historicalTimeout;
     }
 }

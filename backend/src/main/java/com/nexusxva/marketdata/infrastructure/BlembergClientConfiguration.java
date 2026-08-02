@@ -22,6 +22,11 @@ class BlembergClientConfiguration {
         return restClient(properties.getBaseUrl(), properties.getRefreshTimeout());
     }
 
+    @Bean
+    RestClient blembergHistoricalRestClient(BlembergProperties properties) {
+        return restClient(properties.getBaseUrl(), properties.getHistoricalTimeout());
+    }
+
     private RestClient restClient(String baseUrl, java.time.Duration timeout) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(timeout);

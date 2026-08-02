@@ -48,7 +48,17 @@ public class CvaNettingSetCalculationService {
                 .map(portfolio -> exposureSimulationService.simulate(portfolioExposureCommand(command, portfolio)))
                 .toList();
         validateExposureCurrencies(nettingSet, exposureResults);
-        List<ExposurePoint> nettedPoints = nettedExposurePoints(exposureResults, nettingSet.collateralAmount().doubleValue());
+        List<ExposurePoint> grossPoints = grossExposurePoints(exposureResults);
+        List<ExposurePoint> nettedPoints = applyCollateral(grossPoints, nettingSet.collateralAmount().doubleValue());
+        CvaResult uncollateralizedCvaResult = calculator.calculate(new CvaInput(
+                command.valuationDate(),
+                grossPoints,
+                command.lossGivenDefault(),
+                command.counterpartyHazardRate(),
+                command.discountRate(),
+                command.creditCurve(),
+                command.discountCurve()
+        ));
         CvaResult cvaResult = calculator.calculate(new CvaInput(
                 command.valuationDate(),
                 nettedPoints,
@@ -58,6 +68,28 @@ public class CvaNettingSetCalculationService {
                 command.creditCurve(),
                 command.discountCurve()
         ));
+        double collateralBenefit = Math.max(uncollateralizedCvaResult.cva() - cvaResult.cva(), 0.0);
+        double collateralBenefitPercent = uncollateralizedCvaResult.cva() > 0.0
+                ? collateralBenefit / uncollateralizedCvaResult.cva()
+                : 0.0;
+        Map<LocalDate, Double> grossExposureByDate = grossPoints.stream()
+                .collect(java.util.stream.Collectors.toMap(ExposurePoint::date, ExposurePoint::expectedExposure));
+        List<com.nexusxva.cva.domain.CvaPoint> collateralizedPoints = cvaResult.points().stream()
+                .map(point -> {
+                    double grossExposure = grossExposureByDate.getOrDefault(point.date(), point.expectedExposure());
+                    return new com.nexusxva.cva.domain.CvaPoint(
+                            point.date(),
+                            grossExposure,
+                            Math.max(grossExposure - point.expectedExposure(), 0.0),
+                            point.expectedExposure(),
+                            point.discountFactor(),
+                            point.survivalProbability(),
+                            point.defaultProbabilityIncrement(),
+                            point.discountedExpectedExposure(),
+                            point.cvaContribution()
+                    );
+                })
+                .toList();
 
         return new CvaNettingSetCalculationResult(
                 nettingSet.id(),
@@ -79,8 +111,11 @@ public class CvaNettingSetCalculationService {
                 command.discountRate(),
                 cvaResult.creditMethod(),
                 cvaResult.discountMethod(),
+                uncollateralizedCvaResult.cva(),
+                collateralBenefit,
+                collateralBenefitPercent,
                 cvaResult.cva(),
-                cvaResult.points()
+                collateralizedPoints
         );
     }
 
@@ -107,10 +142,7 @@ public class CvaNettingSetCalculationService {
         );
     }
 
-    private List<ExposurePoint> nettedExposurePoints(
-            List<ExposureSimulationResult> exposureResults,
-            double collateralAmount
-    ) {
+    private List<ExposurePoint> grossExposurePoints(List<ExposureSimulationResult> exposureResults) {
         Map<LocalDate, double[]> totalsByDate = new LinkedHashMap<>();
         for (ExposureSimulationResult result : exposureResults) {
             for (ExposurePoint point : result.points()) {
@@ -127,11 +159,22 @@ public class CvaNettingSetCalculationService {
                     double[] totals = entry.getValue();
                     return new ExposurePoint(
                             entry.getKey(),
-                            Math.max(totals[0] - collateralAmount, 0.0),
+                            totals[0],
                             totals[1],
-                            Math.max(totals[2] - collateralAmount, 0.0)
+                            totals[2]
                     );
                 })
+                .toList();
+    }
+
+    private List<ExposurePoint> applyCollateral(List<ExposurePoint> grossPoints, double collateralAmount) {
+        return grossPoints.stream()
+                .map(point -> new ExposurePoint(
+                        point.date(),
+                        Math.max(point.expectedExposure() - collateralAmount, 0.0),
+                        point.expectedNegativeExposure(),
+                        Math.max(point.pfe() - collateralAmount, 0.0)
+                ))
                 .toList();
     }
 }

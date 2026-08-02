@@ -6,6 +6,8 @@ import java.time.LocalDate;
 
 public record CvaPointResponse(
         LocalDate date,
+        double grossExpectedExposure,
+        double collateralApplied,
         double expectedExposure,
         double discountFactor,
         double survivalProbability,
@@ -17,6 +19,8 @@ public record CvaPointResponse(
     static CvaPointResponse from(CvaPoint point) {
         return new CvaPointResponse(
                 point.date(),
+                point.grossExpectedExposure(),
+                point.collateralApplied(),
                 point.expectedExposure(),
                 point.discountFactor(),
                 point.survivalProbability(),

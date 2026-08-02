@@ -1,5 +1,53 @@
 # Blemberg Contract Fixtures
 
+## Historical Daily Bars Batch
+
+Risk Cockpit Historical VaR uses the cached historical batch contract. Blemberg owns and refreshes the bars; NexusXVA consumes them without persisting a second market-data history.
+
+```http
+POST /api/market-data/daily-bars/batch
+Content-Type: application/json
+```
+
+```json
+{
+  "symbols": ["AAPL", "MSFT", "NVDA"],
+  "observations": 260
+}
+```
+
+```json
+{
+  "series": [
+    {
+      "symbol": "AAPL",
+      "currency": "USD",
+      "stale": false,
+      "bars": [
+        { "date": "2026-07-31", "close": 210.15 }
+      ]
+    }
+  ],
+  "missingSymbols": [],
+  "asOf": "2026-08-02T00:00:00Z",
+  "source": "TWELVE_DATA"
+}
+```
+
+Required rules:
+
+- Symbols are uppercase and unique.
+- Bars contain finite positive closes and dates.
+- `observations` defaults to 260 and accepts values from 2 through 500.
+- A successful series contains exactly the requested number of valid closes, ordered oldest to newest.
+- `asOf` is the latest close common to the successful series and `source` is `TWELVE_DATA`.
+- A valid request returns `200` even when every symbol is missing; in that case `series` is empty and `asOf` is `null`.
+- Missing symbols are explicit in `missingSymbols`; partial coverage must never look complete.
+- NexusXVA requests 260 observations and rejects the VaR component unless every active symbol has at least 250 aligned returns.
+- NexusXVA does not retry against a provider. The Risk Pack becomes `PARTIAL` and Blemberg's daily refresh fills the cache progressively.
+
+Coverage distinguishes `pricingReady` from `historicalVarReady`. The latter starts at 251 valid closes, while a batch request for 260 still requires all 260 because the endpoint never returns a partial series as successful.
+
 These examples are the response shapes NexusXVA expects from Blemberg.
 They can be used as fixtures in the Blemberg repository and in NexusXVA adapter tests.
 

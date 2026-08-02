@@ -57,6 +57,8 @@ class CvaControllerIntegrationTest extends AbstractPostgresIntegrationTest {
                 .andExpect(jsonPath("$.cva").isNumber())
                 .andExpect(jsonPath("$.points", hasSize(3)))
                 .andExpect(jsonPath("$.points[0].date").value("2026-07-05"))
+                .andExpect(jsonPath("$.points[0].grossExpectedExposure").isNumber())
+                .andExpect(jsonPath("$.points[0].collateralApplied").value(0.0))
                 .andExpect(jsonPath("$.points[0].expectedExposure").isNumber())
                 .andExpect(jsonPath("$.points[0].discountFactor").isNumber())
                 .andExpect(jsonPath("$.points[0].survivalProbability").isNumber())
@@ -147,6 +149,9 @@ class CvaControllerIntegrationTest extends AbstractPostgresIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nettingSetId").value(nettingSetId.toString()))
                 .andExpect(jsonPath("$.model").value("SIMPLIFIED_CVA_NETTING_SET_V1"))
+                .andExpect(jsonPath("$.uncollateralizedCva").isNumber())
+                .andExpect(jsonPath("$.collateralBenefit").value(0.0))
+                .andExpect(jsonPath("$.collateralBenefitPercent").value(0.0))
                 .andExpect(jsonPath("$.cva").isNumber());
 
         mockMvc.perform(get("/api/valuation-runs")
@@ -331,8 +336,8 @@ class CvaControllerIntegrationTest extends AbstractPostgresIntegrationTest {
                   "pfeConfidenceLevel": 0.95,
                   "lossGivenDefault": 0.60,
                   "creditCurve": [
-                    { "date": "2026-08-04", "survivalProbability": 0.990 },
-                    { "date": "2026-09-03", "survivalProbability": 0.985 }
+                    { "date": "2026-07-05", "survivalProbability": 0.990 },
+                    { "date": "2026-08-04", "survivalProbability": 0.985 }
                   ],
                   "discountRate": 0.05
                 }

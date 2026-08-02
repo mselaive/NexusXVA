@@ -254,6 +254,8 @@ FO netting-set CVA request
 
 V1 netting is intentionally simple: it aggregates exposure profiles across assigned portfolios and subtracts static collateral from positive exposure buckets. It is not path-level netting, CSA margining, collateral calls or wrong-way risk. Credit and discount curve master data now lives in the XVA module and can be referenced by CVA runs. Netting-set CVA is written to valuation run history with `scopeType=NETTING_SET`, so it is auditable like portfolio-level runs.
 
+For transparency, netting-set CVA calculates gross and residual profiles with the same simulated paths, curves and LGD. Each bucket returns gross expected exposure, collateral applied and residual expected exposure. The response also returns uncollateralized CVA, residual CVA and their non-negative difference as collateral benefit. This benefit is a modeled credit-cost reduction, not trading P&L. The CVA UI uses a guided Scope -> Simulation -> Credit model setup, then collapses setup into an Overview and a technical Bucket details view after a successful run. Editing an input marks the displayed result as outdated until it is rerun.
+
 Persisted curve lifecycle:
 
 ```text
@@ -825,6 +827,27 @@ The order we followed was:
 
 This avoided building Monte Carlo or CVA before we had a persisted unit on which to calculate risk.
 Now CVA V1.1 exists as the first XVA adjustment slice and Dashboard V1 is the active product slice.
+
+## Risk Cockpit V1
+
+Risk Cockpit is the shared FO/BO portfolio risk view. FO queues an asynchronous Risk Pack; BO supervises persisted results without recalculating them.
+
+```text
+Risk Pack request
+  -> persisted QUEUED run
+  -> bounded two-worker executor
+  -> Pricing
+  -> standard Stress + Historical VaR
+  -> Exposure
+  -> CVA using the same deterministic exposure configuration
+  -> persisted component outputs and diagnostics
+```
+
+Historical VaR obtains 260 closes per active symbol from Blemberg's batch endpoint and requires 250 aligned log returns. Each dated return vector shocks all symbols together. European options are fully repriced and cash equities are marked at shocked spot. Current volatility, rates, dividend yield and FX are frozen, so the result is explicitly labelled spot-risk-only.
+
+The run can be `PARTIAL`: missing history fails VaR; missing approved curves skips/fails CVA; other successful components remain available. Restart recovery marks abandoned queued/running packs as failed, and a database constraint prevents concurrent packs for the same portfolio.
+
+The UI exposes Overview, Market Risk, P&L & Sensitivities, Exposure & CVA, and Run Diagnostics. Colors distinguish exposure, credit cost and positive/negative P&L; they do not create unconfigured risk limits.
 
 ## Recommended Next Milestone
 

@@ -208,6 +208,11 @@ Completion criteria:
 
 Current notes:
 
+- Risk Cockpit V1 is implemented as a shared FO/BO portfolio view. FO queues persisted asynchronous Risk Packs; BO has read-only supervision.
+- Risk Packs persist Pricing, standard Stress, Historical VaR, Exposure and CVA as independent components. Partial results must remain inspectable.
+- Historical VaR V1 uses 250 aligned equity-spot log returns from 260 Blemberg daily closes and full option repricing. It freezes volatility, rates, dividends and FX and must disclose those omitted risk factors.
+- NexusXVA persists derived Risk Pack outputs and diagnostics, never Blemberg historical bars as market-data source of truth.
+- Only one active pack per portfolio is allowed; the executor has two workers and a queue of 20.
 - Dashboard V1 lives in `frontend/`.
 - Dashboard V1 is split into workflow pages: FO Desk, overview, Pre-Trade Analysis, Stress Testing, `u-Pad`, portfolios, pricing, exposure, CVA, Run History and Report History.
 - FO Desk V1 is the operational FO landing page: it aggregates visible portfolios, personal booking counts, booking history and a read-only P&L Snapshot without new persistence.

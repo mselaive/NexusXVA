@@ -136,6 +136,7 @@ public class AuthSessionFilter extends OncePerRequestFilter {
                     || path.startsWith("/api/report-snapshots")
                     || path.startsWith("/api/notifications")
                     || path.startsWith("/api/market-data")
+                    || path.startsWith("/api/risk-cockpit")
                     || path.startsWith("/api/xva");
             case "ADMIN" -> path.startsWith("/api/admin")
                     || path.startsWith("/api/valuation-runs")

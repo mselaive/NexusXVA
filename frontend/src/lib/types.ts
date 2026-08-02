@@ -10,6 +10,41 @@ export type PortfolioSummary = {
   positionCount: number;
 };
 
+export type RiskPackRunStatus = "QUEUED" | "RUNNING" | "SUCCESS" | "PARTIAL" | "FAILED";
+export type RiskPackComponentType = "PRICING" | "STRESS" | "VAR" | "EXPOSURE" | "CVA";
+export type RiskPackComponentStatus = "PENDING" | "RUNNING" | "SUCCESS" | "FAILED" | "SKIPPED";
+
+export type RiskPackComponent = {
+  id: string;
+  type: RiskPackComponentType;
+  status: RiskPackComponentStatus;
+  startedAt: string | null;
+  completedAt: string | null;
+  durationMs: number | null;
+  output: Record<string, any> | null;
+  errorMessage: string | null;
+};
+
+export type RiskPackRun = {
+  id: string;
+  portfolioId: string;
+  valuationDate: string;
+  status: RiskPackRunStatus;
+  requestedByUserId: string | null;
+  requestedByUsername: string | null;
+  requestedByGroup: string | null;
+  portfolioUpdatedAt: string;
+  marketDataAsOf: string | null;
+  configuration: Record<string, any>;
+  queuedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  errorMessage: string | null;
+  components: RiskPackComponent[];
+};
+
+export type StartRiskPackResponse = { runId: string; status: RiskPackRunStatus };
+
 export type Portfolio = {
   id: string;
   name: string;
@@ -832,6 +867,9 @@ export type CvaNettingSetCalculationResponse = Omit<CvaCalculationResponse, "por
   collateralCurrency: string;
   portfolioCount: number;
   profileLevelNettingApproximation: boolean;
+  uncollateralizedCva: number;
+  collateralBenefit: number;
+  collateralBenefitPercent: number;
 };
 
 export type Counterparty = {
@@ -977,6 +1015,8 @@ export type SaveDiscountCurveRequest = {
 
 export type CvaPoint = {
   date: string;
+  grossExpectedExposure: number;
+  collateralApplied: number;
   expectedExposure: number;
   discountFactor: number;
   survivalProbability: number;

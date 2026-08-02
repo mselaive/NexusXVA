@@ -31,6 +31,9 @@ public record CvaNettingSetCalculationResponse(
         Double discountRate,
         CvaCreditMethod creditMethod,
         CvaDiscountMethod discountMethod,
+        double uncollateralizedCva,
+        double collateralBenefit,
+        double collateralBenefitPercent,
         double cva,
         List<CvaPointResponse> points
 ) {
@@ -57,6 +60,9 @@ public record CvaNettingSetCalculationResponse(
                 result.discountRate(),
                 result.creditMethod(),
                 result.discountMethod(),
+                result.uncollateralizedCva(),
+                result.collateralBenefit(),
+                result.collateralBenefitPercent(),
                 result.cva(),
                 result.points().stream().map(CvaPointResponse::from).toList()
         );

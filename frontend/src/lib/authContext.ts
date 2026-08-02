@@ -16,14 +16,14 @@ export const WORK_GROUPS: Record<WorkGroupCode, WorkGroup> = {
     name: "Front Office",
     description: "Book trades, monitor market data, run pricing and analyze exposure.",
     landingHref: "/fo-desk",
-    allowedHrefs: ["/", "/fo-desk", "/pre-trade-analysis", "/stress-testing", "/delta-hedge", "/upad", "/what-if", "/portfolios", "/pricing", "/exposure", "/cva", "/valuation-runs", "/report-history"],
+    allowedHrefs: ["/", "/fo-desk", "/risk-cockpit", "/pre-trade-analysis", "/stress-testing", "/delta-hedge", "/upad", "/what-if", "/portfolios", "/pricing", "/exposure", "/cva", "/valuation-runs", "/report-history"],
   },
   BO: {
     code: "BO",
     name: "Back Office",
     description: "Validate pending trades and manage preventive Front Office trading limits.",
     landingHref: "/trade-validation",
-    allowedHrefs: ["/trade-validation", "/lifecycle-reporting", "/operations-reporting", "/trading-limits", "/eod-control", "/execute-scripts", "/valuation-runs", "/report-history"],
+    allowedHrefs: ["/risk-cockpit", "/trade-validation", "/lifecycle-reporting", "/operations-reporting", "/trading-limits", "/eod-control", "/execute-scripts", "/valuation-runs", "/report-history"],
   },
   ADMIN: {
     code: "ADMIN",

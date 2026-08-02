@@ -96,16 +96,30 @@ describe("Dashboard", () => {
   });
 
   it("runs CVA with credit and discount curves", async () => {
+    vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
     const fetchMock = mockFetch();
 
     render(<CvaPage />);
 
-    await screen.findByText("Credit and discount model");
+    await screen.findByText(/Credit and discount model/);
     await userEvent.click(screen.getByRole("button", { name: /Curve mode/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Inline curves/i }));
     await userEvent.click(screen.getByRole("button", { name: /Run CVA/i }));
 
-    await screen.findByText("CREDIT_CURVE");
-    expect(screen.getByText("DISCOUNT_CURVE")).toBeInTheDocument();
+    expect(await screen.findByText("CVA charge")).toBeInTheDocument();
+    expect(screen.getByText("Exposure after collateral")).toBeInTheDocument();
+    expect(screen.queryByText("3. Credit and discount model")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: /Bucket details/i }));
+    expect(screen.getByText("Gross EE")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Edit setup/i }));
+    expect(await screen.findByText("3. Credit and discount model")).toBeInTheDocument();
+    const horizonInput = screen.getByText("Horizon days", { selector: ".field-label-inline > span" })
+      .closest("label")!
+      .querySelector("input")!;
+    await userEvent.clear(horizonInput);
+    await userEvent.type(horizonInput, "730");
+    await userEvent.click(screen.getByRole("button", { name: /View previous result/i }));
+    expect(await screen.findByText("OUTDATED")).toBeInTheDocument();
 
     const cvaCall = fetchMock.mock.calls.find(([url, init]) => url === "/nexus-api/risk/cva" && init?.method === "POST");
     expect(cvaCall).toBeDefined();
@@ -431,6 +445,8 @@ function mockFetch() {
         points: [
           {
             date: "2026-12-30",
+            grossExpectedExposure: 100,
+            collateralApplied: 0,
             expectedExposure: 100,
             discountFactor: 0.98,
             survivalProbability: 0.99,

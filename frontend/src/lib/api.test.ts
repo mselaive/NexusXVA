@@ -43,6 +43,24 @@ describe("nexusApi", () => {
     });
   });
 
+  it("queues a Risk Pack with its valuation date", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: "csrf-token" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ runId: "run-1", status: "QUEUED" }), { status: 202 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await nexusApi.startRiskPack("portfolio-1", "2026-08-02");
+
+    expect(result).toEqual({ runId: "run-1", status: "QUEUED" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/nexus-api/risk-cockpit/portfolios/portfolio-1/runs",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ valuationDate: "2026-08-02" }),
+      }),
+    );
+  });
+
 });
 
 describe("blembergApi", () => {
@@ -51,19 +69,13 @@ describe("blembergApi", () => {
   });
 
   it("sends priority symbols when refreshing market data", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: "csrf-token" }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ status: "COMPLETED", requestedSymbols: ["AAPL"] }), { status: 200 }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: "COMPLETED", requestedSymbols: ["AAPL"] }), { status: 200 }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     await blembergApi.refreshMarketData(["AAPL"]);
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/nexus-api/auth/me",
-      expect.objectContaining({
-        credentials: "same-origin",
-      }),
-    );
     expect(fetchMock).toHaveBeenCalledWith(
       "/nexus-api/market-data/blemberg/refresh",
       expect.objectContaining({

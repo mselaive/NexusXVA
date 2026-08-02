@@ -28,6 +28,9 @@ public record CvaNettingSetCalculationResult(
         Double discountRate,
         CvaCreditMethod creditMethod,
         CvaDiscountMethod discountMethod,
+        double uncollateralizedCva,
+        double collateralBenefit,
+        double collateralBenefitPercent,
         double cva,
         List<CvaPoint> points
 ) {

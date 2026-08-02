@@ -51,6 +51,7 @@ nexusxva:
       base-url: ${BLEMBERG_BASE_URL:http://localhost:8081}
       timeout: ${BLEMBERG_TIMEOUT:2s}
       refresh-timeout: ${BLEMBERG_REFRESH_TIMEOUT:60s}
+      historical-timeout: ${BLEMBERG_HISTORICAL_TIMEOUT:15s}
       startup-probe-enabled: ${BLEMBERG_STARTUP_PROBE_ENABLED:true}
   log:
     file-enabled: ${NEXUSXVA_LOG_FILE_ENABLED:true}

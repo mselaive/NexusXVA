@@ -256,6 +256,8 @@ FO netting-set CVA request
 
 El netting V1 es intencionalmente simple: agrega perfiles de exposure de los portfolios asignados y resta collateral estatico de los buckets de exposure positiva. No es netting path-level, CSA margining, margin calls ni wrong-way risk. Las curvas de credito y descuento persistidas ahora son master data XVA reutilizable. CVA por netting set se escribe en Run History con `scopeType=NETTING_SET`, por lo que queda auditable igual que los runs por portfolio.
 
+Para dar transparencia, el CVA por netting set calcula perfiles gross y residual usando los mismos paths simulados, curvas y LGD. Cada bucket devuelve expected exposure gross, collateral aplicado y expected exposure residual. La respuesta tambien incluye CVA sin collateral, CVA residual y su diferencia no negativa como beneficio del collateral. Ese beneficio es una reduccion modelada del coste crediticio, no P&L de trading. La UI de CVA usa un setup guiado Scope -> Simulation -> Credit model; despues de un run correcto colapsa el setup y abre un Overview junto a la vista tecnica Bucket details. Si se modifica un input, el resultado visible queda marcado como outdated hasta volver a correrlo.
+
 Lifecycle de curvas persistidas:
 
 ```text
@@ -819,6 +821,27 @@ El orden que seguimos fue:
 
 Asi evitamos construir Monte Carlo o CVA antes de tener una unidad persistida sobre la cual calcular riesgo.
 Ahora CVA V1.1 existe como primer slice de ajuste XVA y Dashboard V1 es el slice de producto activo.
+
+## Risk Cockpit V1
+
+Risk Cockpit es la vista compartida de riesgo de portfolio para FO y BO. FO encola un Risk Pack asincrono; BO supervisa los resultados persistidos sin recalcularlos.
+
+```text
+Solicitud Risk Pack
+  -> run QUEUED persistido
+  -> executor limitado a dos workers
+  -> Pricing
+  -> Stress estandar + Historical VaR
+  -> Exposure
+  -> CVA con la misma configuracion determinista de exposure
+  -> outputs y diagnosticos persistidos por componente
+```
+
+Historical VaR pide a Blemberg 260 cierres por simbolo activo y exige 250 log returns alineados. Cada vector fechado mueve todos los simbolos conjuntamente. Las opciones europeas se revaloran por completo y las cash equities usan el spot estresado. Volatilidad, tasas, dividend yield y FX actuales quedan congelados, por lo que el resultado se identifica expresamente como riesgo de spot solamente.
+
+El run puede quedar `PARTIAL`: historia faltante falla VaR; curvas aprobadas faltantes impiden CVA; los demas componentes exitosos siguen visibles. Al reiniciar, los runs abandonados se marcan `FAILED`, y una restriccion de base evita dos packs concurrentes para el mismo portfolio.
+
+La UI separa Overview, Market Risk, P&L & Sensitivities, Exposure & CVA y Run Diagnostics. Los colores diferencian exposicion, coste crediticio y P&L positivo/negativo; no representan limites de riesgo no configurados.
 
 ## Proximo milestone recomendado
 
